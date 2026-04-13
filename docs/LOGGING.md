@@ -1,132 +1,97 @@
-# WithContext 日志记录功能
+# 日志记录
 
-orion-error 现在提供了强大的日志记录功能，允许在无错误情况下也能记录有价值的上下文信息。
+`orion-error` 的日志能力围绕 `OperationContext` 展开。
 
-## 功能特性
-
-- ✅ 支持多种日志库：log 和 tracing
-- ✅ 在成功和失败场景下都能记录上下文信息
-- ✅ 可选的依赖，按需启用
-- ✅ 丰富的日志级别支持
-- ✅ 自动格式化上下文信息
-
-## 启用日志功能
-
-在 `Cargo.toml` 中添加相应的特性：
+## 启用方式
 
 ```toml
 [dependencies]
-orion-error = { version = "0.4", features = ["log"] }
-# 或者
-orion-error = { version = "0.4", features = ["tracing"] }
+orion-error = { version = "0.6", features = ["log"] }
+# 或
+orion-error = { version = "0.6", features = ["tracing"] }
 ```
 
-## 使用方法
+默认 feature 已包含 `log`。
 
-### 基本日志记录
+## 基本用法
 
 ```rust
-use orion_error::WithContext;
+use orion_error::{ContextRecord, OperationContext};
 
-let mut ctx = WithContext::want("order_processing");
-ctx.with("order_id", "123");
-ctx.with("amount", "100.0");
+let mut ctx = OperationContext::want("order_processing");
+ctx.record("order_id", "123");
+ctx.record("amount", "100.0");
 
-// 记录不同级别的日志
-ctx.log_info("开始处理订单");
-ctx.log_debug("订单详情");
-ctx.log_warn("警告信息");
-ctx.log_error("错误信息");
-ctx.log_trace("详细追踪");
+ctx.info("start");
+ctx.debug("payload prepared");
+ctx.warn("slow upstream");
+ctx.error("final failure");
+ctx.trace("verbose trace");
 ```
 
-### 在业务逻辑中使用
+也可以使用别名方法：
+
+- `log_info`
+- `log_debug`
+- `log_warn`
+- `log_error`
+- `log_trace`
+
+## 自动结果日志
 
 ```rust
-fn process_order(order: Order) -> Result<(), Error> {
-    let mut ctx = WithContext::want("process_order");
-    ctx.with("order_id", order.id.to_string());
-    
-    // 记录处理开始
-    ctx.log_info("开始订单处理");
-    
-    // 业务逻辑...
-    
-    if success {
-        // 记录成功信息
-        ctx.log_info("订单处理成功");
-        Ok(())
-    } else {
-        // 记录错误信息
-        ctx.log_error("订单处理失败");
-        Err(Error::new())
-    }
+use orion_error::{ContextRecord, OperationContext};
+
+let mut ctx = OperationContext::want("sync_user").with_auto_log();
+ctx.record("user_id", "42");
+
+do_sync()?;
+ctx.mark_suc();
+```
+
+默认结果是失败。如果启用了 `with_auto_log()` 但没有标记成功，Drop 时会输出失败日志。
+
+## 使用 `OperationScope`
+
+```rust
+use orion_error::{ContextRecord, OperationContext};
+
+let mut ctx = OperationContext::want("sync_user").with_auto_log();
+
+{
+    let mut scope = ctx.scoped_success();
+    scope.record("user_id", "42");
+    validate()?;
 }
 ```
 
-### 输出示例
+可选方法：
 
-启用日志功能后，输出格式如下：
+- `scope()`：默认失败，需要显式 `mark_success()`
+- `scoped_success()`：作用域结束时自动标记成功
+- `cancel()`：标记取消
 
-```
-INFO 开始处理订单 - target: order_processing, context: {order_id: 123, amount: 100.0}
-DEBUG 订单详情 - target: order_processing, context: {order_id: 123, amount: 100.0}
-```
-
-## 配置日志库
-
-### 使用 log 库
+## `op_context!` 宏
 
 ```rust
-fn main() {
-    env_logger::init();
-    // 你的代码...
-}
+use orion_error::{op_context, ContextRecord};
+
+let mut ctx = op_context!("load_config").with_auto_log();
+ctx.record("path", "config.toml");
 ```
 
-### 使用 tracing 库
+这个宏会在调用处展开 `module_path!()`，方便日志系统显示正确模块路径。
 
-```rust
-fn main() {
-    tracing_subscriber::fmt::init();
-    // 你的代码...
-}
-```
+## log 与 tracing
 
-## 性能考虑
+- 只启用 `log` 时，使用 `log` 宏输出
+- 启用 `tracing` 时，优先使用 `tracing`
+- 同时启用时，代码路径以 `tracing` 为准
 
-- 日志记录只在启用相应特性时编译
-- 在成功路径上，日志调用有轻微性能开销
-- 上下文格式化只在日志记录时发生
-- 适合用于调试、监控和审计场景
+## 推荐实践
 
-## 示例
-
-查看 `examples/logging_example.rs` 获取完整示例：
-
-```bash
-# 使用 log 功能运行示例
-cargo run --example logging_example --features log
-
-# 使用 tracing 功能运行示例  
-cargo run --example logging_example --features tracing
-
-# 无日志功能运行示例
-cargo run --example logging_example
-```
-
-## 最佳实践
-
-1. **适度使用**: 在关键业务路径记录有价值的信息
-2. **上下文丰富**: 利用 `with()` 方法添加相关上下文
-3. **级别选择**: 根据信息重要性选择合适的日志级别
-4. **性能敏感**: 在高性能场景谨慎使用调试和追踪级别
-
-## 优势
-
-- 🎯 **零成本成功路径**: 错误处理逻辑只在错误时执行
-- 📝 **丰富上下文**: 即使成功也能记录完整的操作上下文
-- 🔧 **灵活配置**: 支持多种日志库和级别
-- 🚀 **按需启用**: 不影响不使用日志功能的用户
-
-通过这个功能，你可以在无错误情况下也能获得有价值的操作日志，大大提升了系统的可观测性和调试能力。
+- 用 `want(...)` 描述操作目标
+- 用 `record(...)` 记录关键诊断字段
+- 用 `with_auto_log()` 只包裹真正需要结果日志的作用域
+- 对成功路径使用 `mark_suc()` 或 `scoped_success()`
+- 不要继续新增 `with_exit_log()`；它已废弃

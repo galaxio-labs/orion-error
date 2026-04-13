@@ -9,7 +9,7 @@ use std::fmt::Display;
 pub use context::ContextAdd;
 pub use context::{ContextRecord, OperationContext, OperationScope, WithContext};
 pub use domain::DomainReason;
-pub use error::{convert_error, StructError, StructErrorBuilder, StructErrorTrait};
+pub use error::{convert_error, SourceFrame, StructError, StructErrorBuilder, StructErrorTrait};
 pub use reason::ErrorCode;
 pub use universal::{ConfErrReason, UvsFrom, UvsReason};
 

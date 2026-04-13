@@ -1,5 +1,37 @@
 # 更新日志 (CHANGELOG)
 
+## [v0.6.1] - 2026-04-13
+
+### ✨ 新增
+- **source-chain 支持**：`StructError` 现在可保存真实底层错误 source，并实现标准 `std::error::Error::source()`。
+- **source 辅助接口**：新增 `with_source(...)`、`source_ref()`、`root_cause()`、`source_chain()`、`display_chain()`。
+- **source 结构化快照**：新增 `SourceFrame`、`source_frames()`、`root_cause_frame()`，用于把 source chain 输出为稳定结构化数据；`err_wrap()` 现在会把下层 `StructError` 的 `error_code`、`reason`、`want`、`path`、`detail` 写入 source frame。
+- **source-aware 转换**：新增 `ErrorOweSourceBase` / `ErrorOweSource`，支持 `.owe_source(...)`、`.owe_sys_source()`、`.owe_validation_source()` 等保留真实 source 的转换接口。
+- **跨层包装接口**：新增 `WrapStructError` / `ErrorWrap`，支持 `wrap(reason)` 与 `err_wrap(reason)`，用于 service/repository 等分层场景中把下层 `StructError` 作为上层错误的 source 保留下来。
+
+### 🔄 行为改进
+- **`err_conv()` 保留 source**：`StructError<R1>` 转为 `StructError<R2>` 时，不再丢失原有 source。
+- **Display 补充 source 摘要**：结构化错误的显示输出增加 `Source` 行，便于快速定位底层错误。
+- **`serde` 输出补充 source 结构化字段**：启用 `serde` feature 时，序列化结果新增 `source_frames`，并继续保留 `source_message` 与 `source_chain` 兼容字段；底层 trait object 本体不直接序列化，`debug` 字段默认也不序列化。
+- **`Want` / `Path` 语义收敛**：`OperationContext::want(...)` 固定表示最外层调用目标；链式 `.want(...)` 只追加内部路径，展示与序列化同步输出 `want` / `path`。
+- **目标读取 API 收敛**：新增 `target_main()` / `target_path()` 作为推荐读取接口，并移除尚未稳定的 `operation_want()`。
+- **source frame 消息稳定化**：`StructError` source frame 的 `message` 收敛为 reason 文本，完整格式化输出放入 `display`。
+
+### 📚 文档对齐
+- **顶层文档重写**：更新 `README.md` 到当前 `0.6.x` API。
+- **教程重写**：更新 `docs/tutorial.md`，统一使用 `record(...)`、无参 `UvsReason::*_error()` 构造器、`owe_*_source()` 等当前接口。
+- **日志文档修正**：更新 `docs/LOGGING.md`，统一到 `with_auto_log()` / `scoped_success()`。
+- **协作文档修正**：更新 `docs/thiserror-comparison.md` 与 `docs/error-handling/README.md`。
+- **文档导航修正**：更新 `docs/README.md`，明确旧版本写法已过期。
+
+### 🧪 验证
+- 通过：
+  - `cargo test --all-features -- --test-threads=1`
+
+### 使用提示
+- 旧的 `.owe_*()` 仍可用，但只会把上游错误文本写入 `detail`。
+- 如果你需要保留真实底层错误链，请优先使用 `.owe_*_source()`、`with_source(...)` 或 `err_wrap(...)`。
+
 ## [v0.6.0] - 2026-02-22
 
 ### 🚨 Breaking Changes

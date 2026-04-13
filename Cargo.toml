@@ -1,6 +1,6 @@
 [package]
 name = "orion-error"
-version = "0.6.0"
+version = "0.6.1" #@gxl:set(version)
 edition = "2021"
 authors = ["wukong <sec-wukong@outlook.com>"]
 description = "Struct Error for Large Project"

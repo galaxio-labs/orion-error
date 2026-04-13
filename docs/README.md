@@ -1,188 +1,32 @@
-# 📚 Orion-Error 文档中心
+# 文档导航
 
-欢迎使用 Orion-Error 的完整文档中心！这里提供了从入门到精通的所有资源，帮助您快速掌握和使用这个强大的结构化错误处理库。
+当前文档以 `orion-error 0.6.x` 为准。
 
-## 🚀 快速开始
+建议阅读顺序：
 
-### 新用户入门
-如果您是第一次使用 Orion-Error，建议按照以下顺序阅读：
+1. [顶层 README](../README.md)
+2. [使用教程](./tutorial.md)
+3. [日志说明](./LOGGING.md)
+4. [与 thiserror 的配合](./thiserror-comparison.md)
+5. [设计文档目录](./error-handling/README.md)
 
-1. **[错误分类指南](error_classification.md)** - 了解核心的分层错误分类体系
-2. **[使用教程](tutorial.md)** - 通过实际示例学习基本用法
-3. **[API 参考文档](api_reference.md)** - 查阅详细的 API 文档
+## 重要说明
 
-### 安装与配置
-```toml
-[dependencies]
-orion-error = "0.4"
-```
+旧版本文档中常见的过期写法包括：
 
-## 📖 文档导航
+- `orion-error = "0.2"` / `"0.3"` / `"0.4"`
+- `impl DomainReason for MyError {}`
+- `ctx.with("key", "value")`
+- `UvsReason::validation_error("message")`
+- `with_exit_log()`
 
-### 🏗️ 核心概念
+当前版本对应写法：
 
-#### [错误分类指南](error_classification.md)
-深入了解 Orion-Error 的三层错误分类体系：
-- **业务层错误 (100-199)**：用户可见的预期错误
-- **基础设施层错误 (200-299)**：系统级别的故障
-- **配置和外部层错误 (300-399)**：环境和第三方服务问题
+- `orion-error = "0.6"`
+- 一般不需要手写 `DomainReason`
+- 使用 `ctx.record("key", "value")`
+- 使用 `StructError::from(UvsReason::validation_error()).with_detail("message")`
+- 使用 `with_auto_log()`
+- `OperationContext::want("op")` 表示最外层目标；链式 `.want("step")` 表示内部路径
 
-**重点内容：**
-- 10 种语义化错误类型详解
-- 错误码分配规则和含义
-- 实用功能：`is_retryable()`, `is_high_severity()`, `category_name()`
-- 最佳实践和设计原则
-- 完整的迁移指南
-
-### 🛠️ 使用指南
-
-#### [使用教程](tutorial.md)
-通过丰富的代码示例学习如何在实际项目中使用 Orion-Error：
-
-**章节内容：**
-1. **快速开始** - 项目设置和基本使用
-2. **基础错误处理** - 定义领域错误和创建错误
-3. **错误上下文管理** - 上下文创建、多层传播和动态信息
-4. **错误转换策略** - ErrorOwe trait 和自定义转换
-5. **重试机制实现** - 智能重试策略和熔断器模式
-6. **监控和日志集成** - 错误监控、结构化日志和告警
-7. **完整示例：Web 应用** - 实际项目的完整应用案例
-8. **最佳实践** - 错误类型选择、上下文管理、测试策略
-
-**亮点更新：**
-- 介绍 `StructError::builder` 链式构造方式，减少重复的 `with_*` 调用
-- 新增 `OperationScope` RAII guard，自动管理 `OperationContext` 的成功/失败状态
-
-**特色示例：**
-- 微服务架构中的错误处理
-- REST API 错误响应标准化
-- 分布式系统中的错误传播
-- 监控系统集成示例
-
-#### [API 参考文档](api_reference.md)
-完整的 API 参考，包含所有类型、方法和 trait 的详细说明：
-
-**文档结构：**
-1. **核心类型** - UvsReason、ErrorPayload、StructError、WithContext
-2. **构造函数** - 所有错误类型的创建方法
-3. **分析方法** - 错误码、重试性、严重程度、类别判断
-4. **转换 Trait** - 10 种错误转换 trait 详细说明
-5. **错误处理 Trait** - ErrorOwe、ErrorWith 等高级功能
-6. **代码示例** - 每个重要方法的使用示例
-7. **错误码表** - 完整的错误码对照表和特性说明
-
-### 📋 维护信息
-
-#### [更新日志](CHANGELOG.md)
-跟踪版本的演进历史和变更详情：
-
-**主要内容：**
-- **版本 0.3.0** - 重大重构，分层错误分类体系
-- **版本 0.2.0** - 基础框架和核心功能
-- **升级指南** - 从旧版本迁移的详细步骤
-- **未来计划** - 路线图和新功能预览
-
-## 🎯 根据使用场景选择文档
-
-### 我刚开始使用 Orion-Error
-1. 先阅读 [错误分类指南](error_classification.md) 了解核心概念
-2. 跟随 [使用教程](tutorial.md) 的"快速开始"部分
-3. 尝试教程中的基础错误处理示例
-
-### 我需要解决特定的错误处理问题
-1. 查阅 [错误分类指南](error_classification.md) 的错误类型选择原则
-2. 参考 [使用教程](tutorial.md) 中的相关章节（如重试机制、上下文管理）
-3. 在 [API 参考文档](api_reference.md) 中查找具体方法
-
-### 我正在从旧版本升级
-1. 阅读 [更新日志](CHANGELOG.md) 的"升级指南"部分
-2. 查看 [错误分类指南](error_classification.md) 的迁移章节
-3. 使用教程中的迁移示例验证代码修改
-
-### 我需要集成到现有项目
-1. 阅读 [使用教程](tutorial.md) 的"完整示例：Web 应用"
-2. 参考相关章节的最佳实践
-3. 根据项目类型选择合适的错误处理策略
-
-### 我需要深入了解 API 细节
-1. 浏览 [API 参考文档](api_reference.md) 的相关部分
-2. 查看使用教程中的高级用法示例
-3. 参考错误分类指南的设计原则
-
-## 🛠️ 工具和资源
-
-### 示例代码
-- **[examples/order_case.rs](../examples/order_case.rs)** - 完整的订单处理错误示例
-- **教程中的代码片段** - 可直接复制使用的实用代码
-
-### 测试覆盖
-所有文档中的示例代码都有对应的单元测试，确保代码的正确性和可靠性。
-
-### 代码检查
-```bash
-# 运行所有测试
-cargo test
-
-# 检查代码质量
-cargo clippy --all-targets --all-features -- -D warnings
-
-# 生成文档
-cargo doc --no-deps --open
-```
-
-## 🤝 贡献和支持
-
-### 报告问题
-如果您发现了文档中的错误或有改进建议，请：
-1. 检查现有的 GitHub Issues
-2. 创建新的 Issue 并提供详细信息
-3. 包含重现步骤和期望结果
-
-### 贡献文档
-欢迎为文档贡献内容！请：
-1. Fork 项目仓库
-2. 创建文档分支
-3. 提交 Pull Request
-4. 确保文档格式一致和代码示例可运行
-
-### 获取帮助
-- 📧 **邮件支持**: [support@example.com](mailto:support@example.com)
-- 💬 **社区讨论**: [GitHub Discussions](https://github.com/your-org/orion-error/discussions)
-- 🐛 **问题报告**: [GitHub Issues](https://github.com/your-org/orion-error/issues)
-- 📖 **在线文档**: [docs.rs/orion-error](https://docs.rs/orion-error)
-
-## 📊 文档统计
-
-| 文档 | 页数 | 代码示例 | 阅读时间 | 难度 |
-|------|------|----------|----------|------|
-| 错误分类指南 | ~50 | 25+ | 30分钟 | ⭐⭐⭐ |
-| 使用教程 | ~100 | 50+ | 60分钟 | ⭐⭐ |
-| API 参考 | ~80 | 30+ | 45分钟 | ⭐⭐⭐⭐ |
-| 更新日志 | ~30 | 10+ | 20分钟 | ⭐ |
-| **总计** | **~260** | **115+** | **155分钟** | **-** |
-
-## 🔄 文档更新
-
-本文档会随着项目的发展持续更新。主要的更新时机包括：
-
-- 🎯 **新版本发布** - 每个版本都会更新相应的文档
-- 🐛 **问题修复** - 根据用户反馈修正错误和不清晰的地方
-- ✨ **功能增强** - 新增功能时添加相应的文档和示例
-- 📚 **结构优化** - 根据用户使用反馈优化文档结构和组织方式
-
-**最后更新时间**: 2024-01-XX
-**文档版本**: v0.3.0
-**支持的 Orion-Error 版本**: v0.3.0+
-
----
-
-🚀 **开始您的错误处理之旅吧！** 如果您有任何问题或建议，请随时与我们联系。
-
-<div style="text-align: center; margin-top: 2rem;">
-    <strong>祝您使用愉快！</strong><br>
-    <em>— Orion-Error 团队</em>
-</div>
-### 🔍 比较与集成
-
-#### [与 thiserror 的差异与协作指南](thiserror-comparison.md)
-详细对比 `thiserror` 与本库的定位与能力，提供组合使用示例与落地建议。
+如果其他文档与源码冲突，请以 `src/`、测试和顶层 README 为准。

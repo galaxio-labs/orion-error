@@ -1,4 +1,5 @@
-use crate::{core::convert_error, DomainReason, StructError};
+use crate::{core::convert_error, DomainReason, ErrorCode, StructError};
+use std::fmt::Display;
 
 pub trait ErrorConv<T, R: DomainReason>: Sized {
     fn err_conv(self) -> Result<T, StructError<R>>;
@@ -6,6 +7,14 @@ pub trait ErrorConv<T, R: DomainReason>: Sized {
 
 pub trait ConvStructError<R: DomainReason>: Sized {
     fn conv(self) -> StructError<R>;
+}
+
+pub trait ErrorWrap<T, R: DomainReason>: Sized {
+    fn err_wrap(self, reason: R) -> Result<T, StructError<R>>;
+}
+
+pub trait WrapStructError<R: DomainReason>: Sized {
+    fn wrap(self, reason: R) -> StructError<R>;
 }
 
 impl<T, R1, R2> ErrorConv<T, R2> for Result<T, StructError<R1>>
@@ -31,6 +40,26 @@ where
     }
 }
 
+impl<T, R1, R2> ErrorWrap<T, R2> for Result<T, StructError<R1>>
+where
+    R1: DomainReason + ErrorCode + Display + std::fmt::Debug + Send + Sync + 'static,
+    R2: DomainReason,
+{
+    fn err_wrap(self, reason: R2) -> Result<T, StructError<R2>> {
+        self.map_err(|e| e.wrap(reason))
+    }
+}
+
+impl<R1, R2> WrapStructError<R2> for StructError<R1>
+where
+    R1: DomainReason + ErrorCode + Display + std::fmt::Debug + Send + Sync + 'static,
+    R2: DomainReason,
+{
+    fn wrap(self, reason: R2) -> StructError<R2> {
+        StructError::from(reason).with_struct_error_source(self)
+    }
+}
+
 pub trait ToStructError<R>
 where
     R: DomainReason,
@@ -52,6 +81,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as StdError;
+
     use super::*;
     use crate::{ErrorCode, StructError, UvsReason};
 
@@ -176,5 +207,55 @@ mod tests {
         let uvs_result: Result<i32, StructError<UvsReason>> = uvs_reason2.err_result();
         assert!(uvs_result.is_err());
         assert_eq!(uvs_result.unwrap_err().error_code(), 100);
+    }
+
+    #[test]
+    fn test_err_conv_preserves_source() {
+        let source = std::io::Error::other("db unavailable");
+        let original: Result<i32, StructError<TestReason>> =
+            Err(StructError::from(TestReason::TestError).with_source(source));
+
+        let converted: Result<i32, StructError<AnotherReason>> = original.err_conv();
+        let err = converted.unwrap_err();
+
+        assert_eq!(err.error_code(), 2001);
+        assert_eq!(
+            StdError::source(&err).unwrap().to_string(),
+            "db unavailable"
+        );
+    }
+
+    #[test]
+    fn test_err_wrap_preserves_previous_struct_error_chain() {
+        let original: Result<i32, StructError<TestReason>> =
+            Err(StructError::from(TestReason::TestError)
+                .with_detail("repo layer failed")
+                .with_source(std::io::Error::other("db unavailable")));
+
+        let wrapped: Result<i32, StructError<AnotherReason>> =
+            original.err_wrap(AnotherReason::AnotherError);
+        let err = wrapped.unwrap_err();
+
+        assert_eq!(err.error_code(), 2001);
+        assert_eq!(
+            StdError::source(&err).unwrap().to_string(),
+            "[1001] test error\n  -> Details: repo layer failed\n  -> Source: db unavailable"
+        );
+        assert_eq!(err.root_cause().unwrap().to_string(), "db unavailable");
+        assert_eq!(err.source_chain().len(), 2);
+        assert_eq!(err.source_frames()[0].message, "test error");
+        assert!(err.source_frames()[0]
+            .display
+            .as_ref()
+            .unwrap()
+            .contains("repo layer failed"));
+        assert_eq!(err.source_frames()[0].error_code, Some(1001));
+        assert_eq!(err.source_frames()[0].reason.as_deref(), Some("test error"));
+        assert_eq!(
+            err.source_frames()[0].detail.as_deref(),
+            Some("repo layer failed")
+        );
+        assert_eq!(err.source_frames()[1].message, "db unavailable");
+        assert!(err.source_frames()[1].is_root_cause);
     }
 }

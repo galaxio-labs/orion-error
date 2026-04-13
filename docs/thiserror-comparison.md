@@ -1,58 +1,79 @@
 # 与 thiserror 的差异与协作指南
 
-本页系统对比 `thiserror` 与本库（orion-error），并给出协作使用的最佳实践。
+## 定位
 
-## 定位与目标
-- thiserror：专注“定义错误类型”的派生宏，自动实现 `Error`/`Display`，零运行时开销，适合轻量场景。
-- orion-error：面向“错误治理”的结构化库，提供统一分类（`UvsReason`）、错误码（`ErrorCode`）、上下文（`OperationContext`）、转换与传播策略（`ErrorOwe`/`ErrorConv`），适合中大型工程。
+- `thiserror`：负责定义错误类型，自动生成 `Display` 和 `Error`
+- `orion-error`：负责错误治理，提供分类、错误码、上下文、转换和可观测辅助
 
-## 能力对比（概览）
-| 能力 | thiserror | orion-error | 组合使用 |
-|---|---|---|---|
-| 错误类型定义 | 宏派生定义优雅 | 接入 `DomainReason` 协议 | 用 thiserror 定义，orion-error 承载治理 |
-| Display/Error 实现 | 自动 | 支持，但侧重结构化展示 | thiserror 负责显示，orion-error 负责治理 |
-| 错误码与分类 | 无 | `ErrorCode` + `UvsReason` 分层 | 由领域错误转发 `UvsReason` 码 |
-| 上下文与链路 | 无 | `WithContext`/`OperationContext` 堆栈 | 在关键路径记录上下文 |
-| 转换与传播 | 无 | `.owe_*()`/`err_conv()` | 将 `Result<T,E:Display>` 归一化 |
-| 序列化/观测 | 无 | 可序列化、`category_name()` 等 | 统一输出指标/日志/HTTP |
+推荐组合方式是：
 
-## 推荐协作模式
-- 用 thiserror 定义领域枚举；实现 `From<UvsReason>`、`ErrorCode`，自动满足 `DomainReason`；在业务中用 `.owe_*()` 归一转换，叠加 `WithContext`。
+- 用 `thiserror` 定义领域错误枚举
+- 用 `orion-error` 负责 `UvsReason`、`StructError`、上下文和转换
+
+## 能力对比
+
+| 能力 | thiserror | orion-error |
+|---|---|---|
+| 定义领域错误 | 强 | 一般 |
+| 统一错误分类 | 无 | `UvsReason` |
+| 错误码 | 无 | `ErrorCode` |
+| 上下文堆栈 | 无 | `OperationContext` |
+| 非结构错误转结构错误 | 无 | `ErrorOwe` / `ErrorOweSource` |
+| 结构错误跨层转换 | 无 | `ErrorConv` |
+| 重试/严重级别判断 | 无 | `is_retryable()` / `is_high_severity()` |
+
+## 推荐模式
 
 ```rust
 use derive_more::From;
+use orion_error::{ErrorCode, ErrorOweSource, StructError, UvsReason};
 use thiserror::Error;
-use orion_error::{StructError, ErrorOwe, ErrorCode, UvsReason, DomainReason};
 
-#[derive(Debug, Error, From, serde::Serialize, PartialEq)]
+#[derive(Debug, Error, Clone, PartialEq, From)]
 enum AppError {
-    #[error("{0}")]
-    Uvs(UvsReason),
     #[error("parse failed")]
     Parse,
+    #[error("{0}")]
+    Uvs(UvsReason),
 }
-impl ErrorCode for AppError { fn error_code(&self)->i32 { match self { AppError::Uvs(r)=>r.error_code(), AppError::Parse=>100 } } }
-impl DomainReason for AppError {}
+
+impl ErrorCode for AppError {
+    fn error_code(&self) -> i32 {
+        match self {
+            Self::Parse => 1000,
+            Self::Uvs(reason) => reason.error_code(),
+        }
+    }
+}
 
 fn handle() -> Result<(), StructError<AppError>> {
-    read_io().owe_sys()?;          // 系统类错误
-    parse_cfg().owe_validation()?; // 校验类错误
+    std::fs::read_to_string("config.toml")
+        .owe_sys_source()
+        .map(|_| ())?;
     Ok(())
 }
 ```
 
-## 何时选择
-- 仅需定义错误并优雅显示：thiserror + anyhow/eyre 足够。
-- 需要跨模块/服务统一治理（错误码、分类、可观测、策略化）：orion-error，并与 thiserror 组合最佳。
+这里不需要再写空的 `impl DomainReason for AppError {}`。
 
-## 性能与依赖
-- thiserror：编译期派生，零运行时成本。
-- orion-error：`StructError` 保存 detail/position/context，带来可控的小幅对象与格式化开销；建议仅在需要处添加上下文。
-- 可选特性建议：将日志/序列化做成 feature（如 `log`/`tracing`/`serde`），在生产按需启用。
+## 什么时候用 `owe_*()`，什么时候用 `owe_*_source()`
+
+- `owe_*_source()`：默认推荐，保留真实底层 error，适合 `E: std::error::Error`
+- `owe_*()`：兼容路径，只保留字符串 detail，适合 `E: Display`
+
+如果你关心：
+
+- `source()`
+- `root_cause()`
+- 下游监控的根因分类
+- 更完整的错误链
+
+默认优先使用 `owe_*_source()`。
 
 ## 实践建议
-- 统一错误码：服务边界对外仅暴露 `ErrorCode` 与 `category_name()`。
-- Web 映射：将 `UvsReason` 分类映射为 HTTP 状态码；中间件统一处理。
-- 重试与告警：基于 `is_retryable()` 与 `is_high_severity()` 制定自动化策略。
 
-如需更完整示例，请查看 `examples/` 与顶层 README 的“与 thiserror 的差异与配合”。
+- 服务边界对外暴露 `error_code()` 和受控错误信息
+- 领域错误枚举保留少量稳定变体，底层通用错误走 `Uvs(UvsReason)`
+- 在关键链路使用 `want(...)` 和 `record(...)`
+- 在正常 Rust 错误链路里优先使用 `owe_*_source()`
+- 在需要主动包装现有错误对象时使用 `with_source(...)`

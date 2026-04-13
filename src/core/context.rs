@@ -33,12 +33,15 @@ pub struct OperationContext {
     exit_log: bool,
     mod_path: String,
     target: Option<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    path: Vec<String>,
 }
 impl Default for OperationContext {
     fn default() -> Self {
         Self {
             context: CallContext::default(),
             target: None,
+            path: Vec::new(),
             result: OperationResult::Fail,
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
@@ -52,6 +55,7 @@ impl From<CallContext> for OperationContext {
             context: value,
             result: OperationResult::Fail,
             target: None,
+            path: Vec::new(),
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
         }
@@ -112,7 +116,12 @@ impl Drop for OperationContext {
 impl Display for OperationContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(target) = &self.target {
-            writeln!(f, "target: {target} ")?;
+            writeln!(f, "want: {target}")?;
+        }
+        if let Some(path) = self.path_string() {
+            if self.target.as_deref() != Some(path.as_str()) {
+                writeln!(f, "path: {path}")?;
+            }
         }
         for (i, (k, v)) in self.context().items.iter().enumerate() {
             writeln!(f, "{}. {k}: {v} ", i + 1)?;
@@ -186,9 +195,14 @@ impl OperationContext {
         &self.target
     }
 
+    pub fn path(&self) -> &[String] {
+        &self.path
+    }
+
     pub fn new() -> Self {
         Self {
             target: None,
+            path: Vec::new(),
             context: CallContext::default(),
             result: OperationResult::Fail,
             exit_log: false,
@@ -196,8 +210,10 @@ impl OperationContext {
         }
     }
     pub fn want<S: Into<String>>(target: S) -> Self {
+        let target = target.into();
         Self {
-            target: Some(target.into()),
+            target: Some(target.clone()),
+            path: vec![target],
             context: CallContext::default(),
             result: OperationResult::Fail,
             exit_log: false,
@@ -230,11 +246,34 @@ impl OperationContext {
     }
 
     pub fn with_want<S: Into<String>>(&mut self, target: S) {
-        self.target = Some(target.into())
+        let target = target.into();
+        if target.is_empty() {
+            return;
+        }
+
+        if let Some(root) = &self.target {
+            if self.path.is_empty() {
+                self.path.push(root.clone());
+            }
+            if self.path.last() != Some(&target) {
+                self.path.push(target);
+            }
+        } else {
+            self.target = Some(target.clone());
+            self.path.push(target);
+        }
     }
-    /// 别名：设置目标资源/操作名，与 `with_want` 等效
+    /// 别名：设置目标资源/操作名；首次设置根 want，后续调用仅追加 path
     pub fn set_target<S: Into<String>>(&mut self, target: S) {
         self.with_want(target)
+    }
+
+    pub fn path_string(&self) -> Option<String> {
+        if self.path.is_empty() {
+            None
+        } else {
+            Some(self.path.join(" / "))
+        }
     }
     pub fn mark_suc(&mut self) {
         self.result = OperationResult::Suc;
@@ -246,15 +285,22 @@ impl OperationContext {
     /// 格式化上下文信息，用于日志输出
     #[cfg_attr(not(any(feature = "log", feature = "tracing")), allow(dead_code))]
     fn format_context(&self) -> String {
-        let target = self.target.clone().unwrap_or_default();
+        let want = self.target.clone().unwrap_or_default();
+        let path = self.path_string().unwrap_or_default();
+        let head = match (want.is_empty(), path.is_empty() || path == want) {
+            (true, true) => String::new(),
+            (false, true) => format!("want={want}"),
+            (false, false) => format!("want={want} path={path}"),
+            (true, false) => format!("path={path}"),
+        };
         if self.context.items.is_empty() {
-            return target;
+            return head;
         }
-        if target.is_empty() {
+        if head.is_empty() {
             let body = self.context.to_string();
             body.strip_prefix('\n').unwrap_or(&body).to_string()
         } else {
-            format!("{target}: {}", self.context)
+            format!("{head}: {}", self.context)
         }
     }
 
@@ -428,6 +474,7 @@ impl From<String> for OperationContext {
     fn from(value: String) -> Self {
         Self {
             target: None,
+            path: Vec::new(),
             context: CallContext::from(("key", value.to_string())),
             result: OperationResult::Fail,
             exit_log: false,
@@ -440,6 +487,7 @@ impl From<&PathBuf> for OperationContext {
     fn from(value: &PathBuf) -> Self {
         Self {
             target: None,
+            path: Vec::new(),
             context: CallContext::from(("path", format!("{}", value.display()))),
             result: OperationResult::Fail,
             exit_log: false,
@@ -452,6 +500,7 @@ impl From<&Path> for OperationContext {
     fn from(value: &Path) -> Self {
         Self {
             target: None,
+            path: Vec::new(),
             context: CallContext::from(("path", format!("{}", value.display()))),
             result: OperationResult::Fail,
             exit_log: false,
@@ -464,6 +513,7 @@ impl From<&str> for OperationContext {
     fn from(value: &str) -> Self {
         Self {
             target: None,
+            path: Vec::new(),
             context: CallContext::from(("key", value.to_string())),
             result: OperationResult::Fail,
             exit_log: false,
@@ -476,6 +526,7 @@ impl From<(&str, &str)> for OperationContext {
     fn from(value: (&str, &str)) -> Self {
         Self {
             target: None,
+            path: Vec::new(),
             context: CallContext::from((value.0, value.1)),
             result: OperationResult::Fail,
             exit_log: false,
@@ -488,6 +539,7 @@ impl From<(&str, String)> for OperationContext {
     fn from(value: (&str, String)) -> Self {
         Self {
             target: None,
+            path: Vec::new(),
             context: CallContext::from((value.0, value.1)),
             result: OperationResult::Fail,
             exit_log: false,
@@ -510,6 +562,7 @@ where
     fn from(value: (&str, V)) -> Self {
         Self {
             target: None,
+            path: Vec::new(),
             context: CallContext {
                 items: vec![(
                     value.0.to_string(),
@@ -527,6 +580,7 @@ impl From<(String, String)> for OperationContext {
     fn from(value: (String, String)) -> Self {
         Self {
             target: None,
+            path: Vec::new(),
             context: CallContext::from((value.0, value.1)),
             result: OperationResult::Fail,
             exit_log: false,
@@ -621,6 +675,7 @@ mod tests {
     fn test_withcontext_want() {
         let ctx = OperationContext::want("test_target");
         assert_eq!(*ctx.target(), Some("test_target".to_string()));
+        assert_eq!(ctx.path(), &["test_target".to_string()]);
         assert_eq!(ctx.context().items.len(), 0);
     }
 
@@ -657,6 +712,28 @@ mod tests {
         ctx.with_want("new_target");
 
         assert_eq!(*ctx.target(), Some("new_target".to_string()));
+        assert_eq!(ctx.path(), &["new_target".to_string()]);
+    }
+
+    #[test]
+    fn test_withcontext_with_want_appends_path() {
+        let mut ctx = OperationContext::want("place_order");
+        ctx.with_want("read_order_payload");
+        ctx.with_want("parse_order");
+
+        assert_eq!(*ctx.target(), Some("place_order".to_string()));
+        assert_eq!(
+            ctx.path(),
+            &[
+                "place_order".to_string(),
+                "read_order_payload".to_string(),
+                "parse_order".to_string()
+            ]
+        );
+        assert_eq!(
+            ctx.path_string().as_deref(),
+            Some("place_order / read_order_payload / parse_order")
+        );
     }
 
     #[test]
@@ -814,7 +891,7 @@ mod tests {
         let mut ctx = OperationContext::want("test_target");
         ctx.record("key1", "value1");
         let display = format!("{ctx}");
-        assert!(display.contains("target: test_target"));
+        assert!(display.contains("want: test_target"));
         assert!(display.contains("1. key1: value1"));
     }
 
@@ -843,8 +920,10 @@ mod tests {
     fn test_withcontext_from_withcontext() {
         let mut ctx1 = OperationContext::want("target1");
         ctx1.record("key1", "value1");
+        ctx1.with_want("step1");
         let ctx2 = OperationContext::from(&ctx1);
         assert_eq!(*ctx2.target(), Some("target1".to_string()));
+        assert_eq!(ctx2.path(), &["target1".to_string(), "step1".to_string()]);
         assert_eq!(ctx2.context().items.len(), 1);
         assert_eq!(
             ctx2.context().items[0],
@@ -987,7 +1066,10 @@ mod tests {
         ctx.record("key1", "value1");
 
         let formatted = ctx.format_context();
-        assert_eq!(formatted, "test_target: \ncall context:\n\tkey1 : value1\n");
+        assert_eq!(
+            formatted,
+            "want=test_target: \ncall context:\n\tkey1 : value1\n"
+        );
     }
 
     #[test]
@@ -1010,7 +1092,20 @@ mod tests {
     fn test_format_context_with_target_only() {
         let ctx = OperationContext::want("test_target");
         let formatted = ctx.format_context();
-        assert_eq!(formatted, "test_target");
+        assert_eq!(formatted, "want=test_target");
+    }
+
+    #[test]
+    fn test_format_context_with_path() {
+        let mut ctx = OperationContext::want("place_order");
+        ctx.with_want("read_order_payload");
+        ctx.record("order_id", "42");
+
+        let formatted = ctx.format_context();
+        assert_eq!(
+            formatted,
+            "want=place_order path=place_order / read_order_payload: \ncall context:\n\torder_id : 42\n"
+        );
     }
 
     #[test]
@@ -1129,12 +1224,14 @@ mod tests {
     #[test]
     fn test_context_serialization() {
         let mut ctx = OperationContext::want("serialization_test");
+        ctx.with_want("inner_step");
         ctx.record("key1", "value1");
         ctx.record("key2", "value2");
 
         // 测试序列化
         let serialized = serde_json::to_string(&ctx).expect("序列化失败");
         assert!(serialized.contains("serialization_test"));
+        assert!(serialized.contains("inner_step"));
         assert!(serialized.contains("key1"));
         assert!(serialized.contains("value1"));
 
@@ -1183,6 +1280,7 @@ mod tests {
         let ctx = OperationContext::want("builder_test").with_auto_log();
 
         assert_eq!(*ctx.target(), Some("builder_test".to_string()));
+        assert_eq!(ctx.path(), &["builder_test".to_string()]);
         assert!(ctx.exit_log);
     }
 

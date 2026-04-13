@@ -1,7 +1,9 @@
 use orion_error::ErrorCode;
 use orion_error::ErrorOwe;
 use orion_error::ErrorOweBase;
+use orion_error::ErrorOweSource;
 use orion_error::{StructError, UvsReason};
+use std::error::Error as StdError;
 
 #[test]
 fn test_owe_basic_conversion() {
@@ -282,4 +284,19 @@ fn test_error_code_implementation() {
         .as_ref()
         .unwrap()
         .contains("test error"));
+}
+
+#[test]
+fn test_owe_source_preserves_real_source() {
+    let result: Result<(), std::io::Error> = Err(std::io::Error::other("disk offline"));
+
+    let converted: Result<(), StructError<UvsReason>> = result.owe_sys_source();
+    let error = converted.unwrap_err();
+
+    assert_eq!(error.error_code(), 201);
+    assert_eq!(
+        StdError::source(&error).unwrap().to_string(),
+        "disk offline"
+    );
+    assert_eq!(error.root_cause().unwrap().to_string(), "disk offline");
 }

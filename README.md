@@ -1,487 +1,285 @@
 # orion-error
-[Chinese Version](#orion-error-zh)
 
-Structured error handling library for building large-scale applications, providing complete error context tracking and flexible aggregation strategies.
+Structured error handling for Rust services with:
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/galaxy-sec/orion-error)
+- layered universal error categories via `UvsReason`
+- domain-specific error enums with stable `ErrorCode`
+- contextual propagation via `OperationContext` and `ErrorWith`
+- conversion helpers via `ErrorOwe`, `ErrorOweSource`, and `ErrorConv`
+- cross-layer wrapping via `WrapStructError` and `ErrorWrap`
+- optional source-chain preservation for real underlying errors
 
-[![CI](https://github.com/galaxy-sec/orion-error/workflows/CI/badge.svg)](https://github.com/galaxy-sec/orion-error/actions)
-[![Coverage Status](https://codecov.io/gh/galaxy-sec/orion-error/branch/main/graph/badge.svg)](https://codecov.io/gh/galaxy-sec/orion-error)
+[![CI](https://github.com/galaxio-labs/orion-error/workflows/CI/badge.svg)](https://github.com/galaxio-labs/orion-error/actions)
+[![Coverage Status](https://codecov.io/gh/galaxio-labs/orion-error/branch/main/graph/badge.svg)](https://codecov.io/gh/galaxio-labs/orion-error)
 [![crates.io](https://img.shields.io/crates/v/orion-error.svg)](https://crates.io/crates/orion-error)
-
-## Features
-
-- **Structured Errors**: Support multi-layer error aggregation with full error chain
-- **Hierarchical Error Classification**: Three-tier classification system with clear boundaries
-  - **Business Layer (100-199)**: User-facing expected errors
-  - **Infrastructure Layer (200-299)**: System-level failures
-  - **Configuration & External Layer (300-399)**: Environment and third-party issues
-- **Error Types**: 10 specific error types with semantic meaning
-- **Smart Error Analysis**: Built-in retryability and severity assessment
-- **Context Tracing**: Support multi-level context information
-- **Error Codes**: Organized code system by error layers
-- **Error Conversion**: Multiple conversion strategies:
-  ```rust
-  .owe()           // Convert with specific reason
-  .owe_validation() // Convert to validation error
-  .owe_biz()       // Convert to business error
-  .owe_sys()       // Mark as system error
-  .err_conv()      // Automatic type conversion
-  ```
 
 ## Installation
 
-Add to Cargo.toml:
 ```toml
 [dependencies]
-orion-error = "0.3"
+orion-error = "0.6"
 ```
+
+Optional features:
+
+```toml
+[dependencies]
+orion-error = { version = "0.6", features = ["serde"] }
+# or
+orion-error = { version = "0.6", features = ["tracing"] }
+```
+
+Default features include `log`.
 
 ## Quick Start
-## Core Concepts
-
-### Error Definition
-Define domain errors with enum and implement `DomainReason`:
-```rust
-#[derive(Debug, Display)]
-enum OrderReason {
-    InsufficientFunds,
-    UserNotFound,
-}
-
-impl DomainReason for OrderReason {}
-```
-
-### Error Construction
-Build error context with chaining:
-```rust
-validate_user(user_id)
-    .want("Validate user")       // Add operation description
-    .with_detail("uid:123")      // Add debug details
-    .owe(OrderError::UserNotFound) // Convert to upper error type
-```
-
-### Error Handling
-#### Conversion Strategies
-| Method        | Description                      |
-|---------------|----------------------------------|
-| `.owe()`      | Convert to specific biz error    |
-| `.owe_sys()`  | Mark as system error             |
-| `.err_conv()` | Auto-detect error type conversion|
-
-#### Handling Patterns
-```rust
-// Pattern 1: Direct conversion
-parse_input().map_err(|e| e.owe(OrderError::ParseFailed))?;
-
-// Pattern 2: Add context
-db.query()
-   .want("Read order data")
-   .with_detail(format!("order_id={id}"))
-   .err_conv()?;
-```
-
-## 与 thiserror 的差异与配合
-
-- 定位差异：`thiserror` 专注于“定义错误类型”的派生与格式化；本库专注“结构化错误治理”，提供统一分类（`UvsReason`）、错误码（`ErrorCode`）、上下文（`OperationContext`/`WithContext`）与转换策略（`ErrorOwe`/`ErrorConv`）。
-- 运行时语义：`thiserror` 不提供错误码、重试性或严重级别；本库内建 `error_code()`、`is_retryable()`、`is_high_severity()`、`category_name()`，便于监控与告警。
-- 上下文与链路：`thiserror` 不管理上下文；本库可在成功/失败路径记录目标与键值上下文，`with_auto_log()` 结合日志在 Drop 时输出。
-- 转换与传播：基于 `ErrorOwe` 将任意 `Result<T, E: Display>` 规范化为 `Result<T, StructError<R>>`，快速映射为业务/系统/网络/超时等分类。
-
-推荐组合用法：用 `thiserror` 定义领域错误，用本库统一分类与治理。
 
 ```rust
 use derive_more::From;
+use orion_error::{
+    ContextRecord, ErrorCode, ErrorOweSource, ErrorWith, OperationContext, StructError, UvsReason,
+};
 use thiserror::Error;
-use orion_error::{StructError, ErrorOwe, ErrorCode, UvsReason, DomainReason};
 
-#[derive(Debug, Error, From, serde::Serialize, PartialEq)]
+#[derive(Debug, Error, Clone, PartialEq, From)]
 enum AppError {
+    #[error("invalid request")]
+    InvalidRequest,
     #[error("{0}")]
-    Uvs(UvsReason), // 透传统一分类
-    #[error("parse failed")]
-    Parse,
+    Uvs(UvsReason),
 }
 
 impl ErrorCode for AppError {
     fn error_code(&self) -> i32 {
-        match self { AppError::Uvs(r) => r.error_code(), AppError::Parse => 100 }
-    }
-}
-// 满足 From<UvsReason> + Display + PartialEq + Serialize，自动实现 DomainReason
-impl DomainReason for AppError {}
-
-fn handle() -> Result<(), StructError<AppError>> {
-    do_io().owe_sys()?;        // 映射为系统类错误
-    parse().owe_validation()?; // 映射为校验类错误
-    Ok(())
-}
-```
-
-更多内容与实践建议：参见 docs/thiserror-comparison.md。
-
-## Advanced Features
-
-### Error Composition
-```rust
-use orion_error::{UvsReason, StructError, ErrorWith, WithContext};
-
-// Compose errors with rich context
-fn complex_operation() -> Result<(), StructError<UvsReason>> {
-    let mut ctx = WithContext::want("complex_operation");
-    ctx.with("step", "validation");
-    ctx.with("input_type", "user_request");
-
-    // Validation error with context
-    validate_input(&request)
-        .want("input validation")
-        .with(&ctx)?;
-
-    ctx.with("step", "business_logic");
-
-    // Business error with context
-    check_business_rules(&request)
-        .want("business rules check")
-        .with(&ctx)?;
-
-    ctx.with("step", "persistence");
-
-    // System error with context
-    save_to_database(&processed_data)
-        .want("data persistence")
-        .with(&ctx)?;
-
-    Ok(())
-}
-```
-
-### Error Propagation Strategies
-```rust
-use orion_error::{UvsReason, StructError, ErrorOwe};
-
-// Different conversion strategies
-fn process_with_strategies() -> Result<(), StructError<UvsReason>> {
-    // Strategy 1: Convert to validation error
-    let input = get_input().owe_validation()?;
-
-    // Strategy 2: Convert to business error
-    let validated = validate(input).owe_biz()?;
-
-    // Strategy 3: Convert to system error
-    let result = process(validated).owe_sys()?;
-
-    // Strategy 4: Convert with custom reason
-    let final_result = finalize(result).owe(UvsReason::business_error("finalization failed"))?;
-
-    Ok(final_result)
-}
-```
-
-### Error Recovery Patterns
-```rust
-use orion_error::UvsReason;
-
-fn robust_operation() -> Result<(), MyError> {
-    let mut attempts = 0;
-    let max_attempts = 3;
-
-    loop {
-        attempts += 1;
-
-        match attempt_operation() {
-            Ok(result) => return Ok(result),
-            Err(error) => {
-                // Check if error is retryable and within attempt limit
-                if error.is_retryable() && attempts < max_attempts {
-                    log::warn!("Attempt {} failed, retrying: {}", attempts, error);
-                    std::thread::sleep(std::time::Duration::from_secs(2));
-                    continue;
-                } else {
-                    return Err(error.into());
-                }
-            }
+        match self {
+            Self::InvalidRequest => 1000,
+            Self::Uvs(reason) => reason.error_code(),
         }
     }
 }
 
-// Fallback pattern
-fn operation_with_fallback() -> Result<String, MyError> {
-    // Try primary method
-    primary_method().map_err(|e| {
-        log::warn!("Primary method failed: {}", e);
-        // Convert to business error with fallback context
-        UvsReason::business_error("primary method unavailable, fallback not implemented")
-    })
+fn load_config() -> Result<String, StructError<AppError>> {
+    let mut ctx = OperationContext::want("load_config");
+    ctx.record("path", "config.toml");
+
+    std::fs::read_to_string("config.toml")
+        .owe_sys_source()
+        .want("read config file")
+        .with(&ctx)
 }
 ```
 
-### Error Monitoring Integration
+Notes:
+
+- `DomainReason` is usually implemented automatically when your enum satisfies `From<UvsReason> + Display + PartialEq`.
+- Use `record(...)` on `OperationContext`; `with(...)` on the context itself is deprecated.
+- Default to `owe_*_source()` for real error types; use legacy `owe_*()` only when the upstream error is merely `Display`.
+
+## Core Concepts
+
+### 1. `UvsReason`
+
+`UvsReason` is the built-in cross-project error taxonomy:
+
+- Business layer: `ValidationError` `100`, `BusinessError` `101`, `NotFoundError` `102`, `PermissionError` `103`, `LogicError` `104`, `RunRuleError` `105`
+- Infrastructure layer: `DataError` `200`, `SystemError` `201`, `NetworkError` `202`, `ResourceError` `203`, `TimeoutError` `204`
+- Config/external layer: `ConfigError` `300`, `ExternalError` `301`
+
+Useful helpers:
+
+- `error_code()`
+- `is_retryable()`
+- `is_high_severity()`
+- `category_name()`
+
+### 2. `StructError<R>`
+
+`StructError<R>` is the main structured wrapper around a domain reason `R`.
+
+It carries:
+
+- `reason`
+- `detail`
+- `position`
+- context stack
+- optional underlying `source`
+
+Construction styles:
+
 ```rust
-use orion_error::UvsReason;
-
-// Integration with monitoring systems
-struct ErrorMonitor;
-
-impl ErrorMonitor {
-    fn track_error(&self, error: &UvsReason) {
-        // Send to monitoring system
-        let event = MonitoringEvent {
-            error_code: error.error_code(),
-            category: error.category_name(),
-            severity: if error.is_high_severity() { "high" } else { "normal" },
-            retryable: error.is_retryable(),
-            message: error.to_string(),
-            timestamp: chrono::Utc::now(),
-        };
-
-        self.send_to_monitoring(event);
-    }
-
-    fn should_alert(&self, error: &UvsReason) -> bool {
-        error.is_high_severity() ||
-        error.error_code() >= 200 // Infrastructure layer errors
-    }
-}
-
-// Usage in application
-fn handle_api_error(error: UvsReason) -> HttpResponse {
-    let monitor = ErrorMonitor::new();
-    monitor.track_error(&error);
-
-    if monitor.should_alert(&error) {
-        alert_team(&error);
-    }
-
-    // Convert error to HTTP response based on category
-    match error.category_name() {
-        "validation" => HttpResponse::BadRequest().json(error.to_string()),
-        "business" => HttpResponse::Conflict().json(error.to_string()),
-        "not_found" => HttpResponse::NotFound().json(error.to_string()),
-        "permission" => HttpResponse::Unauthorized().json(error.to_string()),
-        "system" | "network" | "timeout" | "resource" => {
-            HttpResponse::ServiceUnavailable().json(error.to_string())
-        }
-        _ => HttpResponse::InternalServerError().json(error.to_string()),
-    }
-}
+let err = StructError::from(UvsReason::validation_error())
+    .with_detail("missing field: user_id");
 ```
 
-## Migration Guide
-
-### From Version 0.2 to 0.3
-
-The error classification system has been significantly improved with a new hierarchical structure. Here's how to migrate:
-
-#### **Error Type Changes**
 ```rust
-// Old way (v0.2)
-use orion_error::UvsReason;
-
-let error = UvsReason::BizError("business logic failed".into());
-let error = UvsReason::LogicError("logic error".into());
-let error = UvsReason::Timeout("timeout occurred".into());
-
-// New way (v0.3)
-use orion_error::UvsReason;
-
-let error = UvsReason::business_error("business logic failed");
-let error = UvsReason::validation_error("logic error");
-let error = UvsReason::timeout_error("timeout occurred");
+let err = StructError::builder(UvsReason::validation_error())
+    .detail("missing field: user_id")
+    .position(location!())
+    .finish();
 ```
 
-#### **Trait Method Changes**
+With preserved source:
+
 ```rust
-// Old way (v0.2)
-let error = string_value.from_biz();
-let error = string_value.from_logic();
-let error = string_value.from_rule();
-
-// New way (v0.3)
-let error = UvsReason::from_biz(string_value);
-let error = UvsReason::from_validation(string_value);
-// Note: Rule errors have been removed, use ValidationError instead
+let err = StructError::builder(UvsReason::system_error())
+    .detail("failed to read config")
+    .source(std::io::Error::other("disk offline"))
+    .finish();
 ```
 
-#### **Error Code Changes**
-Error codes have been reorganized by layers:
+### 3. Context Propagation
+
 ```rust
-// Old codes
-BizError -> 101
-LogicError -> 100
-Timeout -> 109
+use orion_error::{ContextRecord, ErrorWith, OperationContext};
 
-// New codes
-ValidationError -> 100
-BusinessError -> 101
-NotFoundError -> 102
-PermissionError -> 103
-TimeoutError -> 204
+let mut ctx = OperationContext::want("process_order");
+ctx.record("order_id", "123");
+ctx.record("user_id", "42");
+
+let result = do_work()
+    .want("validate order")
+    .with(&ctx);
 ```
 
-#### **New Features Usage**
+Rules of thumb:
+
+- `OperationContext::want("process_order")` defines the outermost goal for this call.
+- Chained `.want("validate order")` on an error appends an inner path segment instead of replacing the outer goal.
+- Display and `serde` now expose both `Want` and `Path`, for example: `Want=process_order`, `Path=process_order / validate order`.
+- Use `target_main()` to read the outermost goal and `target_path()` to read the full path.
+
+### 4. Conversion Helpers
+
+Default recommendation for plain `Result<T, E: Error>`:
+
 ```rust
-// Check retryability
-if error.is_retryable() {
-    // Implement retry logic
-}
-
-// Check severity
-if error.is_high_severity() {
-    // Send high priority alert
-}
-
-// Get category for metrics
-let category = error.category_name();
+read_file().owe_sys_source()?;
+http_call().owe_net_source()?;
 ```
 
-## Full Example
-See [examples/order_case.rs](examples/order_case.rs) for a comprehensive example showing all the new error classification features in action.
+Use legacy `owe_*()` only for sources that are not real error types and only implement `Display`:
 
-## Error Classification System
-
-The `UvsReason` provides a comprehensive error classification system organized in three distinct layers:
-
-### 🏗️ Error Layer Architecture
-
-#### **Business Layer Errors (100-199)**
-These are user-facing errors that are expected in normal application operation.
-
-| Error Type | Code | Description | When to Use |
-|------------|------|-------------|-------------|
-| `ValidationError` | 100 | Input validation failures | Invalid parameters, format errors, constraint violations |
-| `BusinessError` | 101 | Business logic violations | Rule violations, state conflicts, domain-specific errors |
-| `NotFoundError` | 102 | Resource not found | Database record missing, file not found, user doesn't exist |
-| `PermissionError` | 103 | Authorization failures | Access denied, authentication failed, insufficient permissions |
-
-#### **Infrastructure Layer Errors (200-299)**
-System-level failures that should be rare and often require operational attention.
-
-| Error Type | Code | Description | When to Use |
-|------------|------|-------------|-------------|
-| `DataError` | 200 | Data processing errors | Database failures, data corruption, serialization errors |
-| `SystemError` | 201 | OS and file system errors | Disk full, file permission issues, OS-level failures |
-| `NetworkError` | 202 | Network connectivity errors | HTTP timeouts, connection failures, DNS resolution |
-| `ResourceError` | 203 | Resource exhaustion | Memory full, CPU overload, connection pool exhausted |
-| `TimeoutError` | 204 | Operation timeouts | Database query timeout, external service timeout |
-
-#### **Configuration & External Layer Errors (300-399)**
-Environment-related issues and third-party service failures.
-
-| Error Type | Code | Description | When to Use |
-|------------|------|-------------|-------------|
-| `ConfigError` | 300 | Configuration issues | Missing config files, invalid configuration values |
-| `ExternalError` | 301 | Third-party service errors | Payment gateway failures, external API failures |
-
-## Error Classification
-## Error Display
-Built-in Display implementation shows full error chain:
-```text
-[Error Code 500] Insufficient funds
-Caused by:
-  0: User not found (code103)
-     Detail: uid:456
-     Context: "Validate funds"
-  1: Storage full (code500)
-     Context: "Save order"
-```
-
-## Contributing
-Issues and PRs are welcome. Please follow existing code style.
-
-## License
-MIT License
-
-
-
----
-
-# orion-error-zh <a name="orion-error-zh"></a>
-
-
-用于构建大型应用程序的结构化错误处理库，提供完整的错误上下文追踪和灵活的归集策略
-
-## 功能特性
-
-- **结构化错误**：支持多层错误归集，保留完整错误链
-- **错误分类**：
-  - 业务错误（BizError） - 领域相关的可恢复错误
-  - 系统错误（SysError） - 基础设施级别的严重错误
-- **上下文追踪**：支持添加多级上下文信息
-- **错误代码**：支持自定义错误代码体系
-- **错误转换**：提供多种错误转换策略：
-  ```rust
-  .owe()      // 转换为业务错误
-  .owe_sys()  // 转换为系统错误
-  .err_conv() // 自动推导转换
-  ```
-  ## 安装
-
-  在 Cargo.toml 中添加：
-  ```toml
-  [dependencies]
-  orion-error = "0.2"
-  ```
-
-
-
-## 核心概念
-
-### 错误定义
-使用枚举定义领域错误类型，实现 `DomainReason` trait：
 ```rust
-#[derive(Debug, Display)]
-enum OrderReason {
-    InsufficientFunds,
-    UserNotFound,
-}
-
-impl DomainReason for OrderReason {}
+parse_input().owe_validation()?;
+message_only_result.owe_biz()?;
 ```
 
-### 错误构造
-使用链式调用构建错误上下文：
+For converting one `StructError<R1>` into another `StructError<R2>`:
+
 ```rust
-validate_user(user_id)
-    .want("验证用户")          // 添加操作描述
-    .with_detail("uid:123")    // 添加调试细节
-    .owe(OrderError::UserNotFound) // 转换为上层错误类型
+repo_call().err_conv()?;
 ```
 
-### 错误处理
-#### 转换策略
-| 方法         | 说明                          |
-|--------------|-----------------------------|
-| `.owe()`     | 转换为指定业务错误，保留原始错误链   |
-| `.owe_sys()` | 标记为系统级错误                |
-| `.err_conv()`| 自动推导错误类型转换             |
+`err_conv()` preserves context, detail, position, and source.
 
-#### 处理模式
+For wrapping a lower-layer `StructError` into a new upper-layer reason while keeping the old error as `source`:
+
 ```rust
-// 模式1：直接转换
-parse_input().map_err(|e| e.owe(OrderError::ParseFailed))?;
-
-// 模式2：添加上下文
-db.query()
-   .want("读取订单数据")
-   .with_detail(format!("order_id={id}"))
-   .err_conv()?;
+repo_call().err_wrap(UvsReason::system_error())?;
 ```
-## 完整示例
-见 [examples/order_case.rs](examples/order_case.rs)
 
-## 错误展示
-内置 Display 实现可展示完整错误链：
-```text
-[错误代码 500] 账户余额不足
-Caused by:
-  0: 用户不存在 (代码103)
-     详情: uid:456
-     上下文: "验证资金"
-  1: 存储空间不足 (代码500)
-     上下文: "保存订单"
+## Logging
+
+`OperationContext` supports optional logging integration.
+
+```rust
+use orion_error::{op_context, ContextRecord};
+
+let mut ctx = op_context!("sync-user").with_auto_log();
+ctx.record("user_id", "42");
+ctx.info("starting sync");
+
+do_sync()?;
+ctx.mark_suc();
 ```
-## 贡献指南
-欢迎提交 issue 和 PR，请遵循现有代码风格
 
-## 许可证
-MIT License
+Use `scoped_success()` if you want RAII-style success marking.
+
+## Source Chain
+
+If you use `with_source(...)` or `owe_*_source()`, the original error remains available:
+
+```rust
+let err: StructError<UvsReason> = std::fs::read_to_string("config.toml")
+    .owe_sys_source()
+    .unwrap_err();
+
+assert!(std::error::Error::source(&err).is_some());
+assert!(err.root_cause().is_some());
+```
+
+You can also inspect the entire chain:
+
+```rust
+let chain = err.source_chain();
+let frames = err.source_frames();
+let pretty = err.display_chain();
+```
+
+With the `serde` feature, serialized output also includes:
+
+- `want`
+- `path`
+- `source_frames`
+- `source_message`
+- `source_chain`
+
+`source_frames` is the structured form of the chain. Each frame contains:
+
+- `index`
+- `message`
+- optional `display`
+- optional `type_name`
+- optional `error_code`
+- optional `reason`
+- optional `want`
+- optional `path`
+- optional `detail`
+- `is_root_cause`
+
+For `StructError` sources, `message` is the stable reason text and `display` carries the full formatted error. `debug` remains available on `SourceFrame` at runtime, but it is not serialized by default because `Debug` output may contain sensitive internal fields. `source_chain` is kept as a compatibility summary; new observability pipelines should prefer `source_frames`. `type_name` is best-effort and should not be treated as a complete or stable classification key.
+
+The underlying trait object itself is still not serialized.
+
+If you use legacy `owe_*()` helpers, only the display string is copied into `detail`, so they are not the preferred path for normal Rust errors.
+
+## `thiserror` Integration
+
+Recommended pattern:
+
+- use `thiserror` for domain enum definition
+- include `Uvs(UvsReason)` as the bridge variant
+- implement `ErrorCode`
+- use `orion-error` for conversion, context, and classification
+
+See [docs/thiserror-comparison.md](docs/thiserror-comparison.md).
+
+## Migration Notes
+
+Prefer these current names:
+
+- `CwdGuard`-style example does not apply here; ignore older cross-project docs
+- `OperationContext::record(...)` instead of deprecated `with(...)`
+- `with_auto_log()` instead of deprecated `with_exit_log()`
+- prefer `owe_*_source()` by default; keep `owe_*()` for `Display`-only cases
+
+## Validation
+
+From crate root:
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-features -- --test-threads=1
+cargo run --example order_case
+cargo run --example logging_example --features log
+```
+
+## Chinese Notes
+
+当前版本文档以源码为准，推荐优先参考：
+
+- [docs/tutorial.md](docs/tutorial.md)
+- [docs/LOGGING.md](docs/LOGGING.md)
+- [docs/thiserror-comparison.md](docs/thiserror-comparison.md)
+
+如果 README 与源码冲突，请以 `src/` 和测试为准。
