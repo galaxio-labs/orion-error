@@ -17,6 +17,7 @@
 - 使用 `OperationContext::record(...)`，不要继续新增 `ctx.with(...)`
 - 使用 `StructError::from(UvsReason::validation_error()).with_detail(...)`
 - 使用 `owe_*_source()` 保留真实 source chain
+- 对 `StructError<_>` 的跨层传播，优先使用 `err_conv()` 或 `err_wrap(...)`
 - `OperationContext::want(...)` 表示最外层目标；错误链上的 `.want(...)` 用于补全内部 `Path`
 - `UvsReason::*_error()` 构造器不接收消息参数
 

@@ -1,32 +1,47 @@
-1. **领域错误定义**：
-   - 使用`OrderError`枚举定义业务相关的错误类型
-   - 实现`DomainReason`标记trait和`Display`用于错误展示
+# `order_case` 示例说明
 
-2. **错误处理模式**：
-   - 使用`WithContext`添加上下文：
-   ```rust
-   .with(OperationContext::want("解析订单"))
-   ```
-   - 使用`owe`转换底层错误：
-   ```rust
-   .map_err(|e| e.owe(OrderError::UserNotFound))
-   ```
-   - 使用`owe_sys`转换系统级错误：
-   ```rust
-   .map_err(|e| e.owe_sys())
-   ```
+这个示例现在对齐当前推荐写法，重点展示三条路径：
 
-3. **错误信息增强**：
-   - 添加详细错误信息：
-   ```rust
-   .with_detail(format!("当前余额：{balance}，需要：{amount}"))
-   ```
+1. 普通错误转结构化错误时，优先保留真实 source。
+2. 下层已经返回 `StructError<_>` 时，跨层传播优先使用 `err_conv()`。
+3. `OperationContext::want(...)` 只表达最外层目标，链式 `.want(...)` 只补充内部路径。
 
-4. **错误展示**：
-   - 实现`print_error`函数展示完整的错误链：
-   ```rust
-   [错误代码 103] sys error > Storage capacity exceeded
-   Target:保存订单
-   error context:
-       "解析订单"
-       "验证资金"
+## 示例里的推荐做法
+
+- 入口上下文使用：
+
+```rust
+let mut ctx = OperationContext::want("place_order");
+ctx.record("order", order_txt);
+```
+
+- 解析层已经返回 `StructError<ParseReason>`，服务层继续向上转成 `StructError<OrderReason>` 时，使用：
+
+```rust
+Self::parse_order(order_txt, amount)
+    .want("解析订单")
+    .with(&ctx)
+    .err_conv()?;
+```
+
+- 用户查询和存储层也都走 `err_conv()`，而不是再回退到 `.owe_*()`。
+
+- 存储层把底层 `io::Error` 转成结构化错误时，直接保留真实 source：
+
+```rust
+StructError::from(StoreReason::StorageFull)
+    .with_detail("storage capacity exceeded")
+    .with_source(e)
+```
+
+## 这个示例想表达什么
+
+- `owe_*_source()` 适合普通 `Result<T, E>`，其中 `E` 是真实错误类型。
+- `err_conv()` 适合 `Result<T, StructError<R1>> -> Result<T, StructError<R2>>`。
+- `err_wrap(...)` 适合上层要主动建立一个新的 reason 边界时使用。
+
+如果你只是想跑示例：
+
+```bash
+cargo run --example order_case
+```

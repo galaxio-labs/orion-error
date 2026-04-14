@@ -6,16 +6,16 @@
 
 ```toml
 [dependencies]
-orion-error = "0.6"
+orion-error = "0.6.1"
 ```
 
 可选特性：
 
 ```toml
 [dependencies]
-orion-error = { version = "0.6", features = ["serde"] }
+orion-error = { version = "0.6.1", features = ["serde"] }
 # 或
-orion-error = { version = "0.6", features = ["tracing"] }
+orion-error = { version = "0.6.1", features = ["tracing"] }
 ```
 
 默认启用 `log`。
@@ -62,6 +62,7 @@ fn load_user(user_id: u64) -> Result<String, StructError<UserError>> {
 - 领域错误一般不必手写 `impl DomainReason`；满足 `From<UvsReason> + Display + PartialEq` 即自动实现。
 - `record(...)` 是当前推荐的上下文写法。
 - `owe_sys_source()` 会保留底层 `io::Error`。
+- 如果上游已经是 `StructError<_>`，优先用 `err_conv()` 或 `err_wrap(...)`，不要再回退到 `.owe_*()`。
 
 ## 1. 定义领域错误
 
@@ -217,6 +218,13 @@ fn service_call() -> Result<(), StructError<UvsReason>> {
 ```
 
 这种方式更适合 service/repository/infrastructure 分层包装。
+
+### 推荐决策顺序
+
+- 上游是普通 `Error` 类型：优先 `owe_*_source()`
+- 上游只实现 `Display`：再考虑兼容用法 `owe_*()`
+- 上游已经是 `StructError<_>` 且只做 reason 映射：优先 `err_conv()`
+- 上游已经是 `StructError<_>` 且要新建上层语义边界：优先 `err_wrap(...)`
 
 ## 5. `UvsReason` 选择建议
 

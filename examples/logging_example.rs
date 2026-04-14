@@ -1,13 +1,13 @@
-//! 展示WithContext日志记录功能的示例
-//! 此示例展示了如何在无错误情况下使用WithContext记录有价值的上下文信息
+//! 展示 OperationContext 日志记录功能的示例。
+//! 此示例使用当前更推荐的 `op_context!` + `record(...)` + `scoped_success()` 组合。
 
-use orion_error::{ContextRecord, OperationContext};
+use orion_error::{op_context, ContextRecord};
 
 fn main() {
     // 初始化日志系统（实际项目中需要在main函数开始处初始化）
 
     env_logger::init();
-    println!("=== WithContext日志记录示例 ===\n");
+    println!("=== OperationContext 日志记录示例 ===\n");
 
     // 示例1: 订单处理流程中的日志记录
     process_order("order_123", 100.0, "customer_456");
@@ -19,8 +19,7 @@ fn main() {
 }
 
 fn process_order(order_id: &str, amount: f64, customer_id: &str) {
-    // 创建WithContext对象来收集上下文信息
-    let mut ctx = OperationContext::want("process_order").with_auto_log();
+    let mut ctx = op_context!("process_order").with_auto_log();
     ctx.record("order_id", order_id);
     {
         let mut scope = ctx.scoped_success();
@@ -53,7 +52,7 @@ fn validate_order(amount: f64) -> bool {
 
 fn successful_operation() {
     // 展示在成功操作中如何记录有价值的上下文信息
-    let mut ctx = OperationContext::want("data_processing");
+    let mut ctx = op_context!("data_processing");
     {
         let mut scope = ctx.scoped_success();
         scope.record("batch_size", "1000");

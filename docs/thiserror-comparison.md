@@ -70,6 +70,11 @@ fn handle() -> Result<(), StructError<AppError>> {
 
 默认优先使用 `owe_*_source()`。
 
+如果上游已经是 `StructError<_>`，则不要再走 `.owe_*()` / `.owe_*_source()`：
+
+- 做 reason 类型转换时，优先 `err_conv()`
+- 做上层语义包装时，优先 `err_wrap(...)`
+
 ## 实践建议
 
 - 服务边界对外暴露 `error_code()` 和受控错误信息

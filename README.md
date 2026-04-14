@@ -17,16 +17,16 @@ Structured error handling for Rust services with:
 
 ```toml
 [dependencies]
-orion-error = "0.6"
+orion-error = "0.6.1"
 ```
 
 Optional features:
 
 ```toml
 [dependencies]
-orion-error = { version = "0.6", features = ["serde"] }
+orion-error = { version = "0.6.1", features = ["serde"] }
 # or
-orion-error = { version = "0.6", features = ["tracing"] }
+orion-error = { version = "0.6.1", features = ["tracing"] }
 ```
 
 Default features include `log`.
@@ -73,6 +73,7 @@ Notes:
 - `DomainReason` is usually implemented automatically when your enum satisfies `From<UvsReason> + Display + PartialEq`.
 - Use `record(...)` on `OperationContext`; `with(...)` on the context itself is deprecated.
 - Default to `owe_*_source()` for real error types; use legacy `owe_*()` only when the upstream error is merely `Display`.
+- For `Result<T, StructError<_>>`, prefer `err_conv()` or `err_wrap(...)` instead of routing the error back through `owe_*()`.
 
 ## Core Concepts
 
@@ -163,7 +164,7 @@ parse_input().owe_validation()?;
 message_only_result.owe_biz()?;
 ```
 
-For converting one `StructError<R1>` into another `StructError<R2>`:
+For converting one `StructError<R1>` into another `StructError<R2>`, prefer `err_conv()`:
 
 ```rust
 repo_call().err_conv()?;
@@ -171,11 +172,17 @@ repo_call().err_conv()?;
 
 `err_conv()` preserves context, detail, position, and source.
 
-For wrapping a lower-layer `StructError` into a new upper-layer reason while keeping the old error as `source`:
+If the upper layer wants to redefine the reason instead of converting it, use `err_wrap(...)` to keep the lower `StructError` as `source`:
 
 ```rust
 repo_call().err_wrap(UvsReason::system_error())?;
 ```
+
+In other words:
+
+- `owe_*_source()` is for `Result<T, E>` where `E` is a real non-structured error type
+- `err_conv()` is for `Result<T, StructError<R1>>` to `Result<T, StructError<R2>>`
+- `err_wrap(...)` is for `Result<T, StructError<R1>>` when the upper layer wants a new reason boundary
 
 ## Logging
 

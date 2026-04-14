@@ -4,22 +4,24 @@
 
 use derive_more::From;
 use orion_error::{
-    print_error, ContextRecord, ErrorCode, ErrorConv, ErrorOwe, ErrorWith, OperationContext,
-    StructError, UvsReason,
+    print_error, ContextRecord, ErrorCode, ErrorConv, ErrorWith, OperationContext, StructError,
+    UvsReason,
 };
-use std::{
-    fmt::{Display, Formatter},
-    sync::atomic::Ordering,
-};
+use std::sync::atomic::Ordering;
 use thiserror::Error;
 
 // ========== 领域错误定义 ==========
-#[derive(Debug, PartialEq, Clone, From)]
+#[derive(Debug, PartialEq, Clone, Error, From)]
 pub enum OrderReason {
+    #[error("format error")]
     FormatError,
+    #[error("insufficient funds")]
     InsufficientFunds,
+    #[error("storage full")]
     StorageFull,
+    #[error("user not found")]
     UserNotFound,
+    #[error("{0}")]
     Uvs(UvsReason),
 }
 impl ErrorCode for OrderReason {
@@ -66,7 +68,7 @@ impl ErrorCode for ParseReason {
 impl From<ParseReason> for OrderReason {
     fn from(value: ParseReason) -> Self {
         match value {
-            ParseReason::FormatError => Self::Uvs(UvsReason::validation_error()),
+            ParseReason::FormatError => Self::FormatError,
             ParseReason::Uvs(uvs_reason) => Self::Uvs(uvs_reason),
         }
     }
@@ -83,7 +85,7 @@ pub enum UserReason {
 impl From<UserReason> for OrderReason {
     fn from(value: UserReason) -> Self {
         match value {
-            UserReason::NotFound => Self::Uvs(UvsReason::not_found_error()),
+            UserReason::NotFound => Self::UserNotFound,
             UserReason::Uvs(uvs_reason) => Self::Uvs(uvs_reason),
         }
     }
@@ -92,7 +94,7 @@ impl From<UserReason> for OrderReason {
 impl From<StoreReason> for OrderReason {
     fn from(value: StoreReason) -> Self {
         match value {
-            StoreReason::StorageFull => Self::Uvs(UvsReason::resource_error()),
+            StoreReason::StorageFull => Self::StorageFull,
             StoreReason::Uvs(uvs_reason) => Self::Uvs(uvs_reason),
         }
     }
@@ -101,18 +103,6 @@ pub type OrderError = StructError<OrderReason>;
 pub type StoreError = StructError<StoreReason>;
 pub type ParseError = StructError<ParseReason>;
 pub type UserError = StructError<UserReason>;
-
-impl Display for OrderReason {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            OrderReason::FormatError => write!(f, "订单格式错误"),
-            OrderReason::InsufficientFunds => write!(f, "账户余额不足"),
-            OrderReason::StorageFull => write!(f, "订单存储空间不足"),
-            OrderReason::UserNotFound => write!(f, "用户不存在"),
-            OrderReason::Uvs(uvs_reason) => write!(f, "{uvs_reason}"),
-        }
-    }
-}
 
 // ========== 数据层 ==========
 pub mod storage {
@@ -132,7 +122,14 @@ pub mod storage {
     pub static STORAGE_CAPACITY: AtomicUsize = AtomicUsize::new(2);
     static ORDERS: Mutex<Vec<Order>> = Mutex::new(Vec::new());
     pub fn save(order: Order) -> Result<(), StoreError> {
-        save_db_impl(order).owe_sys()
+        save_db_impl(order).map_err(|e| match e.kind() {
+            std::io::ErrorKind::OutOfMemory => StructError::from(StoreReason::StorageFull)
+                .with_detail("storage capacity exceeded")
+                .with_source(e),
+            _ => StructError::from(StoreReason::from(UvsReason::system_error()))
+                .with_detail("persist order failed")
+                .with_source(e),
+        })
     }
 
     fn save_db_impl(order: Order) -> Result<(), std::io::Error> {
@@ -167,14 +164,14 @@ impl OrderService {
         let order = Self::parse_order(order_txt, amount)
             .want("解析订单")
             .with(&ctx)
-            .owe_biz()?;
+            .err_conv()?;
 
         Self::validate_funds(user_id, order.amount)
             .want("验证资金")
             .with(&ctx)?;
 
         let order = storage::Order { user_id, amount };
-        Self::save_order(order).want("保存订单")
+        Self::save_order(order).want("保存订单").with(&ctx)
     }
 
     fn parse_order(txt: &str, amount: f64) -> Result<storage::Order, ParseError> {
