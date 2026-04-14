@@ -1,11 +1,17 @@
-extern mod cfm { git = "https://github.com/galaxy-operators/cfm-gxl.git", channel = "${GXL_CHANNEL:beta}" }
+extern mod vfm { path = "@{PATH}"; }
+
 mod  envs {
   env default {
+     ROOT= "./";
   }
 }
-mod main  : lib_ver_adm {
-  #[auto_load(exit)]
-  flow _set_ver {
-    gx.cmd (  "cargo semver set ${VERSION}" );
+mod main   : lib_ver_adm {
+
+#[auto_load(entry)]
+  flow _entry : ver.use {
+  }
+
+#[auto_load(exit)]
+  flow _set_ver | ver.set_cargo_ver {
   }
 }

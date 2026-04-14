@@ -1,73 +1,45 @@
-extern mod ver,git { git = "https://github.com/galaxy-operators/cfm-gxl.git", channel = "${GXL_CHANNEL:main}" }
-extern mod rust { path = "./_gal/mods";  }
+extern mod rust,ver { path = "@{PATH}"; }
+
 mod envs  {
    env _common  : rust_env.init   {
     root      = ".";
-    target_name = "";
-    prj_key   = "orion-infra" ;
-    AFT_PREFIX = "ds-";
+    prj_key   = "orion-error" ;
+    target_name = "bin-name";
 
   }
 
   #[usage(desp="use debug ",color="blue")]
   env debug :  _common,rust_env.debug {
-    AFT_PREFIX = "dd-" ;
   }
   #[usage(desp="use debug ",color="blue")]
   env release :  _common,rust_env.release{
-    AFT_PREFIX = "ds-" ;
   }
-
 
   #[usage(desp="default mamcos", color="green")]
-  env default    : _common,debug;
+  env default    : envs._common,debug;
 }
 
-mod main   {
+mod main  {
       bld_bins = "target/${ENV_BUILD_NAME}" ;
-      rls_bins = "target/release" ;
-      prj_bins = "${ENV_ROOT}/bin" ;
-      usr_bins = "${HOME}/bin" ;
+      HOME_BIN = "${HOME}/bin" ;
 
     #[auto_load(entry)]
-    flow __into  {
-        DIST_REPO = "unkonw";
-        gx.echo ( value: "${GXL_OS_SYS}" )
-        if ${GXL_OS_SYS} =* "arm64_macos_*" {
-            DIST_REPO = "macos";
-        } else if ${GXL_OS_SYS} =* "x86_64_ubuntu*" {
-            DIST_REPO = "ubuntu22";
-        }
-        else {
-            DIST_REPO = "other";
-        }
-
+    flow __into | conf {
     }
+    #[task(name="config")]
     flow conf  {
-
-      gx.echo ( "PRJ_BINS: ${MAIN_PRJ_BINS} " );
-      gx.echo ( "USR_BIN : ${MAIN_USR_BINS} " );
     }
 
-
-
-  #[usage(desp="build system")]
-  flow build | ver.use | conf |  rust_flow.build  {
-      gx.cmd (  "mkdir -p ${MAIN_USR_BINS}" );
-      gx.cmd (  "mkdir -p ${MAIN_PRJ_BINS}" );
+  #[task(name="${ENV_PRJ_KEY}@build")]
+  flow ver.use | conf | rust_flow.build | @build  {
+      gx.echo(  "${MAIN_HOME_BIN}" );
   }
   #[usage(desp="lint code")]
-  flow lint : rust_flow.lint {} ;
-  flow test : main.build : {
-    gx.cmd ( "cargo test --all -- --test-threads=1"  );
-  }
+  flow lint | rust_flow.lint {} ;
 
-  flow debug_ut {
-    gx.cmd ( "RUST_LOG=debug cargo test ${GXL_CMD_ARG} -- --nocapture" );
-  }
-  flow ci_msg {
-    gx.cmd("git diff > code_diff.txt");
-    gx.ai_chat( "生成简要的 git commit message", prompt_file : "./code_diff.txt");
+  #[task(name="test")]
+  flow build  |   @test  {
+    gx.cmd ( "cargo test --all ${ENV_BUILD_FLAG}", log : "1" , out:"true"  );
   }
 
 }
