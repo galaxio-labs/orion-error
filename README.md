@@ -60,6 +60,8 @@ impl ErrorCode for AppError {
 fn load_config() -> Result<String, StructError<AppError>> {
     let mut ctx = OperationContext::want("load_config");
     ctx.record("path", "config.toml");
+    ctx.record_meta("config.kind", "app_config");
+    ctx.record_meta("config.format", "toml");
 
     std::fs::read_to_string("config.toml")
         .owe_sys_source()
@@ -148,6 +150,29 @@ Rules of thumb:
 - Display and `serde` now expose both `Want` and `Path`, for example: `Want=process_order`, `Path=process_order / validate order`.
 - Use `target_main()` to read the outermost goal and `target_path()` to read the full path.
 
+### 3.1 Typed Metadata
+
+`OperationContext` can also carry machine-readable metadata for diagnostics and classification:
+
+```rust
+use orion_error::{ErrorMetadata, OperationContext, StructError, UvsReason};
+
+let ctx = OperationContext::want("load sink defaults")
+    .with_meta("config.kind", "sink_defaults")
+    .with_meta("config.scope", "sink")
+    .with_meta("parse.line", 1u32);
+
+let err = StructError::from(UvsReason::config_error()).with(ctx);
+assert_eq!(err.context_metadata().get_str("config.kind"), Some("sink_defaults"));
+```
+
+Recommended usage:
+
+- Put stable classification hints such as `config.kind`, `config.scope`, `component.name`, `parse.line` into metadata.
+- Keep metadata short and machine-readable.
+- Keep long human-facing explanations in `detail`.
+- Metadata is not rendered by default in `Display`.
+
 ### 4. Conversion Helpers
 
 Default recommendation for plain `Result<T, E: Error>`:
@@ -183,6 +208,73 @@ In other words:
 - `owe_*_source()` is for `Result<T, E>` where `E` is a real non-structured error type
 - `err_conv()` is for `Result<T, StructError<R1>>` to `Result<T, StructError<R2>>`
 - `err_wrap(...)` is for `Result<T, StructError<R1>>` when the upper layer wants a new reason boundary
+
+If you want to attach a lower `StructError` directly and preserve its structured source frames, use `with_struct_source(...)`:
+
+```rust
+use orion_error::{ErrorWith, OperationContext, StructError, UvsReason};
+
+let source = StructError::from(UvsReason::config_error()).with(
+    OperationContext::want("load sink defaults")
+        .with_meta("config.kind", "sink_defaults")
+);
+
+let err = StructError::from(UvsReason::system_error())
+    .with(OperationContext::want("start engine").with_meta("component.name", "engine"))
+    .with_struct_source(source);
+
+assert_eq!(err.context_metadata().get_str("component.name"), Some("engine"));
+assert_eq!(
+    err.source_frames()[0].metadata.get_str("config.kind"),
+    Some("sink_defaults")
+);
+```
+
+The same rule applies to the builder API: use `.source_struct(lower_err)` for `StructError<_>` sources, and keep `.source(err)` for ordinary non-structured errors.
+
+## Reports and Redaction
+
+Default `Display` should stay concise. For diagnostics, logs, or structured export, use `ErrorReport` and the explicit render APIs:
+
+```rust
+use orion_error::{RedactPolicy, RenderMode, StructError, UvsReason};
+
+struct SimplePolicy;
+
+impl RedactPolicy for SimplePolicy {
+    fn redact_key(&self, key: &str) -> bool {
+        matches!(key, "password" | "config.secret")
+    }
+
+    fn redact_value(&self, _key: Option<&str>, _value: &str) -> Option<String> {
+        Some("<redacted>".to_string())
+    }
+}
+
+let err = StructError::from(UvsReason::config_error())
+    .with_detail("load config failed")
+    .with(
+        orion_error::OperationContext::want("load config")
+            .with_meta("config.kind", "sink_defaults")
+            .with_meta("config.secret", "/prod/secrets/api-key"),
+    );
+
+let report = err.report();
+assert_eq!(report.root_metadata.get_str("config.kind"), Some("sink_defaults"));
+
+let verbose = err.render(RenderMode::Verbose);
+let redacted = err.render_redacted(RenderMode::Verbose, &SimplePolicy);
+
+assert!(verbose.contains("config.secret"));
+assert!(redacted.contains("<redacted>"));
+```
+
+Recommended usage:
+
+- `report()` for structured inspection or custom serialization pipelines.
+- `render(RenderMode::Compact)` for short summaries.
+- `render(RenderMode::Verbose)` for local diagnostics and debug output.
+- `render_redacted(...)` before writing potentially sensitive diagnostics to logs or external systems.
 
 ## Logging
 
@@ -241,6 +333,7 @@ With the `serde` feature, serialized output also includes:
 - optional `want`
 - optional `path`
 - optional `detail`
+- optional `metadata`
 - `is_root_cause`
 
 For `StructError` sources, `message` is the stable reason text and `display` carries the full formatted error. `debug` remains available on `SourceFrame` at runtime, but it is not serialized by default because `Debug` output may contain sensitive internal fields. `source_chain` is kept as a compatibility summary; new observability pipelines should prefer `source_frames`. `type_name` is best-effort and should not be treated as a complete or stable classification key.

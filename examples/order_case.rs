@@ -4,8 +4,8 @@
 
 use derive_more::From;
 use orion_error::{
-    print_error, ContextRecord, ErrorCode, ErrorConv, ErrorWith, OperationContext, StructError,
-    UvsReason,
+    print_error, ContextRecord, ErrorCode, ErrorConv, ErrorWith, OperationContext, RedactPolicy,
+    RenderMode, StructError, UvsReason,
 };
 use std::sync::atomic::Ordering;
 use thiserror::Error;
@@ -104,6 +104,18 @@ pub type StoreError = StructError<StoreReason>;
 pub type ParseError = StructError<ParseReason>;
 pub type UserError = StructError<UserReason>;
 
+struct ExampleRedactPolicy;
+
+impl RedactPolicy for ExampleRedactPolicy {
+    fn redact_key(&self, key: &str) -> bool {
+        matches!(key, "order" | "config.secret")
+    }
+
+    fn redact_value(&self, _key: Option<&str>, _value: &str) -> Option<String> {
+        Some("<redacted>".to_string())
+    }
+}
+
 // ========== 数据层 ==========
 pub mod storage {
     use std::sync::{
@@ -161,6 +173,8 @@ impl OrderService {
     ) -> Result<storage::Order, OrderError> {
         let mut ctx = OperationContext::want("place_order");
         ctx.record("order", order_txt);
+        ctx.record_meta("component.name", "order_service");
+        ctx.record_meta("config.secret", "/prod/orders/api-token");
         let order = Self::parse_order(order_txt, amount)
             .want("解析订单")
             .with(&ctx)
@@ -178,6 +192,11 @@ impl OrderService {
         if txt.is_empty() {
             return Err(StructError::builder(ParseReason::FormatError)
                 .detail("订单文本不能为空")
+                .context(
+                    OperationContext::want("parse order text")
+                        .with_meta("config.kind", "order_txt")
+                        .with_meta("parse.field", "order_txt"),
+                )
                 .finish());
         }
 
@@ -185,6 +204,9 @@ impl OrderService {
         if amount <= 0.0 {
             return Err(StructError::builder(ParseReason::FormatError)
                 .detail("订单金额必须大于零")
+                .context(
+                    OperationContext::want("parse order amount").with_meta("parse.field", "amount"),
+                )
                 .finish());
         }
 
@@ -225,11 +247,23 @@ impl OrderService {
 
 // ========== 展示错误处理 ==========
 
+fn print_verbose_report(err: &OrderError) {
+    println!("verbose report:\n{}", err.render(RenderMode::Verbose));
+    println!(
+        "redacted verbose report:\n{}",
+        err.render_redacted(RenderMode::Verbose, &ExampleRedactPolicy)
+    );
+}
+
 fn main() {
     // 测试用例 1: 空订单文本
     let case1 = OrderService::place_order(123, 200.0, "");
     if let Err(e) = case1 {
         print_error(&e);
+        println!("root metadata: {:?}", e.context_metadata().as_map());
+        let report = e.report();
+        println!("report path: {:?}", report.path);
+        print_verbose_report(&e);
     }
 
     // 测试用例 2: 用户不存在
@@ -249,11 +283,15 @@ fn main() {
     let case4 = OrderService::place_order(123, 200.0, "valid_order");
     if let Err(e) = case4 {
         print_error(&e);
+        if let Some(frame) = e.source_frames().first() {
+            println!("first source metadata: {:?}", frame.metadata.as_map());
+        }
     }
 
     // 测试用例 5: 金额验证失败
     let case5 = OrderService::place_order(123, 0.0, "negative_amount");
     if let Err(e) = case5 {
         print_error(&e);
+        println!("root metadata: {:?}", e.context_metadata().as_map());
     }
 }

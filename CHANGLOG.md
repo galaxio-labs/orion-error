@@ -1,5 +1,20 @@
 # 更新日志 (CHANGELOG)
 
+## [v0.6.2] - 2026-04-20
+
+### ✨ 能力更新
+- **结构化诊断 metadata**：错误上下文与 source frame 现在都可以携带稳定、机器可读的 metadata，便于上层做分类、聚合与诊断。
+- **structured source 保留能力增强**：跨层包装 `StructError` 时，可以显式保留 source 的 `reason / want / path / detail / metadata`，避免降级为纯文本 source。
+- **统一诊断报告接口**：新增 `ErrorReport`、`report()`、`report_redacted()`、`render()`、`render_redacted()`，同时支持结构化查看和文本输出。
+- **安全展示协议落地**：新增统一 redaction 扩展点 `RedactPolicy`，可以在日志或外发前对诊断信息做集中脱敏。
+- **结构化导出更完整**：启用 `serde` feature 后，可直接导出 `ErrorReport` 与带 metadata 的 source frame 数据。
+
+### 📚 文档与示例
+- README、`order_case` 示例、诊断协议设计文档已同步更新到上述能力。
+
+### 🧪 验证
+- `cargo test --all-features -- --test-threads=1`
+
 ## [v0.6.1] - 2026-04-13
 
 ### ✨ 新增

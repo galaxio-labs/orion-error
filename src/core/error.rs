@@ -5,6 +5,7 @@ use crate::ErrorWith;
 use super::{
     context::{CallContext, OperationContext},
     domain::DomainReason,
+    metadata::ErrorMetadata,
     ContextAdd, ErrorCode,
 };
 #[macro_export]
@@ -27,6 +28,14 @@ impl<T: DomainReason + ErrorCode> ErrorCode for StructError<T> {
 }
 
 type BoxedSource = Arc<dyn StdError + Send + Sync + 'static>;
+
+fn is_struct_error_type_name(type_name: &str) -> bool {
+    type_name.contains("StructError<")
+}
+
+fn assert_non_struct_source(type_name: &str, message: &str) {
+    assert!(!is_struct_error_type_name(type_name), "{message}");
+}
 
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -55,7 +64,21 @@ pub struct SourceFrame {
     pub path: Option<String>,
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub detail: Option<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    #[cfg_attr(
+        feature = "serde",
+        serde(skip_serializing_if = "ErrorMetadata::is_empty")
+    )]
+    pub metadata: ErrorMetadata,
     pub is_root_cause: bool,
+}
+
+fn merged_context_metadata(contexts: &[OperationContext]) -> ErrorMetadata {
+    let mut merged = ErrorMetadata::new();
+    for ctx in contexts {
+        merged.merge_missing(ctx.metadata());
+    }
+    merged
 }
 
 fn collect_source_frames(
@@ -82,6 +105,7 @@ fn collect_source_frames(
             want: None,
             path: None,
             detail: None,
+            metadata: ErrorMetadata::default(),
             is_root_cause: false,
         });
         cur = source.source();
@@ -118,6 +142,7 @@ where
         want: source.target_main(),
         path: source.target_path(),
         detail: source.detail().clone(),
+        metadata: source.context_metadata(),
         is_root_cause: source.source_frames().is_empty(),
     });
 
@@ -300,10 +325,18 @@ impl<T: DomainReason> StructError<T> {
     }
 
     #[must_use]
+    /// Attach a non-structured source error.
+    ///
+    /// For `StructError<_>` sources, use `with_struct_source(...)` so metadata and
+    /// structured source frames are preserved.
     pub fn with_source<E>(mut self, source: E) -> Self
     where
         E: StdError + Send + Sync + 'static,
     {
+        assert_non_struct_source(
+            std::any::type_name::<E>(),
+            "use with_struct_source(...) when attaching StructError sources",
+        );
         self.imp.source_frames = Arc::new(collect_source_frames_from(&source));
         self.imp.source = Some(Arc::new(source));
         self
@@ -317,6 +350,14 @@ impl<T: DomainReason> StructError<T> {
         self.imp.source_frames = Arc::new(collect_struct_error_source_frames(&source));
         self.imp.source = Some(Arc::new(source));
         self
+    }
+
+    #[must_use]
+    pub fn with_struct_source<R>(self, source: StructError<R>) -> Self
+    where
+        R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    {
+        self.with_struct_error_source(source)
     }
 
     pub fn source_ref(&self) -> Option<&(dyn StdError + 'static)> {
@@ -337,6 +378,10 @@ impl<T: DomainReason> StructError<T> {
 
     pub fn root_cause_frame(&self) -> Option<&SourceFrame> {
         self.source_frames().last()
+    }
+
+    pub fn context_metadata(&self) -> ErrorMetadata {
+        merged_context_metadata(self.contexts())
     }
 
     pub fn source_chain(&self) -> Vec<String> {
@@ -365,6 +410,18 @@ impl<T: DomainReason> StructError<T> {
             }
         }
         out
+    }
+
+    pub fn render(&self, mode: super::report::RenderMode) -> String {
+        self.report().render(mode)
+    }
+
+    pub fn render_redacted(
+        &self,
+        mode: super::report::RenderMode,
+        policy: &impl super::report::RedactPolicy,
+    ) -> String {
+        self.report().render_redacted(mode, policy)
     }
 }
 
@@ -567,11 +624,28 @@ impl<T: DomainReason> StructErrorBuilder<T> {
         self
     }
 
+    /// Attach a non-structured source error.
+    ///
+    /// For `StructError<_>` sources, use `source_struct(...)` so metadata and
+    /// structured source frames are preserved.
     pub fn source<E>(mut self, source: E) -> Self
     where
         E: StdError + Send + Sync + 'static,
     {
+        assert_non_struct_source(
+            std::any::type_name::<E>(),
+            "use source_struct(...) when attaching StructError sources",
+        );
         self.source_frames = collect_source_frames_from(&source);
+        self.source = Some(Arc::new(source));
+        self
+    }
+
+    pub fn source_struct<R>(mut self, source: StructError<R>) -> Self
+    where
+        R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    {
+        self.source_frames = collect_struct_error_source_frames(&source);
         self.source = Some(Arc::new(source));
         self
     }
@@ -842,5 +916,180 @@ mod tests {
                 "place_order / read_order_payload".to_string()
             ))
         );
+    }
+
+    #[test]
+    fn test_struct_error_context_metadata_prefers_inner_context() {
+        let inner = OperationContext::want("load sink defaults")
+            .with_meta("config.kind", "sink_defaults")
+            .with_meta("file.path", "/tmp/defaults.toml");
+        let outer = OperationContext::want("load infra sink routes")
+            .with_meta("config.kind", "sink_route")
+            .with_meta("config.group", "infra");
+
+        let error = StructError::from(TestDomainReason::TestError)
+            .with(inner)
+            .with(outer);
+
+        let metadata = error.context_metadata();
+        assert_eq!(metadata.get_str("config.kind"), Some("sink_defaults"));
+        assert_eq!(metadata.get_str("file.path"), Some("/tmp/defaults.toml"));
+        assert_eq!(metadata.get_str("config.group"), Some("infra"));
+    }
+
+    #[test]
+    fn test_with_struct_source_preserves_source_context_metadata() {
+        let source = StructError::from(TestDomainReason::TestError).with(
+            OperationContext::want("load sink defaults").with_meta("config.kind", "sink_defaults"),
+        );
+
+        let error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
+            .with_struct_source(source);
+
+        assert_eq!(
+            error.source_frames()[0].metadata.get_str("config.kind"),
+            Some("sink_defaults")
+        );
+    }
+
+    #[test]
+    fn test_builder_source_struct_preserves_source_context_metadata() {
+        let source = StructError::from(TestDomainReason::TestError).with(
+            OperationContext::want("load sink defaults").with_meta("config.kind", "sink_defaults"),
+        );
+
+        let error = StructError::builder(TestDomainReason::Uvs(UvsReason::system_error()))
+            .source_struct(source)
+            .finish();
+
+        assert_eq!(
+            error.source_frames()[0].metadata.get_str("config.kind"),
+            Some("sink_defaults")
+        );
+    }
+
+    #[test]
+    fn test_with_struct_source_keeps_nested_source_frame_metadata() {
+        let leaf = StructError::from(TestDomainReason::TestError).with(
+            OperationContext::want("parse route")
+                .with_meta("config.kind", "sink_route")
+                .with_meta("config.group", "infra"),
+        );
+        let middle = StructError::from(TestDomainReason::Uvs(UvsReason::validation_error()))
+            .with_struct_source(leaf);
+
+        let error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
+            .with_struct_source(middle);
+
+        assert_eq!(
+            error.source_frames()[1].metadata.get_str("config.kind"),
+            Some("sink_route")
+        );
+        assert_eq!(
+            error.source_frames()[1].metadata.get_str("config.group"),
+            Some("infra")
+        );
+    }
+
+    #[test]
+    fn test_root_and_source_metadata_can_be_read_separately() {
+        let source = StructError::from(TestDomainReason::TestError).with(
+            OperationContext::want("load sink defaults").with_meta("config.kind", "sink_defaults"),
+        );
+
+        let error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
+            .with(OperationContext::want("start engine").with_meta("component.name", "engine"))
+            .with_struct_source(source);
+
+        assert_eq!(
+            error.context_metadata().get_str("component.name"),
+            Some("engine")
+        );
+        assert_eq!(
+            error.source_frames()[0].metadata.get_str("config.kind"),
+            Some("sink_defaults")
+        );
+    }
+
+    #[test]
+    fn test_display_does_not_include_metadata() {
+        let error = StructError::from(TestDomainReason::TestError).with(
+            OperationContext::want("load sink defaults")
+                .with_meta("config.kind", "sink_defaults")
+                .with_meta("config.group", "infra"),
+        );
+
+        let display_output = format!("{error}");
+        assert!(!display_output.contains("config.kind"));
+        assert!(!display_output.contains("sink_defaults"));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_source_frame_serialization_skips_empty_metadata() {
+        let frame = SourceFrame {
+            index: 0,
+            message: "message".to_string(),
+            display: None,
+            debug: "debug".to_string(),
+            type_name: None,
+            error_code: None,
+            reason: None,
+            want: None,
+            path: None,
+            detail: None,
+            metadata: ErrorMetadata::default(),
+            is_root_cause: true,
+        };
+
+        let json_value = serde_json::to_value(&frame).unwrap();
+        assert!(!json_value
+            .as_object()
+            .expect("object")
+            .contains_key("metadata"));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_source_frame_serialization_includes_metadata() {
+        let error = StructError::from(TestDomainReason::TestError).with(
+            OperationContext::want("load sink defaults")
+                .with_meta("config.kind", "sink_defaults")
+                .with_meta("parse.line", 1u32),
+        );
+        let wrapped = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
+            .with_struct_source(error);
+
+        let json_value = serde_json::to_value(&wrapped).unwrap();
+        assert_eq!(
+            json_value["source_frames"][0]["metadata"]["config.kind"],
+            serde_json::Value::String("sink_defaults".to_string())
+        );
+        assert_eq!(
+            json_value["source_frames"][0]["metadata"]["parse.line"],
+            serde_json::json!(1)
+        );
+    }
+
+    #[test]
+    fn test_with_source_debug_asserts_for_struct_error() {
+        let source = StructError::from(TestDomainReason::TestError);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            StructError::from(TestDomainReason::Uvs(UvsReason::system_error())).with_source(source)
+        }));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_builder_source_debug_asserts_for_struct_error() {
+        let source = StructError::from(TestDomainReason::TestError);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            StructError::builder(TestDomainReason::Uvs(UvsReason::system_error()))
+                .source(source)
+                .finish()
+        }));
+
+        assert!(result.is_err());
     }
 }

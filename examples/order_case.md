@@ -5,6 +5,8 @@
 1. 普通错误转结构化错误时，优先保留真实 source。
 2. 下层已经返回 `StructError<_>` 时，跨层传播优先使用 `err_conv()`。
 3. `OperationContext::want(...)` 只表达最外层目标，链式 `.want(...)` 只补充内部路径。
+4. 诊断分类需要的稳定字段，优先写进 typed metadata，而不是塞进 `detail` 或依赖 `Display` 文本匹配。
+5. 默认 `Display` 保持简洁；详细诊断输出应通过 `report()` / `render(RenderMode::Verbose)` / `render_redacted(...)` 显式获取。
 
 ## 示例里的推荐做法
 
@@ -13,6 +15,7 @@
 ```rust
 let mut ctx = OperationContext::want("place_order");
 ctx.record("order", order_txt);
+ctx.record_meta("component.name", "order_service");
 ```
 
 - 解析层已经返回 `StructError<ParseReason>`，服务层继续向上转成 `StructError<OrderReason>` 时，使用：
@@ -34,11 +37,68 @@ StructError::from(StoreReason::StorageFull)
     .with_source(e)
 ```
 
+- 解析层把机器分类信息写进 metadata，而不是写进 `detail`：
+
+```rust
+StructError::builder(ParseReason::FormatError)
+    .detail("订单文本不能为空")
+    .context(
+        OperationContext::want("parse order text")
+            .with_meta("config.kind", "order_txt")
+            .with_meta("parse.field", "order_txt")
+    )
+    .finish()
+```
+
+- 上层可以分别读取 root metadata 和 source frame metadata：
+
+```rust
+let root_meta = err.context_metadata();
+let source_meta = &err.source_frames()[0].metadata;
+```
+
+- 需要结构化诊断快照时，可以先取 `report()`：
+
+```rust
+let report = err.report();
+println!("report path: {:?}", report.path);
+```
+
+- 需要详细文本输出时，显式使用 verbose render：
+
+```rust
+println!("{}", err.render(RenderMode::Verbose));
+```
+
+- 需要写日志或外发时，先走 redaction：
+
+```rust
+struct ExampleRedactPolicy;
+
+impl RedactPolicy for ExampleRedactPolicy {
+    fn redact_key(&self, key: &str) -> bool {
+        matches!(key, "order" | "config.secret")
+    }
+
+    fn redact_value(&self, _key: Option<&str>, _value: &str) -> Option<String> {
+        Some("<redacted>".to_string())
+    }
+}
+
+println!(
+    "{}",
+    err.render_redacted(RenderMode::Verbose, &ExampleRedactPolicy)
+);
+```
+
 ## 这个示例想表达什么
 
 - `owe_*_source()` 适合普通 `Result<T, E>`，其中 `E` 是真实错误类型。
 - `err_conv()` 适合 `Result<T, StructError<R1>> -> Result<T, StructError<R2>>`。
 - `err_wrap(...)` 适合上层要主动建立一个新的 reason 边界时使用。
+- `with_meta()` / `record_meta()` 适合附加稳定、短小、机器可读的诊断字段。
+- `report()` / `render(...)` 适合显式诊断输出；默认 `Display` 不应该被扩展成 verbose 调试出口。
+- `render_redacted(...)` 适合在日志、审计、外发 JSON 前统一执行敏感信息清洗。
 
 如果你只是想跑示例：
 

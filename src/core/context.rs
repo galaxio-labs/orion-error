@@ -5,6 +5,8 @@ use std::{
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
 };
+
+use super::metadata::{ErrorMetadata, MetadataValue};
 #[derive(Debug, Clone, PartialEq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OperationResult {
@@ -35,6 +37,12 @@ pub struct OperationContext {
     target: Option<String>,
     #[cfg_attr(feature = "serde", serde(default))]
     path: Vec<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    #[cfg_attr(
+        feature = "serde",
+        serde(skip_serializing_if = "ErrorMetadata::is_empty")
+    )]
+    metadata: ErrorMetadata,
 }
 impl Default for OperationContext {
     fn default() -> Self {
@@ -45,6 +53,7 @@ impl Default for OperationContext {
             result: OperationResult::Fail,
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
+            metadata: ErrorMetadata::default(),
         }
     }
 }
@@ -58,6 +67,7 @@ impl From<CallContext> for OperationContext {
             path: Vec::new(),
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
+            metadata: ErrorMetadata::default(),
         }
     }
 }
@@ -199,6 +209,10 @@ impl OperationContext {
         &self.path
     }
 
+    pub fn metadata(&self) -> &ErrorMetadata {
+        &self.metadata
+    }
+
     pub fn new() -> Self {
         Self {
             target: None,
@@ -207,6 +221,7 @@ impl OperationContext {
             result: OperationResult::Fail,
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
+            metadata: ErrorMetadata::default(),
         }
     }
     pub fn want<S: Into<String>>(target: S) -> Self {
@@ -218,6 +233,7 @@ impl OperationContext {
             result: OperationResult::Fail,
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
+            metadata: ErrorMetadata::default(),
         }
     }
     #[deprecated(since = "0.5.4", note = "use with_auto_log")]
@@ -275,6 +291,24 @@ impl OperationContext {
             Some(self.path.join(" / "))
         }
     }
+
+    pub fn record_meta<K, V>(&mut self, key: K, value: V)
+    where
+        K: Into<String>,
+        V: Into<MetadataValue>,
+    {
+        self.metadata.insert(key, value);
+    }
+
+    pub fn with_meta<K, V>(mut self, key: K, value: V) -> Self
+    where
+        K: Into<String>,
+        V: Into<MetadataValue>,
+    {
+        self.record_meta(key, value);
+        self
+    }
+
     pub fn mark_suc(&mut self) {
         self.result = OperationResult::Suc;
     }
@@ -423,6 +457,22 @@ impl OperationContext {
     pub fn log_trace<S: AsRef<str>>(&self, message: S) {
         self.trace(message)
     }
+
+    pub(crate) fn context_mut_for_report(&mut self) -> &mut CallContext {
+        &mut self.context
+    }
+
+    pub(crate) fn replace_target_for_report(&mut self, target: Option<String>) {
+        self.target = target;
+    }
+
+    pub(crate) fn replace_path_for_report(&mut self, path: Vec<String>) {
+        self.path = path;
+    }
+
+    pub(crate) fn replace_metadata_for_report(&mut self, metadata: ErrorMetadata) {
+        self.metadata = metadata;
+    }
 }
 
 pub struct OperationScope<'a> {
@@ -479,6 +529,7 @@ impl From<String> for OperationContext {
             result: OperationResult::Fail,
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
+            metadata: ErrorMetadata::default(),
         }
     }
 }
@@ -492,6 +543,7 @@ impl From<&PathBuf> for OperationContext {
             result: OperationResult::Fail,
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
+            metadata: ErrorMetadata::default(),
         }
     }
 }
@@ -505,6 +557,7 @@ impl From<&Path> for OperationContext {
             result: OperationResult::Fail,
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
+            metadata: ErrorMetadata::default(),
         }
     }
 }
@@ -518,6 +571,7 @@ impl From<&str> for OperationContext {
             result: OperationResult::Fail,
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
+            metadata: ErrorMetadata::default(),
         }
     }
 }
@@ -531,6 +585,7 @@ impl From<(&str, &str)> for OperationContext {
             result: OperationResult::Fail,
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
+            metadata: ErrorMetadata::default(),
         }
     }
 }
@@ -544,6 +599,7 @@ impl From<(&str, String)> for OperationContext {
             result: OperationResult::Fail,
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
+            metadata: ErrorMetadata::default(),
         }
     }
 }
@@ -572,6 +628,7 @@ where
             result: OperationResult::Fail,
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
+            metadata: ErrorMetadata::default(),
         }
     }
 }
@@ -585,6 +642,7 @@ impl From<(String, String)> for OperationContext {
             result: OperationResult::Fail,
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
+            metadata: ErrorMetadata::default(),
         }
     }
 }
@@ -1508,5 +1566,76 @@ mod tests {
         );
         assert_eq!(ctx.context().items[2].0, "new_key2");
         assert!(ctx.context().items[2].1.contains("/new/path.txt"));
+    }
+
+    #[test]
+    fn test_context_metadata_records_values() {
+        let ctx = OperationContext::want("load")
+            .with_meta("config.kind", "wpsrc")
+            .with_meta("parse.line", 1u32)
+            .with_meta("parse.strict", true);
+
+        assert_eq!(ctx.metadata().get_str("config.kind"), Some("wpsrc"));
+        assert!(ctx.metadata().as_map().contains_key("parse.line"));
+        assert!(ctx.metadata().as_map().contains_key("parse.strict"));
+    }
+
+    #[test]
+    fn test_context_metadata_duplicate_key_overwrites() {
+        let ctx = OperationContext::new()
+            .with_meta("config.kind", "sink_route")
+            .with_meta("config.kind", "sink_defaults");
+
+        assert_eq!(ctx.metadata().get_str("config.kind"), Some("sink_defaults"));
+    }
+
+    #[test]
+    fn test_context_metadata_ignores_empty_key() {
+        let result = std::panic::catch_unwind(|| OperationContext::new().with_meta("", "ignored"));
+
+        if cfg!(debug_assertions) {
+            assert!(result.is_err());
+        } else {
+            let ctx = result.expect("release build should ignore empty metadata key");
+            assert!(ctx.metadata().is_empty());
+        }
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_context_serialization_skips_empty_metadata_and_reads_missing_field() {
+        let ctx = OperationContext::want("serialization_test");
+
+        let serialized = serde_json::to_value(&ctx).expect("序列化失败");
+        assert!(!serialized
+            .as_object()
+            .expect("object")
+            .contains_key("metadata"));
+
+        let deserialized: OperationContext =
+            serde_json::from_value(serialized).expect("反序列化失败");
+        assert!(deserialized.metadata().is_empty());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_context_serialization_preserves_metadata() {
+        let ctx = OperationContext::want("serialization_test")
+            .with_meta("config.kind", "sink_defaults")
+            .with_meta("parse.line", 3u32);
+
+        let serialized = serde_json::to_value(&ctx).expect("序列化失败");
+        assert_eq!(
+            serialized["metadata"]["config.kind"],
+            serde_json::Value::String("sink_defaults".to_string())
+        );
+        assert_eq!(serialized["metadata"]["parse.line"], serde_json::json!(3));
+
+        let deserialized: OperationContext =
+            serde_json::from_value(serialized).expect("反序列化失败");
+        assert_eq!(
+            deserialized.metadata().get_str("config.kind"),
+            Some("sink_defaults")
+        );
     }
 }

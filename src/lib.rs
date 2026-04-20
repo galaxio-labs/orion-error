@@ -4,8 +4,9 @@ mod traits;
 
 pub use core::ErrStrategy;
 pub use core::{
-    print_error, print_error_zh, ConfErrReason, DomainReason, ErrorCode, SourceFrame,
-    StructErrorTrait, UvsFrom, UvsReason,
+    print_error, print_error_zh, ConfErrReason, DomainReason, ErrorCode, ErrorMetadata,
+    ErrorReport, MetadataValue, RedactPolicy, RenderMode, SourceFrame, StructErrorTrait, UvsFrom,
+    UvsReason,
 };
 pub use core::{ContextRecord, OperationContext, OperationScope, WithContext};
 pub use core::{StructError, StructErrorBuilder};
@@ -27,15 +28,17 @@ pub mod prelude {
         ErrorOweSourceBase, ErrorWith, ErrorWrap, ToStructError, UvsFrom, WrapStructError,
     };
     pub use crate::{
-        OperationContext, OperationScope, SourceFrame, StructError, StructErrorBuilder, UvsReason,
+        ErrorMetadata, ErrorReport, MetadataValue, OperationContext, OperationScope, RedactPolicy,
+        RenderMode, SourceFrame, StructError, StructErrorBuilder, UvsReason,
     };
 }
 
 /// Grouped core types and enums.
 pub mod types {
     pub use crate::{
-        ConfErrReason, ErrStrategy, OperationContext, OperationScope, SourceFrame, StructError,
-        StructErrorBuilder, UvsReason, WithContext,
+        ConfErrReason, ErrStrategy, ErrorMetadata, ErrorReport, MetadataValue, OperationContext,
+        OperationScope, RedactPolicy, RenderMode, SourceFrame, StructError, StructErrorBuilder,
+        UvsReason, WithContext,
     };
 }
 

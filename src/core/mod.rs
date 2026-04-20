@@ -2,7 +2,9 @@ mod case;
 mod context;
 mod domain;
 mod error;
+mod metadata;
 mod reason;
+mod report;
 mod universal;
 use std::fmt::Display;
 
@@ -10,7 +12,9 @@ pub use context::ContextAdd;
 pub use context::{ContextRecord, OperationContext, OperationScope, WithContext};
 pub use domain::DomainReason;
 pub use error::{convert_error, SourceFrame, StructError, StructErrorBuilder, StructErrorTrait};
+pub use metadata::{ErrorMetadata, MetadataValue};
 pub use reason::ErrorCode;
+pub use report::{ErrorReport, RedactPolicy, RenderMode};
 pub use universal::{ConfErrReason, UvsFrom, UvsReason};
 
 pub enum ErrStrategy {

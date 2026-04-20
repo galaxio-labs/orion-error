@@ -56,7 +56,7 @@ where
     R2: DomainReason,
 {
     fn wrap(self, reason: R2) -> StructError<R2> {
-        StructError::from(reason).with_struct_error_source(self)
+        StructError::from(reason).with_struct_source(self)
     }
 }
 
@@ -84,7 +84,7 @@ mod tests {
     use std::error::Error as StdError;
 
     use super::*;
-    use crate::{ErrorCode, StructError, UvsReason};
+    use crate::{ErrorCode, ErrorWith, OperationContext, StructError, UvsReason};
 
     // 定义测试用的 DomainReason
     #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -257,5 +257,40 @@ mod tests {
         );
         assert_eq!(err.source_frames()[1].message, "db unavailable");
         assert!(err.source_frames()[1].is_root_cause);
+    }
+
+    #[test]
+    fn test_err_conv_preserves_context_metadata() {
+        let original: Result<i32, StructError<TestReason>> =
+            Err(StructError::from(TestReason::TestError).with(
+                OperationContext::want("load sink defaults")
+                    .with_meta("config.kind", "sink_defaults"),
+            ));
+
+        let converted: Result<i32, StructError<AnotherReason>> = original.err_conv();
+        let err = converted.unwrap_err();
+
+        assert_eq!(
+            err.context_metadata().get_str("config.kind"),
+            Some("sink_defaults")
+        );
+    }
+
+    #[test]
+    fn test_err_wrap_preserves_source_frame_metadata() {
+        let original: Result<i32, StructError<TestReason>> =
+            Err(StructError::from(TestReason::TestError).with(
+                OperationContext::want("load sink defaults")
+                    .with_meta("config.kind", "sink_defaults"),
+            ));
+
+        let wrapped: Result<i32, StructError<AnotherReason>> =
+            original.err_wrap(AnotherReason::AnotherError);
+        let err = wrapped.unwrap_err();
+
+        assert_eq!(
+            err.source_frames()[0].metadata.get_str("config.kind"),
+            Some("sink_defaults")
+        );
     }
 }
