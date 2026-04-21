@@ -1,6 +1,6 @@
 # Orion Error Mini RFC
 
-更新时间：2026-04-21
+更新时间：2026-04-22
 
 对于 `0.6.x / V1 API` 的具体落地执行、修复顺序与评审标准，先以 [V1 修复与评审基线](./v1-fix-and-review-plan.md) 为准；本文档继续承担设计解释、边界说明与 `V2` 规划。
 
@@ -1958,3 +1958,359 @@ pub struct ErrorReport { ... }
 一句话总结：
 
 > 最好的错误 API，不是“防止你用错”，而是“让你几乎不需要思考也不容易用错”。
+
+## 17. V3：稳定架构协议版
+
+前面的 `V1 / V2` 主要解决的是：
+
+- API 如何分流
+- source 模型如何收敛
+- `StructError` 与 `StdError` 的关系如何调整
+
+如果继续往前走，`V3` 要解决的就不再只是“错误对象怎么设计”，而是：
+
+- 如何让错误体系成为跨 crate、跨边界、跨出口都稳定的工程协议
+
+换句话说：
+
+- `V1` 偏兼容收敛
+- `V2` 偏模型重构
+- `V3` 偏协议化、治理化、制度化
+
+### 17.1 V3 的目标
+
+`V3` 版本的核心目标有 5 个：
+
+1. 让错误身份稳定，而不是主要依赖 `detail` 文本
+2. 让上下文可机器消费，而不只是人类可读
+3. 让 runtime / snapshot / renderer 三层真正闭合
+4. 让 CLI / HTTP / 日志 / 测试输出共享同一套协议
+5. 让错误规范可被 lint / test / migration checker 自动约束
+
+### 17.2 V3 的核心判断
+
+`V2` 已经足够像一个“优秀错误内核”；
+`V3` 要把它推进成“稳定架构协议”。
+
+这意味着 `orion-error` 不再只回答：
+
+- 怎么构造错误
+- 怎么 attach source
+
+还必须回答：
+
+- 错误的稳定身份是什么
+- 哪些上下文是 typed meta，哪些只是展示文本
+- 不同出口如何稳定映射
+- 如何保证不同项目不会把同一个库用成不同方言
+
+### 17.3 稳定身份：`Reason + Code + Category`
+
+`V3` 保持 `Reason` 是主语义载体，继续坚持：
+
+- `Reason` 决定错误身份
+- `ErrorCategory` 只是粗粒度分桶
+- `detail` 不参与错误身份判定
+
+但在 `V3` 里，需要把 `code` 的治理规则正式化。
+
+建议：
+
+```rust
+pub trait Reason: Debug + Display + Send + Sync + 'static {
+    fn code(&self) -> &'static str;
+    fn category(&self) -> ErrorCategory;
+}
+```
+
+并增加协议约束：
+
+- `code` 必须稳定
+- `code` 必须可用于测试断言
+- `code` 必须可用于 CLI / HTTP / 日志 / telemetry 分桶
+- `code` 的变更应视为兼容性事件，而不只是文案调整
+
+建议命名风格：
+
+- `<domain>.<kind>`
+- 如：
+  - `conf.file_not_found`
+  - `conf.invalid_value`
+  - `biz.reload_in_progress`
+  - `logic.unsupported_file_type`
+  - `sys.io_error`
+
+进一步建议：
+
+- `orion-error` core 不强制具体命名
+- 但应在文档中明确 code namespace 规则与稳定性承诺
+
+### 17.4 Typed Meta：从“上下文文本”升级为“结构化上下文”
+
+`V2` 的 `at(...) / doing(...) / tag(...)` 已经解决了可读性问题，但还不够支撑稳定协议。
+
+`V3` 需要明确区分两类上下文：
+
+1. typed meta
+2. display context
+
+建议核心模型演进为：
+
+```rust
+pub struct StructError<R> {
+    reason: R,
+    detail: Option<String>,
+    context: Vec<ContextFrame>,
+    meta: ErrorMeta,
+    source: Option<SourcePayload>,
+}
+
+pub struct ErrorMeta {
+    file_path: Option<String>,
+    target: Option<String>,
+    operation: Option<String>,
+    component: Option<String>,
+    resource_id: Option<String>,
+    hint: Vec<String>,
+    extra: BTreeMap<&'static str, String>,
+}
+```
+
+边界建议：
+
+- `at(...)` 优先落到 `file_path` / `target`
+- `doing(...)` 优先落到 `operation`
+- `tag(...)` 只作为扩展槽位，不应替代稳定字段
+- `with(...)` 在 `V3` 中继续弱化，避免长期承载混合语义
+
+这会直接带来四个收益：
+
+- renderer 可以稳定渲染，而不是猜文本
+- 测试可以断言 `operation` / `file_path` / `component`
+- HTTP/CLI 可以生成更稳定的 hint
+- observability / telemetry 可以直接消费 meta
+
+### 17.5 Runtime / Snapshot / Report / Renderer 四层闭合
+
+`V2` 已经提出了 `runtime / snapshot / report` 分层方向；`V3` 需要把它做成完整闭环。
+
+建议最终拆成四层：
+
+1. `StructError<R>`
+   - 运行时传播对象
+2. `StructErrorSnapshot`
+   - 稳定导出对象
+3. `ErrorReport`
+   - 面向展示策略的渲染输入
+4. `Renderer`
+   - 不同出口的格式化实现
+
+草案：
+
+```rust
+pub struct StructErrorSnapshot {
+    code: String,
+    category: ErrorCategory,
+    detail: Option<String>,
+    meta: ErrorMetaSnapshot,
+    source: Option<Box<StructErrorSnapshot>>,
+}
+
+pub struct ErrorReport {
+    code: String,
+    category: ErrorCategory,
+    summary: String,
+    detail: Option<String>,
+    hints: Vec<String>,
+    meta: ErrorMetaSnapshot,
+    source_chain: Vec<SourceReportFrame>,
+}
+```
+
+然后提供稳定转换：
+
+```rust
+impl<R: Reason> StructError<R> {
+    pub fn snapshot(&self) -> StructErrorSnapshot;
+    pub fn report(&self) -> ErrorReport;
+}
+```
+
+以及 renderer 协议：
+
+```rust
+pub trait ErrorRenderer {
+    type Output;
+
+    fn render(&self, report: &ErrorReport) -> Self::Output;
+}
+```
+
+这层设计的关键是：
+
+- runtime 不直接背负所有展示责任
+- snapshot 不直接等于 CLI 文本
+- renderer 不反向污染错误内部模型
+
+### 17.6 出口映射协议
+
+`V3` 必须补齐一层 `report policy`，定义不同出口如何消费 `code / category / meta`。
+
+至少需要覆盖：
+
+- CLI
+- HTTP / RPC
+- 日志
+- 测试断言
+- 机器导出
+
+建议约束：
+
+- CLI：
+  - 优先显示 `summary + detail + operation + file_path`
+  - 默认保留 source chain
+- HTTP：
+  - 优先基于 `code / category` 映射状态码
+  - 默认隐藏底层 raw source 文本
+- 日志：
+  - 优先输出完整 `code / category / meta / source_chain`
+- 测试：
+  - 优先断言 `code / category / meta`
+  - 避免对 `detail` 全文本做脆弱断言
+- 导出：
+  - 统一基于 `snapshot` / `report`，而不是复用 CLI 文本
+
+示意：
+
+```rust
+pub trait ErrorPolicy {
+    fn http_status(&self, code: &str, category: ErrorCategory) -> u16;
+    fn user_visibility(&self, code: &str) -> Visibility;
+    fn default_hints(&self, code: &str) -> &'static [&'static str];
+}
+```
+
+这一步非常重要，因为它把“错误对象”升级成了“错误协议”。
+
+### 17.7 Enforcement：让规范可验证
+
+大型工程里，只有设计，没有 enforcement，最终一定会漂。
+
+`V3` 需要把错误规则制度化：
+
+- lint / grep 规则
+- compile-time trait boundary
+- snapshot test helpers
+- migration checker
+- deprecated API banlist
+
+建议至少提供：
+
+1. `cargo` 检查建议
+   - 禁止 `with_source(...)`
+   - 禁止在新代码里继续写 `want(...)`
+   - 禁止 `Result<T, String>` 出现在领域边界
+2. 测试 helper
+   - `assert_err_code(...)`
+   - `assert_err_category(...)`
+   - `assert_err_operation(...)`
+   - `assert_err_path(...)`
+3. migration checker
+   - 自动扫描旧 API
+   - 给出推荐替换路径
+4. report snapshot helper
+   - 断言稳定 snapshot，而不是断言 CLI 文本
+
+示意：
+
+```rust
+assert_err_code(&err, "biz.reload_in_progress");
+assert_err_category(&err, ErrorCategory::Biz);
+assert_err_operation(&err, "reload engine");
+```
+
+### 17.8 V3 对 `StructError: StdError` 的最终立场
+
+`V3` 不改变 `V2` 的推荐方向：
+
+- 长期最优形态仍然是方案 C
+  - `StructError<R>` 作为领域真错误
+  - `OwnedStdStructError<R>` 作为标准生态桥接层
+
+原因是：
+
+- 稳定架构协议要求内部语义纯净
+- 同时大型 Rust 工程仍然需要接入 `anyhow` / 第三方生态
+
+因此，`V3` 的立场不是“彻底抛弃标准错误生态”，而是：
+
+- 把桥接变成显式边界动作
+- 不再让领域内错误与 `StdError` 身份长期混在一起
+
+### 17.9 V3 推荐的 API 层次
+
+建议把 API 分成四层：
+
+1. Core model
+   - `StructError<R>`
+   - `SourcePayload`
+   - `ErrorMeta`
+   - `StructErrorSnapshot`
+   - `ErrorReport`
+2. Construction API
+   - `into_as(...)`
+   - `wrap_as(...)`
+   - `with_std_source(...)`
+   - `with_struct_source(...)`
+   - `at(...)`
+   - `doing(...)`
+3. Bridge API
+   - `into_std()`
+   - `as_std()`
+   - 官方 `anyhow` bridge
+4. Governance API
+   - test helper
+   - lint/check helper
+   - migration helper
+   - renderer/policy trait
+
+这能避免把所有能力都挤进一个 `StructError` 类型上。
+
+### 17.10 V3 与 V1 / V2 的关系
+
+`V3` 不是推翻 `V1 / V2`，而是在它们之上补齐协议层。
+
+推荐路线：
+
+1. `V1`
+   - 先在兼容前提下完成 API 分流与旧入口收敛
+2. `V2`
+   - 完成 source 模型与 bridge 模型重构
+3. `V3`
+   - 增加稳定 code 治理、typed meta、report policy、enforcement
+
+因此更准确地说：
+
+- `V1` 解决“别再继续混”
+- `V2` 解决“把模型拆对”
+- `V3` 解决“让这套模型成为长期协议”
+
+### 17.11 一句话结论
+
+如果 `V2` 的关键词是：
+
+- `split source`
+- `wrap vs into`
+- `StructError vs StdError`
+
+那么 `V3` 的关键词应该是：
+
+- `stable code`
+- `typed meta`
+- `snapshot/report/renderer`
+- `policy`
+- `enforcement`
+
+一句话总结：
+
+> V2 让 `orion-error` 成为一套更干净的错误模型；V3 才让它成为一套真正稳定的大型工程错误协议。
