@@ -12,11 +12,12 @@ pub use core::{ContextRecord, OperationContext, OperationScope, WithContext};
 pub use core::{StructError, StructErrorBuilder};
 pub use testcase::{TestAssert, TestAssertWithMsg};
 pub use traits::{
-    ConvStructError, ErrorConv, ErrorWith, ErrorWrap, ToStructError, WrapStructError,
+    raw_source, ConvStructError, ErrorConv, ErrorWith, ErrorWrap, ErrorWrapAs, IntoAs, RawSource,
+    RawStdError, ToStructError, WrapStructError, WrapStructErrorAs,
 };
 pub use traits::{ErrorOwe, ErrorOweBase, ErrorOweSource, ErrorOweSourceBase};
 
-/// Commonly used traits and types for convenient wildcard imports.
+/// V1 primary-path traits and types for convenient wildcard imports.
 ///
 /// # Example
 /// ```rust,ignore
@@ -24,12 +25,22 @@ pub use traits::{ErrorOwe, ErrorOweBase, ErrorOweSource, ErrorOweSourceBase};
 /// ```
 pub mod prelude {
     pub use crate::{
-        ContextRecord, ErrorCode, ErrorConv, ErrorOwe, ErrorOweBase, ErrorOweSource,
-        ErrorOweSourceBase, ErrorWith, ErrorWrap, ToStructError, UvsFrom, WrapStructError,
+        raw_source, ErrorMetadata, ErrorReport, MetadataValue, OperationContext, OperationScope,
+        RawSource, RawStdError, RedactPolicy, RenderMode, SourceFrame, StructError,
+        StructErrorBuilder, UvsReason,
     };
     pub use crate::{
-        ErrorMetadata, ErrorReport, MetadataValue, OperationContext, OperationScope, RedactPolicy,
-        RenderMode, SourceFrame, StructError, StructErrorBuilder, UvsReason,
+        ContextRecord, ErrorCode, ErrorConv, ErrorWith, ErrorWrapAs, IntoAs, ToStructError,
+        UvsFrom, WrapStructErrorAs,
+    };
+}
+
+/// Compatibility wildcard imports for legacy conversion APIs.
+///
+/// Use this only when maintaining older `owe_*()` / `err_wrap(...)` call paths.
+pub mod compat_prelude {
+    pub use crate::{
+        ErrorOwe, ErrorOweBase, ErrorOweSource, ErrorOweSourceBase, ErrorWrap, WrapStructError,
     };
 }
 
@@ -45,8 +56,14 @@ pub mod types {
 /// Grouped conversion and context extension traits.
 pub mod traits_ext {
     pub use crate::{
-        ContextRecord, ConvStructError, ErrorCode, ErrorConv, ErrorOwe, ErrorOweBase,
-        ErrorOweSource, ErrorOweSourceBase, ErrorWith, ErrorWrap, ToStructError, UvsFrom,
-        WrapStructError,
+        ContextRecord, ConvStructError, ErrorCode, ErrorConv, ErrorWith, ErrorWrapAs, IntoAs,
+        ToStructError, UvsFrom, WrapStructErrorAs,
+    };
+}
+
+/// Compatibility trait exports for legacy conversion helpers.
+pub mod compat_traits {
+    pub use crate::{
+        ErrorOwe, ErrorOweBase, ErrorOweSource, ErrorOweSourceBase, ErrorWrap, WrapStructError,
     };
 }

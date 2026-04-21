@@ -1,6 +1,8 @@
 # 使用教程
 
-本教程面向 `orion-error 0.6.x`，以当前源码与测试为准。
+本教程面向 `orion-error 0.6.x` 的 `V1 API`，以当前源码与测试为准。
+
+在调整本教程中的主路径、边界约束和评审标准前，先以 [V1 修复与评审基线](./v1-fix-and-review-plan.md) 为准。
 
 ## 安装
 
@@ -20,12 +22,20 @@ orion-error = { version = "0.6.1", features = ["tracing"] }
 
 默认启用 `log`。
 
+## 导入约定
+
+- `orion_error::prelude::*`：V1 主路径通配导入，包含 `IntoAs`、`ErrorWrapAs`、`ErrorConv`、`ErrorWith` 等推荐 API
+- `orion_error::traits_ext::*`：如果你只想按 trait 分组导入 V1 主路径扩展 trait，可以用这一层
+- `orion_error::compat_prelude::*` / `orion_error::compat_traits::*`：只用于兼容旧的 `owe_*()` / `err_wrap(...)` 调用路径
+
+如果是新代码，默认不要把 compat 导入和 `prelude::*` 混成一个体系。
+
 ## 一分钟上手
 
 ```rust
 use derive_more::From;
 use orion_error::{
-    ContextRecord, ErrorCode, ErrorOweSource, ErrorWith, OperationContext, StructError, UvsReason,
+    ContextRecord, ErrorCode, ErrorWith, IntoAs, OperationContext, StructError, UvsReason,
 };
 use thiserror::Error;
 
@@ -47,12 +57,12 @@ impl ErrorCode for UserError {
 }
 
 fn load_user(user_id: u64) -> Result<String, StructError<UserError>> {
-    let mut ctx = OperationContext::want("load_user");
+    let mut ctx = OperationContext::doing("load_user");
     ctx.record("user_id", user_id.to_string());
 
     std::fs::read_to_string("user.json")
-        .owe_sys_source()
-        .want("read user profile")
+        .into_as(UserError::from(UvsReason::system_error()), "read user profile failed")
+        .doing("read user profile")
         .with(&ctx)
 }
 ```
@@ -61,8 +71,9 @@ fn load_user(user_id: u64) -> Result<String, StructError<UserError>> {
 
 - 领域错误一般不必手写 `impl DomainReason`；满足 `From<UvsReason> + Display + PartialEq` 即自动实现。
 - `record(...)` 是当前推荐的上下文写法。
-- `owe_sys_source()` 会保留底层 `io::Error`。
-- 如果上游已经是 `StructError<_>`，优先用 `err_conv()` 或 `err_wrap(...)`，不要再回退到 `.owe_*()`。
+- `into_as(...)` 是普通错误进入结构化体系的主路径。
+- `doing(...)` 在 V1 中只是 `want(...)` 的命名糖衣，不改变 `OperationContext` 底层语义。
+- 如果上游已经是 `StructError<_>`，优先用 `err_conv()` 或 `wrap_as(...)`，不要再回退到 `.owe_*()`。
 
 ## 1. 定义领域错误
 
@@ -110,7 +121,7 @@ let err = StructError::from(UvsReason::validation_error())
 ```rust
 use orion_error::{OperationContext, StructError, UvsReason};
 
-let ctx = OperationContext::want("validate_request");
+let ctx = OperationContext::doing("validate_request");
 
 let err = StructError::builder(UvsReason::validation_error())
     .detail("field `email` is required")
@@ -125,7 +136,7 @@ use orion_error::{StructError, UvsReason};
 
 let err = StructError::builder(UvsReason::system_error())
     .detail("failed to read config")
-    .source(std::io::Error::other("disk offline"))
+    .source_std(std::io::Error::other("disk offline"))
     .finish();
 ```
 
@@ -134,19 +145,20 @@ let err = StructError::builder(UvsReason::system_error())
 ```rust
 use orion_error::{ContextRecord, ErrorWith, OperationContext};
 
-let mut ctx = OperationContext::want("place_order");
+let mut ctx = OperationContext::doing("place_order");
 ctx.record("order_id", "A-1001");
 ctx.record("user_id", "42");
 
 let result = check_inventory()
-    .want("check inventory")
+    .doing("check inventory")
     .with(&ctx);
 ```
 
 推荐约定：
 
-- `OperationContext::want(...)` 写本次调用的最外层目标
-- 错误链上的 `.want(...)` 只追加内部步骤，形成完整 `Path`
+- `OperationContext::doing(...)` 是 V1 推荐主命名，但在 V1 中仍只是 `want(...)` 的命名糖衣
+- 错误链上的 `.doing(...)` 只追加内部步骤，形成完整 `Path`
+- `at(...)` 在 V1 中只是 `with(...)` 的命名糖衣，不承诺写入结构化 target/path
 - `record(...)` 写关键诊断键值
 - `detail(...)` / `with_detail(...)` 写补充调试说明
 
@@ -163,16 +175,21 @@ let result = check_inventory()
 
 ## 4. 错误转换策略
 
-### 默认推荐：保留真实 source
+### 默认推荐：普通错误进入结构化体系
 
-当上游错误实现 `std::error::Error` 时，优先使用 `owe_*_source()`：
+当上游错误实现 `std::error::Error`，并且这是第一次进入结构化错误体系时，优先使用 `into_as(...)`：
 
 ```rust
-std::fs::read_to_string("config.toml").owe_sys_source()?;
-call_http_service().owe_net_source()?;
+use orion_error::IntoAs;
+
+std::fs::read_to_string("config.toml")
+    .into_as(UvsReason::system_error(), "read config failed")?;
+
+call_http_service()
+    .into_as(UvsReason::network_error(), "call http service failed")?;
 ```
 
-这是当前推荐路径。
+这是 V1 推荐主路径。
 
 ### 兼容路径：只保留 detail
 
@@ -186,8 +203,9 @@ run_business_rule().owe_biz()?;
 ### 自定义 reason
 
 ```rust
-some_result.owe(UvsReason::permission_error())?;
-some_io_result.owe_source(UvsReason::system_error())?;
+use orion_error::IntoAs;
+
+some_io_result.into_as(UvsReason::system_error(), "load file failed")?;
 ```
 
 ### `StructError<R1>` 到 `StructError<R2>`
@@ -208,23 +226,29 @@ repo_call().err_conv()?;
 如果你不是做 reason 类型转换，而是要在上层重新定义一个新 reason，同时把下层 `StructError` 整个作为 source 保留下来：
 
 ```rust
-use orion_error::{ErrorWrap, StructError, UvsReason};
+use orion_error::{ErrorWrapAs, StructError, UvsReason};
 
 fn service_call() -> Result<(), StructError<UvsReason>> {
     repo_call()
-        .err_wrap(UvsReason::system_error())
+        .wrap_as(UvsReason::system_error(), "service call failed")
         .map(|_| ())
 }
 ```
 
-这种方式更适合 service/repository/infrastructure 分层包装。
+这种方式更适合作为 V1 的公开主路径，用于 service/repository/infrastructure 分层包装。
+
+兼容说明：
+
+- `err_wrap(...)` 仍然保留
+- 但它属于兼容入口，不属于 V1 推荐主路径
 
 ### 推荐决策顺序
 
-- 上游是普通 `Error` 类型：优先 `owe_*_source()`
-- 上游只实现 `Display`：再考虑兼容用法 `owe_*()`
+- 上游是普通 `Error` 类型：优先 `into_as(...)`
+- 需要显式声明“这是显式实现了 `RawStdError` 的 raw StdError 类型”时：`raw_source(...)` 后再 `into_as(...)`
+- 上游只实现 `Display`：仍走兼容路径 `owe_*()`
 - 上游已经是 `StructError<_>` 且只做 reason 映射：优先 `err_conv()`
-- 上游已经是 `StructError<_>` 且要新建上层语义边界：优先 `err_wrap(...)`
+- 上游已经是 `StructError<_>` 且要新建上层语义边界：优先 `wrap_as(...)`
 
 ## 5. `UvsReason` 选择建议
 
@@ -274,7 +298,12 @@ fn process_order(order_id: &str) -> Result<(), MyError> {
 1. 用 `thiserror` 定义领域错误枚举
 2. 用 `derive_more::From` 接入 `UvsReason`
 3. 实现 `ErrorCode`
-4. 在业务里优先使用 `ErrorOweSource`，必要时再用 `ErrorOwe` / `ErrorConv`
+4. 在业务里优先使用 `IntoAs` / `wrap_as(...)` / `err_conv()`
+
+导入建议：
+
+- 新代码优先 `use orion_error::prelude::*;`
+- 如果必须维护旧的 `owe_*()` / `err_wrap(...)`，再显式补 `use orion_error::compat_prelude::*;`
 
 详见 [thiserror-comparison.md](./thiserror-comparison.md)。
 
@@ -289,11 +318,11 @@ fn process_order(order_id: &str) -> Result<(), MyError> {
 
 优先使用：
 
-- `with_source(...)`
-- `builder.source(...)`
-- `owe_source(...)`
-- `owe_*_source()`
-- `wrap(...)` / `err_wrap(...)`
+- `with_std_source(...)`
+- `builder.source_std(...)`
+- `into_as(...)`
+- `with_struct_source(...)`
+- `wrap_as(...)`
 
 常用链路查看方法：
 
@@ -325,7 +354,7 @@ fn process_order(order_id: &str) -> Result<(), MyError> {
 
 底层 trait object 本体仍然不会直接序列化。
 
-旧的 `owe_*()` 仍可用，但只会把字符串放进 `detail`，因此不应作为普通 Rust error 的默认写法。
+旧的 `owe_*()` / `owe_*_source()` / `want(...)` / `with_source(...)` 仍可用，但都已进入 deprecated path；V1 不建议新增使用。
 
 ## 9. 当前版本的兼容提示
 
@@ -334,13 +363,16 @@ fn process_order(order_id: &str) -> Result<(), MyError> {
 - `OperationContext::with(...)`
 - `OperationContext::with_path(...)`
 - `with_exit_log()`
+- `with_source(...)`
+- `want(...)`
+- `owe_*()` / `owe_*_source()`
 - `impl DomainReason for MyError {}` 这种空实现
 - `UvsReason::validation_error("msg")` 这种带参数构造
 
 当前正确写法：
 
 ```rust
-let mut ctx = OperationContext::want("op");
+let mut ctx = OperationContext::doing("op");
 ctx.record("key", "value");
 
 let err = StructError::from(UvsReason::validation_error())

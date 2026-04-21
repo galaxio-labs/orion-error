@@ -329,6 +329,14 @@ impl<T: DomainReason> StructError<T> {
     ///
     /// For `StructError<_>` sources, use `with_struct_source(...)` so metadata and
     /// structured source frames are preserved.
+    pub fn with_std_source<E>(self, source: E) -> Self
+    where
+        E: StdError + Send + Sync + 'static,
+    {
+        self.with_source(source)
+    }
+
+    #[must_use]
     pub fn with_source<E>(mut self, source: E) -> Self
     where
         E: StdError + Send + Sync + 'static,
@@ -628,6 +636,13 @@ impl<T: DomainReason> StructErrorBuilder<T> {
     ///
     /// For `StructError<_>` sources, use `source_struct(...)` so metadata and
     /// structured source frames are preserved.
+    pub fn source_std<E>(self, source: E) -> Self
+    where
+        E: StdError + Send + Sync + 'static,
+    {
+        self.source(source)
+    }
+
     pub fn source<E>(mut self, source: E) -> Self
     where
         E: StdError + Send + Sync + 'static,

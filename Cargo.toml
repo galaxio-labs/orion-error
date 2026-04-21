@@ -1,6 +1,6 @@
 [package]
 name = "orion-error"
-version = "0.6.2" #@gxl:set(version)
+version = "0.6.3" #@gxl:set(version)
 edition = "2021"
 authors = ["wukong <sec-wukong@outlook.com>"]
 description = "Struct Error for Large Project"
@@ -16,6 +16,9 @@ log = ["dep:log"]
 # tracing 日志集成
 tracing = ["dep:tracing"]
 serde = ["dep:serde"]
+anyhow = ["dep:anyhow"]
+serde_json = ["dep:serde_json"]
+toml = ["dep:toml"]
 
 [dependencies]
 thiserror = "2.0"
@@ -23,6 +26,9 @@ serde = { version = "1.0", features = ["derive", "rc"], optional = true }
 derive_more = { version = "2.1", features = ["from"] }
 log = { version = "0.4", optional = true }
 tracing = { version = "0.1", optional = true }
+anyhow = { version = "1.0", optional = true }
+serde_json = { version = "1.0", optional = true }
+toml = { version = "0.8", optional = true }
 
 
 [dev-dependencies]

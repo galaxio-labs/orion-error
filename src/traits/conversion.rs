@@ -17,6 +17,14 @@ pub trait WrapStructError<R: DomainReason>: Sized {
     fn wrap(self, reason: R) -> StructError<R>;
 }
 
+pub trait ErrorWrapAs<T, R: DomainReason>: Sized {
+    fn wrap_as(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>>;
+}
+
+pub trait WrapStructErrorAs<R: DomainReason>: Sized {
+    fn wrap_as(self, reason: R, detail: impl Into<String>) -> StructError<R>;
+}
+
 impl<T, R1, R2> ErrorConv<T, R2> for Result<T, StructError<R1>>
 where
     R1: DomainReason,
@@ -57,6 +65,27 @@ where
 {
     fn wrap(self, reason: R2) -> StructError<R2> {
         StructError::from(reason).with_struct_source(self)
+    }
+}
+
+impl<T, R1, R2> ErrorWrapAs<T, R2> for Result<T, StructError<R1>>
+where
+    R1: DomainReason + ErrorCode + Display + std::fmt::Debug + Send + Sync + 'static,
+    R2: DomainReason,
+{
+    fn wrap_as(self, reason: R2, detail: impl Into<String>) -> Result<T, StructError<R2>> {
+        let detail = detail.into();
+        self.map_err(|e| e.wrap_as(reason, detail))
+    }
+}
+
+impl<R1, R2> WrapStructErrorAs<R2> for StructError<R1>
+where
+    R1: DomainReason + ErrorCode + Display + std::fmt::Debug + Send + Sync + 'static,
+    R2: DomainReason,
+{
+    fn wrap_as(self, reason: R2, detail: impl Into<String>) -> StructError<R2> {
+        self.wrap(reason).with_detail(detail)
     }
 }
 
@@ -292,5 +321,42 @@ mod tests {
             err.source_frames()[0].metadata.get_str("config.kind"),
             Some("sink_defaults")
         );
+    }
+
+    #[test]
+    fn test_wrap_as_preserves_detail_source_chain_and_metadata() {
+        let original: Result<i32, StructError<TestReason>> =
+            Err(StructError::from(TestReason::TestError)
+                .with_detail("repo layer failed")
+                .with(
+                    OperationContext::want("load sink defaults")
+                        .with_meta("config.kind", "sink_defaults"),
+                )
+                .with_source(std::io::Error::other("db unavailable")));
+
+        let wrapped: Result<i32, StructError<AnotherReason>> =
+            original.wrap_as(AnotherReason::AnotherError, "service layer failed");
+        let err = wrapped.unwrap_err();
+
+        assert_eq!(err.error_code(), 2001);
+        assert_eq!(err.detail().as_deref(), Some("service layer failed"));
+        assert!(StdError::source(&err)
+            .unwrap()
+            .to_string()
+            .contains("test error"));
+        assert_eq!(err.root_cause().unwrap().to_string(), "db unavailable");
+        assert_eq!(err.source_chain().len(), 2);
+        assert_eq!(err.source_frames()[0].message, "test error");
+        assert_eq!(err.source_frames()[0].error_code, Some(1001));
+        assert_eq!(
+            err.source_frames()[0].detail.as_deref(),
+            Some("repo layer failed")
+        );
+        assert_eq!(
+            err.source_frames()[0].metadata.get_str("config.kind"),
+            Some("sink_defaults")
+        );
+        assert_eq!(err.source_frames()[1].message, "db unavailable");
+        assert!(err.source_frames()[1].is_root_cause);
     }
 }

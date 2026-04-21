@@ -1,10 +1,30 @@
 # 错误日志规范
 
+> 历史设计说明：
+> 本页保留的是日志字段与展示层面的设计草案，不是 `orion-error 0.6.x / V1 API` 的精确结构定义。
+> 文中的 `StructError` 内部结构、`UvsReason` 枚举形态和日志字段示例可能早于当前实现，不能直接视为源码契约。
+> 实际可依赖的输出字段、报告结构和渲染接口，请以当前源码中的 `ErrorReport`、`RenderMode` 及相关测试为准，并参考 [使用教程](../tutorial.md)。
+
+## 当前 V1 对照
+
+如果你的目标是“基于当前 crate 做日志/观测输出”，优先按下面的稳定入口理解：
+
+- 结构化导出：`ErrorReport`
+- 文本渲染：`render(RenderMode::Compact)` / `render(RenderMode::Verbose)`
+- 脱敏输出：`render_redacted(...)`
+- 机器可读 source 链：`source_frames`
+- 上下文主语义：`want` / `path`
+- 机器可读 metadata：`ErrorMetadata`
+
+下面正文里出现的 `StructError` 内部字段、`UvsReason` 旧枚举形态、`OperationContext::with_target(...)` / `with_path(...)` 等代码，大多只是历史设计稿或示意结构，不是当前 `orion-error 0.6.x / V1 API` 的稳定契约。
+
 ## 概述
 
 错误日志是错误处理系统的重要组成部分，标准化的日志格式和字段定义能够确保错误信息的一致性、可读性和可分析性。本规范基于 `StructError<T>` 和 `UvsReason` 的实际实现，定义了系统错误日志的标准格式、字段定义和最佳实践。
 
 ## 核心错误结构
+
+以下结构体与枚举定义是历史结构示意，不应作为当前源码契约引用：
 
 ### StructError 结构
 ```rust
@@ -95,7 +115,7 @@ pub struct CallContext {
 }
 ```
 
-> 提示：0.5.5 起提供 `OperationContext::scoped_success()` / `scope()` RAII guard，可在作用域结束时自动更新 `is_suc` 状态，减少遗漏 `mark_suc()` 的风险。
+> 提示：这里的 `OperationContext` 字段布局和部分方法名属于历史示意；当前用法请以源码和教程中的 `doing(...)`、`record(...)`、`with_auto_log()`、`scoped_success()` 等接口为准。
 
 #### 用户上下文
 ```rust
@@ -128,6 +148,8 @@ pub struct SystemContext {
 ```
 
 ## 日志格式规范
+
+本节 JSON / 文本样例主要表达观测字段设计方向，不代表当前 crate 默认会直接输出同名字段，也不代表字段全集稳定承诺。
 
 ### JSON 格式标准
 

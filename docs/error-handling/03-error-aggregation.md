@@ -1,5 +1,22 @@
 # 错误归集机制
 
+> 历史设计说明：
+> 本页主要保存早期的错误归集和跨层传播设计示意，不是 `orion-error 0.6.x / V1 API` 的直接使用手册。
+> 文中的 `StructReason`、`UvsReason::from_*`、手写链路模型以及自定义包装示例，很多都不对应当前源码中的公开接口。
+> 当前 V1 主路径请以 `into_as(...)` / `wrap_as(...)` / `err_conv()` / `with_std_source(...)` / `with_struct_source(...)` 为准，详见 [使用教程](../tutorial.md) 和 [V1 修复与评审基线](../v1-fix-and-review-plan.md)。
+
+## 当前 V1 对照
+
+如果你的目标是“按当前 crate 做跨层错误归集”，优先按下面的映射理解：
+
+- 普通 `StdError` 第一次进入结构化体系：`into_as(...)`
+- 已经是 `StructError<_>`，只做 reason 映射：`err_conv()`
+- 已经是 `StructError<_>`，上层建立新语义边界：`wrap_as(...)`
+- 普通底层 source：`with_std_source(...)`
+- 结构化下层 source：`with_struct_source(...)`
+
+下面正文中的很多类型和代码块，只能当作历史设计示意，不能直接复制为当前实现。
+
 ## 概述
 
 错误归集机制是错误处理系统的核心组成部分，负责将不同层级、不同来源的错误信息进行统一收集、转换和管理。通过有效的错误归集，可以确保错误信息在系统各层级间传递时不会丢失关键上下文，同时保持错误类型的一致性和可追溯性。
@@ -16,6 +33,8 @@
 4. **链式追踪**: 维护完整的错误转换链路
 
 ### 转换模式
+
+以下示例是历史设计稿中的转换示意，不对应当前 `orion-error 0.6.x / V1 API` 的稳定接口：
 
 #### 标准转换模式
 ```rust
@@ -86,6 +105,8 @@ impl From<DatabaseError> for OrderError {
 ```
 
 ### 转换链管理
+
+本节的 `ErrorChain` / `ConversionStep` 是历史治理模型示意，不是当前 crate 已提供的公共类型。
 
 #### 错误转换链定义
 ```rust
@@ -302,6 +323,15 @@ impl WithContext {
 ```
 
 #### 上下文使用示例
+
+以下示例属于历史设计说明，用于解释旧式上下文聚合写法。
+
+对于 `0.6.x / V1 API`：
+
+- 不再把 `WithContext::want(...)` / 链式 `.want(...)` 作为推荐主路径
+- 不再把 `.owe_*()` 作为普通错误第一次进入结构化体系的首选写法
+- 请优先参考 `into_as(...)` / `wrap_as(...)` / `doing(...)` 的主路径说明
+
 ```rust
 fn place_order() -> Result<Order> {
     // 创建错误上下文

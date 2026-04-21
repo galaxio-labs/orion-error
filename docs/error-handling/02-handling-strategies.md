@@ -1,5 +1,22 @@
 # 错误处理策略
 
+> 历史设计说明：
+> 本页保留的是处理策略层面的设计讨论，不是 `orion-error 0.6.x / V1 API` 的直接编码指南。
+> 文中的 `StructReason`、`UvsReason::from_*`、自定义重试宏和示意 trait 主要用于说明思路，不能直接视为当前库的稳定接口。
+> 当前推荐调用路径请以 [docs/README.md](../README.md)、[使用教程](../tutorial.md)、[V1 Migration Checklist](../v1-migration-checklist.md) 和 [V1 修复与评审基线](../v1-fix-and-review-plan.md) 为准。
+
+## 当前 V1 对照
+
+如果你的目标是“按当前 crate 落地错误处理策略”，先按下面的主路径理解：
+
+- 普通错误第一次进入结构化体系：`into_as(...)`
+- 已结构化错误只做 reason 映射：`err_conv()`
+- 已结构化错误建立新上层语义边界：`wrap_as(...)`
+- 普通 source：`with_std_source(...)`
+- 结构化 source：`with_struct_source(...)`
+
+重试、降级、恢复等策略在 V1 里仍然主要属于业务层/治理层实现；`orion-error` 提供的是 reason、context、source 和 report 等结构化承载能力，而不是这里示意出来的整套策略执行框架。
+
 ## 概述
 
 错误处理策略是错误处理系统的核心，它定义了如何对不同类型的错误进行响应和处理。根据代码中的`ErrStrategy`枚举，本系统提供了三种主要的错误处理策略：Retry（重试）、Ignore（忽略）和Throw（抛出）。每种策略都有其适用场景和实现方式。
@@ -63,6 +80,9 @@ graph TD
 - 需要保留原始错误信息的同时转换错误类型
 
 #### 实现方式
+
+以下代码是历史设计稿中的策略示意，不对应当前 `orion-error 0.6.x / V1 API` 的稳定接口：
+
 ```rust
 // 使用 ErrConv trait 进行错误类型转换
 impl From<StoreReason> for StructReason<OrderReason> {
@@ -100,6 +120,9 @@ fn process_order(order: Order) -> Result<OrderResponse, OrderError> {
 - 外部服务的瞬时不可用
 
 #### 实现方式
+
+以下重试函数、重试宏和判断逻辑主要用于表达治理思路，不是当前 crate 直接提供的公共 API：
+
 ```rust
 use std::time::Duration;
 use backoff::ExponentialBackoff;
@@ -177,6 +200,9 @@ impl OrderError {
 - 外部依赖不可用时的功能简化
 
 #### 实现方式
+
+以下降级 trait 和服务示例是历史伪代码，不对应当前 crate 的现成接口：
+
 ```rust
 // 服务降级模式
 pub trait DegradeableService {

@@ -18,7 +18,7 @@ orion-error = { version = "0.6", features = ["tracing"] }
 ```rust
 use orion_error::{ContextRecord, OperationContext};
 
-let mut ctx = OperationContext::want("order_processing");
+let mut ctx = OperationContext::doing("order_processing");
 ctx.record("order_id", "123");
 ctx.record("amount", "100.0");
 
@@ -42,7 +42,7 @@ ctx.trace("verbose trace");
 ```rust
 use orion_error::{ContextRecord, OperationContext};
 
-let mut ctx = OperationContext::want("sync_user").with_auto_log();
+let mut ctx = OperationContext::doing("sync_user").with_auto_log();
 ctx.record("user_id", "42");
 
 do_sync()?;
@@ -56,7 +56,7 @@ ctx.mark_suc();
 ```rust
 use orion_error::{ContextRecord, OperationContext};
 
-let mut ctx = OperationContext::want("sync_user").with_auto_log();
+let mut ctx = OperationContext::doing("sync_user").with_auto_log();
 
 {
     let mut scope = ctx.scoped_success();
@@ -90,7 +90,7 @@ ctx.record("path", "config.toml");
 
 ## 推荐实践
 
-- 用 `want(...)` 描述操作目标
+- 用 `doing(...)` 描述操作目标
 - 用 `record(...)` 记录关键诊断字段
 - 用 `with_auto_log()` 只包裹真正需要结果日志的作用域
 - 对成功路径使用 `mark_suc()` 或 `scoped_success()`

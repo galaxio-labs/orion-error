@@ -236,6 +236,9 @@ impl OperationContext {
             metadata: ErrorMetadata::default(),
         }
     }
+    pub fn doing<S: Into<String>>(target: S) -> Self {
+        Self::want(target)
+    }
     #[deprecated(since = "0.5.4", note = "use with_auto_log")]
     pub fn with_exit_log(mut self) -> Self {
         self.exit_log = true;
@@ -278,6 +281,9 @@ impl OperationContext {
             self.target = Some(target.clone());
             self.path.push(target);
         }
+    }
+    pub fn with_doing<S: Into<String>>(&mut self, target: S) {
+        self.with_want(target)
     }
     /// 别名：设置目标资源/操作名；首次设置根 want，后续调用仅追加 path
     pub fn set_target<S: Into<String>>(&mut self, target: S) {

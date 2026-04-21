@@ -1,5 +1,22 @@
 # 错误恢复模式
 
+> 历史设计说明：
+> 本页保留的是恢复与容错策略设计草案，不是 `orion-error 0.6.x / V1 API` 的直接接口说明。
+> 文中的 `OperationContext::with_target(...)`、示意重试执行器和恢复模式代码，很多并不对应当前源码中的公开方法。
+> 当前 V1 范围内，请把这里理解为治理思路，而不是现成 API；实际用法请以 [使用教程](../tutorial.md)、[V1 Migration Checklist](../v1-migration-checklist.md) 和 [V1 修复与评审基线](../v1-fix-and-review-plan.md) 为准。
+
+## 当前 V1 对照
+
+如果你的目标是“在当前 crate 上实现恢复模式”，先把职责边界理解清楚：
+
+- `orion-error` 负责承载 `reason`、`detail`、`context`、`source`、`report`
+- 业务代码自己决定是否重试、是否降级、是否熔断、是否回退
+- 普通错误进入结构化体系：`into_as(...)`
+- 已结构化错误跨层传播：`err_conv()` 或 `wrap_as(...)`
+- 恢复逻辑里如果要保留下层错误链，优先使用 `with_std_source(...)` / `with_struct_source(...)`
+
+下面的大段执行器、退避策略和恢复模式代码，主要是历史治理设计示意，不是当前 `orion-error 0.6.x / V1 API` 已经提供的现成框架。
+
 ## 概述
 
 错误恢复模式是错误处理系统中的关键组成部分，定义了系统在面对各种错误情况时的自动恢复和容错机制。通过合理的恢复模式，可以显著提高系统的可靠性、可用性和用户体验，减少人工干预的需求。
@@ -13,6 +30,8 @@
 
 #### 重试模式
 重试模式是最常用的自动恢复模式，适用于临时性故障。基于 `UvsReason` 的错误分类，我们可以智能地判断哪些错误可以重试。
+
+以下 `RetryExecutor` 和配套代码是历史伪代码，不对应当前公开 API：
 
 ```rust
 use std::time::Duration;
@@ -187,6 +206,8 @@ async fn fetch_data(url: &str) -> Result<String, StructError<UvsReason>> {
 
 #### 指数退避重试
 指数退避重试是在重试模式基础上增加智能延迟的策略。基于 `UvsReason` 的错误分类，我们可以为不同类型的错误选择不同的退避策略。
+
+以下退避执行器与策略定义同样属于历史设计示意：
 
 ```rust
 use std::time::Duration;

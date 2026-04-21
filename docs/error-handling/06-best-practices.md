@@ -1,3 +1,23 @@
+# 错误处理最佳实践
+
+> 历史设计说明：
+> 本页保存的是早期最佳实践草稿，包含大量概念性示例和非当前源码接口的伪代码，不应直接视为 `orion-error 0.6.x / V1 API` 的使用手册。
+> 文中的自定义 `ContextualError`、扩展 trait、上下文模型和包装方式，很多并不是当前 crate 的公开 API。
+> 当前推荐路径请以 [docs/README.md](../README.md)、[使用教程](../tutorial.md)、[V1 Migration Checklist](../v1-migration-checklist.md) 和 [V1 修复与评审基线](../v1-fix-and-review-plan.md) 为准。
+
+## 当前 V1 最小实践
+
+如果你要按当前 `orion-error 0.6.x / V1 API` 写新代码，先记住这几条：
+
+- 普通错误第一次进入结构化体系：优先 `into_as(...)`
+- 已结构化错误跨层传播：优先 `err_conv()` 或 `wrap_as(...)`
+- 普通 source：`with_std_source(...)`
+- 结构化 source：`with_struct_source(...)`
+- 上下文命名优先 `doing(...)` / `at(...)`
+- `owe_*()`、`err_wrap(...)`、`want(...)`、`with_source(...)` 只作为 compat 路径
+
+下面的大段代码和类型定义是历史草稿与伪代码，不是当前 crate 已提供的 API，也不建议直接复制到新实现里。
+
 use std::collections::HashMap;
 use serde_json::Value;
 
@@ -114,6 +134,9 @@ pub struct RequestContext {
 ```
 
 #### 使用示例
+
+以下示例是历史上下文包装草稿，不对应当前 V1 推荐写法：
+
 ```rust
 pub fn process_order(order: &Order) -> Result<OrderResponse, BusinessError> {
     validate_order(order)
@@ -151,6 +174,8 @@ pub fn process_order(order: &Order) -> Result<OrderResponse, BusinessError> {
 ```
 
 ### 上下文信息层次
+
+本节的 `ErrorContext`、`BusinessContext`、`TechnicalContext` 等类型是历史建模示意，不是当前 crate 的公开结构。
 
 #### 推荐的上下文层次结构
 ```rust
@@ -1740,7 +1765,7 @@ return Err(err);
 - Guard 实现 `Deref`/`DerefMut`，可直接调用 `record()/info()` 等方法。
 
 ```rust
-let mut ctx = OperationContext::want("billing").with_auto_log();
+let mut ctx = OperationContext::doing("billing").with_auto_log();
 {
     let mut scope = ctx.scoped_success();
     scope.record("invoice_id", invoice_id.to_string());

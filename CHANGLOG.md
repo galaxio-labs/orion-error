@@ -1,5 +1,32 @@
 # 更新日志 (CHANGELOG)
 
+## [v0.6.3] - 2026-04-21
+
+### ✨ 能力更新
+- **V1 主路径正式落地**：普通错误第一次进入结构化体系，统一推荐使用 `into_as(...)`；已结构化错误跨层建立新语义边界，统一推荐使用 `wrap_as(...)`。
+- **`into_as(...)` 入口收紧**：不再依赖 `E: StdError` blanket 风格入口，改为封闭的 `UnstructuredSource` 通道，避免误吞 `StructError<_>`。
+- **显式 raw source 逃生门**：新增 `RawStdError`、`RawSource<E>` 与 `raw_source(...)`，只允许下游本地 raw `StdError` 类型显式 opt-in。
+- **source 接口分流补齐**：新增 `with_std_source(...)` 与 `builder.source_std(...)`，与 `with_struct_source(...)` / `source_struct(...)` 形成明确分工。
+- **上下文命名糖衣落地**：新增 `OperationContext::doing(...)`、`with_doing(...)` 以及错误链上的 `doing(...)` / `at(...)` 命名糖衣；在 `0.6.x` 中它们仍保持 V1 约定下的别名语义。
+- **结构化上卷新接口**：新增 `ErrorWrapAs` / `WrapStructErrorAs`，支持 `wrap_as(reason, detail)` 作为新的公开主路径。
+
+### 🔄 行为与导出面调整
+- **导出层分流**：`prelude::*` / `traits_ext::*` 现在面向 V1 主路径；新增 `compat_prelude::*` / `compat_traits::*` 承载旧的 `owe_*()` / `err_wrap(...)` 路径。
+- **兼容路径内部对齐**：`owenance` 内部改用 `with_std_source(...)`，减少普通 source 与结构化 source 通道混用。
+
+### 📚 文档收口
+- **主文档统一到 V1 口径**：更新 `README.md`、`docs/README.md`、`docs/tutorial.md`、`docs/thiserror-comparison.md`、`docs/LOGGING.md`、`docs/v1-migration-checklist.md`。
+- **迁移说明细化**：`docs/v1-migration-checklist.md` 现已补充新接口说明、旧代码替换规则和典型迁移示例，可直接指导 `0.6.x` 旧代码改造。
+- **修复与评审基线落档**：新增 `docs/v1-fix-and-review-plan.md`，冻结 V1 正确解法与评审顺序。
+- **V1 结案说明落档**：新增 `docs/v1-closure-summary.md`，记录实现层、主文档层和历史设计文档的最终收口结论。
+- **历史设计文档降级**：`docs/error-handling/01-08` 统一补充“历史设计说明”与 V1 对照，避免再被误读为当前 API 手册。
+
+### 🧪 验证
+- 新增 `wrap_as(...)` 直接测试，锁住 `detail`、source chain 与 metadata 保留行为。
+- 通过：
+  - `cargo fmt --all -- --check`
+  - `cargo test --all-features -- --test-threads=1`
+
 ## [v0.6.2] - 2026-04-20
 
 ### ✨ 能力更新

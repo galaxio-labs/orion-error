@@ -110,7 +110,9 @@ where
     fn owe_source(self, reason: R) -> Result<T, StructError<R>> {
         self.map_err(|e| {
             let detail = e.to_string();
-            StructError::from(reason).with_detail(detail).with_source(e)
+            StructError::from(reason)
+                .with_detail(detail)
+                .with_std_source(e)
         })
     }
 }
@@ -174,6 +176,8 @@ where
     result.map_err(|e| {
         let detail = e.to_string();
         let reason = f();
-        StructError::from(reason).with_detail(detail).with_source(e)
+        StructError::from(reason)
+            .with_detail(detail)
+            .with_std_source(e)
     })
 }

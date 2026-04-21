@@ -137,10 +137,10 @@ pub mod storage {
         save_db_impl(order).map_err(|e| match e.kind() {
             std::io::ErrorKind::OutOfMemory => StructError::from(StoreReason::StorageFull)
                 .with_detail("storage capacity exceeded")
-                .with_source(e),
+                .with_std_source(e),
             _ => StructError::from(StoreReason::from(UvsReason::system_error()))
                 .with_detail("persist order failed")
-                .with_source(e),
+                .with_std_source(e),
         })
     }
 
@@ -171,21 +171,21 @@ impl OrderService {
         amount: f64,
         order_txt: &str,
     ) -> Result<storage::Order, OrderError> {
-        let mut ctx = OperationContext::want("place_order");
+        let mut ctx = OperationContext::doing("place_order");
         ctx.record("order", order_txt);
         ctx.record_meta("component.name", "order_service");
         ctx.record_meta("config.secret", "/prod/orders/api-token");
         let order = Self::parse_order(order_txt, amount)
-            .want("解析订单")
+            .doing("解析订单")
             .with(&ctx)
             .err_conv()?;
 
         Self::validate_funds(user_id, order.amount)
-            .want("验证资金")
+            .doing("验证资金")
             .with(&ctx)?;
 
         let order = storage::Order { user_id, amount };
-        Self::save_order(order).want("保存订单").with(&ctx)
+        Self::save_order(order).doing("保存订单").with(&ctx)
     }
 
     fn parse_order(txt: &str, amount: f64) -> Result<storage::Order, ParseError> {
@@ -193,7 +193,7 @@ impl OrderService {
             return Err(StructError::builder(ParseReason::FormatError)
                 .detail("订单文本不能为空")
                 .context(
-                    OperationContext::want("parse order text")
+                    OperationContext::doing("parse order text")
                         .with_meta("config.kind", "order_txt")
                         .with_meta("parse.field", "order_txt"),
                 )
@@ -205,7 +205,8 @@ impl OrderService {
             return Err(StructError::builder(ParseReason::FormatError)
                 .detail("订单金额必须大于零")
                 .context(
-                    OperationContext::want("parse order amount").with_meta("parse.field", "amount"),
+                    OperationContext::doing("parse order amount")
+                        .with_meta("parse.field", "amount"),
                 )
                 .finish());
         }
