@@ -85,7 +85,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ErrorCode, ErrorWith, OperationContext, StructError, UvsReason};
+    use crate::{ErrorCode, OperationContext, StructError, UvsReason};
 
     // 定义测试用的 DomainReason
     #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -261,7 +261,7 @@ mod tests {
     #[test]
     fn test_err_conv_preserves_context_metadata() {
         let original: Result<i32, StructError<TestReason>> =
-            Err(StructError::from(TestReason::TestError).attach_context(
+            Err(StructError::from(TestReason::TestError).with_context(
                 OperationContext::doing("load sink defaults")
                     .with_meta("config.kind", "sink_defaults"),
             ));
@@ -278,7 +278,7 @@ mod tests {
     #[test]
     fn test_wrap_as_preserves_source_frame_metadata() {
         let original: Result<i32, StructError<TestReason>> =
-            Err(StructError::from(TestReason::TestError).attach_context(
+            Err(StructError::from(TestReason::TestError).with_context(
                 OperationContext::doing("load sink defaults")
                     .with_meta("config.kind", "sink_defaults"),
             ));
@@ -299,7 +299,7 @@ mod tests {
         let original: Result<i32, StructError<TestReason>> =
             Err(StructError::from(TestReason::TestError)
                 .with_detail("repo layer failed")
-                .attach_context(
+                .with_context(
                     OperationContext::doing("load sink defaults")
                         .with_meta("config.kind", "sink_defaults"),
                 )

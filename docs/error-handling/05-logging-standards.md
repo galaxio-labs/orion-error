@@ -806,7 +806,7 @@ impl LogBuffer {
         }
     }
     
-    pub fn write(&self, message: String) -> Result<(), String> {
+    pub fn write(&self, message: String) {
         let current_count = self.counter.fetch_add(1, Ordering::Relaxed);
         
         if current_count >= self.flush_threshold {
@@ -820,7 +820,6 @@ impl LogBuffer {
         }
         
         buffer.push(message);
-        Ok(())
     }
     
     fn trigger_async_flush(&self) {
@@ -1030,13 +1029,12 @@ fn process_with_strategy<T>(
 
 ```rust
 fn process_order(order: &Order) -> Result<(), StructError<UvsReason>> {
-    let ctx = OperationContext::default()
-        .with_target("order_processing")
-        .with("order_id", order.id.to_string())
-        .with("customer_id", order.customer_id.to_string())
-        .with("amount", order.amount.to_string())
-        .with_path("/api/orders/process")
-        .with_want("process_order");
+    let mut ctx = OperationContext::doing("process_order");
+    ctx.record("target", "order_processing");
+    ctx.record("order_id", order.id.to_string());
+    ctx.record("customer_id", order.customer_id.to_string());
+    ctx.record("amount", order.amount.to_string());
+    ctx.record("path", "/api/orders/process");
     
     ctx.info("Starting order processing");
     
@@ -1069,35 +1067,31 @@ fn process_order(order: &Order) -> Result<(), StructError<UvsReason>> {
 // 使用条件编译
 #[cfg(debug_assertions)]
 {
-    let debug_ctx = OperationContext::default()
-        .with_target("debug_info")
-        .with("complex_data", format!("{:?}", complex_data));
+    let mut debug_ctx = OperationContext::doing("debug_info");
+    debug_ctx.record("complex_data", format!("{:?}", complex_data));
     debug_ctx.debug("Detailed debug information");
 }
 
 // 使用日志级别控制
 if log::log_enabled!(log::Level::Debug) {
-    let debug_ctx = OperationContext::default()
-        .with_target("expensive_computation")
-        .with("result", expensive_computation().to_string());
+    let mut debug_ctx = OperationContext::doing("expensive_computation");
+    debug_ctx.record("result", expensive_computation().to_string());
     debug_ctx.debug("Expensive to compute debug info");
 }
 
 // 敏感信息保护
-let ctx = OperationContext::default()
-    .with_target("user_auth")
-    .with("user_id", user_id.to_string())
-    .with("login_status", "attempt".to_string());
+let mut ctx = OperationContext::doing("user_auth");
+ctx.record("user_id", user_id.to_string());
+ctx.record("login_status", "attempt");
 ctx.info("User login attempt");
 
 // 避免记录密码等敏感信息
-// ctx.with("password", password.to_string()); // 错误的做法
+// ctx.record("password", password.to_string()); // 错误的做法
 
 // 使用脱敏
 let masked_card = format!("****-****-****-{}", &card_number[card_number.len()-4..]);
-let secure_ctx = OperationContext::default()
-    .with_target("payment_processing")
-    .with("card_number", masked_card);
+let mut secure_ctx = OperationContext::doing("payment_processing");
+secure_ctx.record("card_number", masked_card);
 secure_ctx.info("Credit card processed");
 ```
 

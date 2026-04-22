@@ -132,11 +132,11 @@ V2 现在立刻可做的第一步是：
 - `OperationContext::doing(...)` / `at(...)` 已升级为真实 `action` / `locator` 语义，不再只是命名糖衣
 - snapshot 默认 `serde` 已切到 `orion-error.snapshot.v2` 稳定 schema，并补了显式 compat 导出入口
 - `OperationContext::want(...)`、`OperationContext::with_want(...)`、`ErrorWith::want(...)` 已在 `0.7.0` 正式进入 `#[deprecated]`
-- `ErrorWith::with(...)` 已在 `0.7.0` 正式进入 `#[deprecated]`，主路径迁移到 `attach_context(...)`
+- `ErrorWith::with(...)` 已在 `0.7.0` 正式进入 `#[deprecated]`，主路径迁移到 `with_context(...)`
 - `StructError<R>` 已退出 `StdError`，标准错误生态改由 `into_std()` / `as_std()` /
   `into_dyn_std()` / `into_boxed_std()` 等官方 bridge 承接
 - `ErrorWrap::err_wrap(...)` / `WrapStructError::wrap(...)` 已从主代码移除
-- `StructError::with_source(...)` / `StructErrorBuilder::source(...)` 已从主代码移除
+- `StructError::with_source(...)` / `StructErrorBuilder::source(...)` 已不再作为主路径 API，但当前以 `IntoSourcePayload` 自动分流糖衣形式保留
 - `ErrorOweSourceBase::owe_source(...)` / `ErrorOweSource::owe_*_source()` 已从主代码移除
 - `ErrorOweBase::owe(...)` 已在 `0.7.0` 正式进入 `#[deprecated]`
 - `ErrorOwe::owe_*()` 已从主代码移除

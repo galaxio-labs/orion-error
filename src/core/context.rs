@@ -156,14 +156,21 @@ impl Display for OperationContext {
     }
 }
 pub trait ContextRecord<S1, S2> {
-    fn record(&mut self, key: S1, val: S2);
+    fn record_field(&mut self, key: S1, val: S2);
+
+    fn record(&mut self, key: S1, val: S2)
+    where
+        Self: Sized,
+    {
+        self.record_field(key, val);
+    }
 }
 
 impl<S1> ContextRecord<S1, String> for OperationContext
 where
     S1: Into<String>,
 {
-    fn record(&mut self, key: S1, val: String) {
+    fn record_field(&mut self, key: S1, val: String) {
         self.context.items.push((key.into(), val));
     }
 }
@@ -172,7 +179,7 @@ impl<S1> ContextRecord<S1, &str> for OperationContext
 where
     S1: Into<String>,
 {
-    fn record(&mut self, key: S1, val: &str) {
+    fn record_field(&mut self, key: S1, val: &str) {
         self.context.items.push((key.into(), val.into()));
     }
 }
@@ -183,7 +190,7 @@ impl<S1> ContextRecord<S1, &PathBuf> for OperationContext
 where
     S1: Into<String>,
 {
-    fn record(&mut self, key: S1, val: &PathBuf) {
+    fn record_field(&mut self, key: S1, val: &PathBuf) {
         self.context
             .items
             .push((key.into(), format!("{}", val.display())));
@@ -193,7 +200,7 @@ impl<S1> ContextRecord<S1, &Path> for OperationContext
 where
     S1: Into<String>,
 {
-    fn record(&mut self, key: S1, val: &Path) {
+    fn record_field(&mut self, key: S1, val: &Path) {
         self.context
             .items
             .push((key.into(), format!("{}", val.display())));
@@ -467,6 +474,21 @@ impl OperationContext {
 
     pub fn path_string(&self) -> Option<String> {
         self.normalized_path_string()
+    }
+
+    pub fn record_field<S1, S2>(&mut self, key: S1, val: S2)
+    where
+        Self: ContextRecord<S1, S2>,
+    {
+        <Self as ContextRecord<S1, S2>>::record_field(self, key, val);
+    }
+
+    pub fn with_field<S1, S2>(mut self, key: S1, val: S2) -> Self
+    where
+        Self: ContextRecord<S1, S2>,
+    {
+        self.record_field(key, val);
+        self
     }
 
     pub fn record_meta<K, V>(&mut self, key: K, value: V)
@@ -892,28 +914,28 @@ pub trait ContextAdd<T> {
 
 impl<K: Into<String>> ContextAdd<(K, String)> for OperationContext {
     fn add_context(&mut self, val: (K, String)) {
-        self.record(val.0.into(), val.1);
+        self.record_field(val.0.into(), val.1);
     }
 }
 impl<K: Into<String>> ContextAdd<(K, &String)> for OperationContext {
     fn add_context(&mut self, val: (K, &String)) {
-        self.record(val.0.into(), val.1.clone());
+        self.record_field(val.0.into(), val.1.clone());
     }
 }
 impl<K: Into<String>> ContextAdd<(K, &str)> for OperationContext {
     fn add_context(&mut self, val: (K, &str)) {
-        self.record(val.0.into(), val.1.to_string());
+        self.record_field(val.0.into(), val.1.to_string());
     }
 }
 
 impl<K: Into<String>> ContextAdd<(K, &PathBuf)> for OperationContext {
     fn add_context(&mut self, val: (K, &PathBuf)) {
-        self.record(val.0.into(), format!("{}", val.1.display()));
+        self.record_field(val.0.into(), format!("{}", val.1.display()));
     }
 }
 impl<K: Into<String>> ContextAdd<(K, &Path)> for OperationContext {
     fn add_context(&mut self, val: (K, &Path)) {
-        self.record(val.0.into(), format!("{}", val.1.display()));
+        self.record_field(val.0.into(), format!("{}", val.1.display()));
     }
 }
 

@@ -4,19 +4,27 @@ mod traits;
 
 pub use core::ErrStrategy;
 pub use core::{
-    print_error, print_error_zh, ConfErrReason, DomainReason, ErrorCode, ErrorMetadata,
-    ErrorReport, IntoSourcePayload, MetadataValue, OwnedDynStdStructError, OwnedStdStructError,
-    RedactPolicy, RenderMode, SnapshotContextFrame, SnapshotSourceFrame, SourceFrame,
-    SourcePayload, SourcePayloadKind, SourcePayloadRef, StableSnapshotContextFrame,
-    StableSnapshotSourceFrame, StableStructErrorSnapshot, StdStructRef, StructErrorSnapshot,
-    StructErrorTrait, UvsFrom, UvsReason, STABLE_SNAPSHOT_CONTEXT_FIELDS,
+    print_error, print_error_zh, ConfErrReason, DefaultErrorPolicy, DomainReason, ErrorCategory,
+    ErrorCliResponse, ErrorCode, ErrorHttpResponse, ErrorIdentitySnapshot, ErrorLogResponse,
+    ErrorMetadata, ErrorPolicy, ErrorPolicyDecision, ErrorPolicySnapshot, ErrorPolicyView,
+    ErrorRenderer, ErrorReport, ErrorRpcResponse, IntoSourcePayload, MetadataValue,
+    OwnedDynStdStructError, OwnedStdStructError, RedactPolicy, RenderMode, SnapshotContextFrame,
+    SnapshotSourceFrame, SourceFrame, SourcePayload, SourcePayloadKind, SourcePayloadRef,
+    StableErrorIdentity, StableSnapshotContextFrame, StableSnapshotSourceFrame,
+    StableStructErrorSnapshot, StdStructRef, StructErrorSnapshot, StructErrorTrait,
+    TextReportRenderer, UvsFrom, UvsReason, Visibility, CLI_ERROR_RESPONSE_FIELDS,
+    HTTP_ERROR_RESPONSE_FIELDS, LOG_ERROR_RESPONSE_FIELDS, POLICY_DECISION_FIELDS,
+    POLICY_SNAPSHOT_TOP_LEVEL_FIELDS, RPC_ERROR_RESPONSE_FIELDS, STABLE_SNAPSHOT_CONTEXT_FIELDS,
     STABLE_SNAPSHOT_SCHEMA_VERSION, STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS,
     STABLE_SNAPSHOT_TOP_LEVEL_FIELDS,
 };
 pub use core::{ContextRecord, OperationContext, OperationScope, WithContext};
 pub use core::{SnapshotCompat, StableSnapshotCompat};
 pub use core::{StructError, StructErrorBuilder};
-pub use testcase::{TestAssert, TestAssertWithMsg};
+pub use testcase::{
+    assert_err_category, assert_err_code, assert_err_identity, assert_err_operation,
+    assert_err_path, TestAssert, TestAssertWithMsg,
+};
 #[deprecated(
     since = "0.7.0",
     note = "use orion_error::compat_prelude::* or orion_error::compat_traits::* for legacy owe(...) APIs"
@@ -35,14 +43,19 @@ pub use traits::{
 /// ```
 pub mod prelude {
     pub use crate::{
-        raw_source, ErrorMetadata, ErrorReport, IntoSourcePayload, MetadataValue, OperationContext,
-        OperationScope, OwnedDynStdStructError, OwnedStdStructError, RawSource, RawStdError,
-        RedactPolicy, RenderMode, SnapshotContextFrame, SnapshotSourceFrame, SourceFrame,
-        SourcePayload, SourcePayloadKind, SourcePayloadRef, StableSnapshotContextFrame,
+        raw_source, DefaultErrorPolicy, ErrorCategory, ErrorCliResponse, ErrorHttpResponse,
+        ErrorIdentitySnapshot, ErrorLogResponse, ErrorMetadata, ErrorPolicy, ErrorPolicyDecision,
+        ErrorPolicySnapshot, ErrorPolicyView, ErrorRenderer, ErrorReport, ErrorRpcResponse,
+        IntoSourcePayload, MetadataValue, OperationContext, OperationScope, OwnedDynStdStructError,
+        OwnedStdStructError, RawSource, RawStdError, RedactPolicy, RenderMode,
+        SnapshotContextFrame, SnapshotSourceFrame, SourceFrame, SourcePayload, SourcePayloadKind,
+        SourcePayloadRef, StableErrorIdentity, StableSnapshotContextFrame,
         StableSnapshotSourceFrame, StableStructErrorSnapshot, StdStructRef, StructError,
-        StructErrorBuilder, StructErrorSnapshot, UvsReason, STABLE_SNAPSHOT_CONTEXT_FIELDS,
-        STABLE_SNAPSHOT_SCHEMA_VERSION, STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS,
-        STABLE_SNAPSHOT_TOP_LEVEL_FIELDS,
+        StructErrorBuilder, StructErrorSnapshot, TextReportRenderer, UvsReason, Visibility,
+        CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS, LOG_ERROR_RESPONSE_FIELDS,
+        POLICY_DECISION_FIELDS, POLICY_SNAPSHOT_TOP_LEVEL_FIELDS, RPC_ERROR_RESPONSE_FIELDS,
+        STABLE_SNAPSHOT_CONTEXT_FIELDS, STABLE_SNAPSHOT_SCHEMA_VERSION,
+        STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS, STABLE_SNAPSHOT_TOP_LEVEL_FIELDS,
     };
     pub use crate::{
         ContextRecord, ErrorCode, ErrorConv, ErrorWith, ErrorWrapAs, IntoAs, ToStructError,
@@ -117,13 +130,18 @@ pub mod compat_prelude {
 /// Grouped core types and enums.
 pub mod types {
     pub use crate::{
-        ConfErrReason, ErrStrategy, ErrorMetadata, ErrorReport, IntoSourcePayload, MetadataValue,
-        OperationContext, OperationScope, OwnedDynStdStructError, OwnedStdStructError,
-        RedactPolicy, RenderMode, SnapshotContextFrame, SnapshotSourceFrame, SourceFrame,
-        SourcePayload, SourcePayloadKind, SourcePayloadRef, StableSnapshotContextFrame,
+        ConfErrReason, DefaultErrorPolicy, ErrStrategy, ErrorCategory, ErrorCliResponse,
+        ErrorHttpResponse, ErrorIdentitySnapshot, ErrorLogResponse, ErrorMetadata, ErrorPolicy,
+        ErrorPolicyDecision, ErrorPolicySnapshot, ErrorPolicyView, ErrorRenderer, ErrorReport,
+        ErrorRpcResponse, IntoSourcePayload, MetadataValue, OperationContext, OperationScope,
+        OwnedDynStdStructError, OwnedStdStructError, RedactPolicy, RenderMode,
+        SnapshotContextFrame, SnapshotSourceFrame, SourceFrame, SourcePayload, SourcePayloadKind,
+        SourcePayloadRef, StableErrorIdentity, StableSnapshotContextFrame,
         StableSnapshotSourceFrame, StableStructErrorSnapshot, StdStructRef, StructError,
-        StructErrorBuilder, StructErrorSnapshot, UvsReason, WithContext,
-        STABLE_SNAPSHOT_CONTEXT_FIELDS, STABLE_SNAPSHOT_SCHEMA_VERSION,
+        StructErrorBuilder, StructErrorSnapshot, TextReportRenderer, UvsReason, Visibility,
+        WithContext, CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS,
+        LOG_ERROR_RESPONSE_FIELDS, POLICY_DECISION_FIELDS, POLICY_SNAPSHOT_TOP_LEVEL_FIELDS,
+        RPC_ERROR_RESPONSE_FIELDS, STABLE_SNAPSHOT_CONTEXT_FIELDS, STABLE_SNAPSHOT_SCHEMA_VERSION,
         STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS, STABLE_SNAPSHOT_TOP_LEVEL_FIELDS,
     };
 }
@@ -151,21 +169,29 @@ pub mod bridge {
 /// Snapshot-layer types and stable snapshot schema exports.
 pub mod snapshot {
     pub use crate::{
-        SnapshotContextFrame, SnapshotSourceFrame, StableSnapshotContextFrame,
-        StableSnapshotSourceFrame, StableStructErrorSnapshot, StructErrorSnapshot,
-        STABLE_SNAPSHOT_CONTEXT_FIELDS, STABLE_SNAPSHOT_SCHEMA_VERSION,
+        ErrorIdentitySnapshot, SnapshotContextFrame, SnapshotSourceFrame,
+        StableSnapshotContextFrame, StableSnapshotSourceFrame, StableStructErrorSnapshot,
+        StructErrorSnapshot, STABLE_SNAPSHOT_CONTEXT_FIELDS, STABLE_SNAPSHOT_SCHEMA_VERSION,
         STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS, STABLE_SNAPSHOT_TOP_LEVEL_FIELDS,
     };
 }
 
 /// Report-layer types for rendering and redaction.
 pub mod report {
-    pub use crate::{ErrorReport, RedactPolicy, RenderMode};
+    pub use crate::{
+        DefaultErrorPolicy, ErrorCliResponse, ErrorHttpResponse, ErrorLogResponse, ErrorPolicy,
+        ErrorPolicyDecision, ErrorPolicySnapshot, ErrorPolicyView, ErrorRenderer, ErrorReport,
+        ErrorRpcResponse, RedactPolicy, RenderMode, TextReportRenderer, Visibility,
+        CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS, LOG_ERROR_RESPONSE_FIELDS,
+        POLICY_DECISION_FIELDS, POLICY_SNAPSHOT_TOP_LEVEL_FIELDS, RPC_ERROR_RESPONSE_FIELDS,
+    };
 }
 
 /// Reason-layer enums and traits.
 pub mod reason {
-    pub use crate::{ConfErrReason, ErrorCode, UvsFrom, UvsReason};
+    pub use crate::{
+        ConfErrReason, ErrorCategory, ErrorCode, StableErrorIdentity, UvsFrom, UvsReason,
+    };
 }
 
 /// Conversion traits for the current primary paths.

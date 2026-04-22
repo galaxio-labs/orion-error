@@ -21,12 +21,12 @@
 示例请以当前源码为准：
 
 - `orion_error::prelude::*` 是 V1 主路径通配导入
-- `orion_error::v1::*` / `orion_error::v1::prelude::*` / `orion_error::v1::compat_prelude::*` 是 V1 显式版本入口
+- `orion_error::v1::*` / `orion_error::v1::prelude::*` / `orion_error::v1` 下的 compat prelude 模块是 V1 显式版本入口
 - `orion_error::v2::*` / `orion_error::v2::prelude::*` 是 V2 主入口
 - `orion_error::runtime::*` / `conversion::*` / `reason::*` / `snapshot::*` / `report::*` / `bridge::*` 是 V2 分层导入入口
 - 如果只想导入 V1 主路径扩展 trait，可使用 `orion_error::traits_ext::*`
-- `orion_error::compat_prelude::*` / `orion_error::compat_traits::*` 只用于维护旧的 `owe(...)` / `err_wrap(...)` 路径
-- 使用 `OperationContext::record(...)`，不要继续新增 `ctx.with(...)`
+- crate root 下的 compat prelude / compat traits 模块只用于维护旧的 `owe(...)` / `err_wrap(...)` 路径
+- 使用 `OperationContext::record(...)`，不要继续新增旧的链式键值写法
 - 使用 `StructError::from(UvsReason::validation_error()).with_detail(...)`
 - 普通错误第一次进入结构化体系，优先 `into_as(...)`
 - 对 `StructError<_>` 的跨层传播，优先使用 `err_conv()` 或 `wrap_as(...)`
@@ -55,7 +55,7 @@ fn place_order(order_txt: &str) -> Result<(), StructError<UvsReason>> {
     std::fs::read_to_string("order.txt")
         .into_as(UvsReason::system_error(), "read order payload failed")
         .doing("read order payload")
-        .attach_context(&ctx)
+        .with_context(&ctx)
         .map(|_| ())
 }
 ```

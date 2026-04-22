@@ -1,5 +1,21 @@
 # 更新日志 (CHANGELOG)
 
+## [Unreleased]
+
+### 🧭 V3 启动
+- **V3 最小范围落档**：新增 `docs/v3-minimum-plan.md`，冻结 `V3` 第一批的最小可落地范围，明确 `V3-A stable identity`、`V3-B policy`、`V3-C enforcement` 的执行顺序。
+- **stable code 策略落档**：新增 `docs/v3-stable-code-policy.md`，明确 `V3` 将以稳定字符串 `code` 作为长期错误身份主键，`detail` 不再参与错误身份判定。
+- **稳定身份最小代码切口落地**：新增 `ErrorCategory`、`StableErrorIdentity` 以及内建 `UvsReason` 的稳定 `code/category` 实现，为后续 `V3-A` 的 snapshot/report 收敛和测试 helper 提供只读基座。
+- **identity snapshot 起步**：新增 `ErrorIdentitySnapshot` 和 `StructError::identity_snapshot()`，在不破坏现有 `orion-error.snapshot.v2` 稳定 schema 的前提下，为 `V3` 侧测试、治理和导出开始提供 `code/category` 视图。
+- **测试 helper 起步**：新增 `assert_err_code(...)` 与 `assert_err_category(...)`，用于把测试从脆弱的文案断言逐步迁向稳定身份断言。
+- **V3-B 协议壳起步**：新增 `ErrorPolicy`、`ErrorRenderer`、`DefaultErrorPolicy`、`TextReportRenderer`、`Visibility`，并补 `ErrorReport::render_with(...)` / `http_status(...)` / `visibility(...)` / `default_hints(...)`，开始把出口协议从 `report` 文本渲染中拆出来。
+- **显式 policy wrapper 起步**：新增 `ErrorPolicyView`、`StructError::policy_report()`、`StructError::into_policy_report()` 与 `ErrorReport::policy_view(...)`，开始让带稳定身份的调用路径脱离 `ErrorReport::policy_identity()` 的启发式兜底。
+- **V3 协议落地面已闭合第一圈**：当前已补齐 `policy_snapshot`、`HTTP`、`CLI`、`log`、`RPC` 与测试 helper；`retryable` 已进入 `ErrorPolicyDecision`，不再只属于 `RPC` projection 的局部规则。
+- **V3-C enforcement 起步**：新增 `scripts/check-v3-policy.sh`，开始在仓库内检查 deprecated 主路径、compat-only 导入以及 `Result<T, String>` 误用；CI 新增 `V3 Policy` job 执行该脚本。
+- **迁移扫描模式起步**：`check-v3-policy.sh` 已支持 `--report-only`，对 `docs/` / `tests/` 中的 legacy/compat 痕迹只出报告不阻塞；测试 helper 新增 `assert_err_identity(...)`，推动断言从文本进一步迁往稳定身份。
+- **文档导航接入 V3**：`docs/README.md` 已补充 `V3` 文档入口，并明确当前 `V3` 仍处于规划启动阶段，线上行为继续以 `V2` 实现与测试为准。
+- **V3 协议契约落档**：新增 `docs/v3-protocol-contract.md`，集中归档当前已实现的稳定身份、policy decision、`HTTP/CLI/log/RPC` projection、test helper 和已知限制。
+
 ## [v0.7.0] - 2026-04-21
 
 ### ✨ V2 启动

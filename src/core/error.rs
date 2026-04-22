@@ -3,10 +3,7 @@ use std::{error::Error as StdError, fmt::Display, ops::Deref, sync::Arc};
 use crate::ErrorWith;
 
 use super::{
-    context::{CallContext, OperationContext},
-    domain::DomainReason,
-    metadata::ErrorMetadata,
-    ContextAdd, ErrorCode,
+    context::OperationContext, domain::DomainReason, metadata::ErrorMetadata, ContextAdd, ErrorCode,
 };
 #[macro_export]
 macro_rules! location {
@@ -24,6 +21,19 @@ pub trait StructErrorTrait<T: DomainReason> {
 impl<T: DomainReason + ErrorCode> ErrorCode for StructError<T> {
     fn error_code(&self) -> i32 {
         self.reason.error_code()
+    }
+}
+
+impl<T> crate::StableErrorIdentity for StructError<T>
+where
+    T: DomainReason + crate::StableErrorIdentity,
+{
+    fn stable_code(&self) -> &'static str {
+        self.reason.stable_code()
+    }
+
+    fn error_category(&self) -> crate::ErrorCategory {
+        self.reason.error_category()
     }
 }
 
@@ -762,6 +772,19 @@ impl<T: DomainReason> StructError<T> {
     }
 
     #[must_use]
+    /// Convenience sugar that auto-routes either a standard source error or an
+    /// existing `StructError<_>` through the V2 dual-channel source model.
+    ///
+    /// Prefer `with_std_source(...)` / `with_struct_source(...)` when you want
+    /// the call site to make the source kind explicit.
+    pub fn with_source<S>(self, source: S) -> Self
+    where
+        S: IntoSourcePayload,
+    {
+        self.attach_source(source)
+    }
+
+    #[must_use]
     pub(crate) fn with_struct_error_source<R>(mut self, source: StructError<R>) -> Self
     where
         R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
@@ -903,8 +926,8 @@ impl<T: DomainReason> StructError<T> {
         self
     }
     #[must_use]
-    pub fn with_context(mut self, context: CallContext) -> Self {
-        Arc::make_mut(&mut self.imp.context).push(OperationContext::from(context));
+    pub fn with_context<C: Into<OperationContext>>(mut self, context: C) -> Self {
+        Arc::make_mut(&mut self.imp.context).push(context.into());
         self
     }
 
@@ -1130,6 +1153,18 @@ impl<T: DomainReason> StructErrorBuilder<T> {
         self.with_internal_source(InternalSourceState::from_std(source))
     }
 
+    /// Convenience sugar that auto-routes either a standard source error or an
+    /// existing `StructError<_>` through the V2 dual-channel source model.
+    ///
+    /// Prefer `source_std(...)` / `source_struct(...)` when you want the call
+    /// site to make the source kind explicit.
+    pub fn source<S>(self, source: S) -> Self
+    where
+        S: IntoSourcePayload,
+    {
+        self.attach_source(source)
+    }
+
     pub fn source_struct<R>(mut self, source: StructError<R>) -> Self
     where
         R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
@@ -1165,7 +1200,7 @@ impl<T: DomainReason> ErrorWith for StructError<T> {
         self
     }
 
-    fn attach_context<C: Into<OperationContext>>(mut self, ctx: C) -> Self {
+    fn with_context<C: Into<OperationContext>>(mut self, ctx: C) -> Self {
         let ctx = ctx.into();
         self.add_context(ctx);
         self
@@ -1176,7 +1211,7 @@ impl<T: DomainReason> ErrorWith for StructError<T> {
 mod tests {
     use std::{error::Error as StdError, fmt};
 
-    use crate::{ContextRecord, UvsReason};
+    use crate::{core::context::CallContext, ContextRecord, UvsReason};
 
     use super::*;
     use derive_more::From;
@@ -1293,7 +1328,7 @@ mod tests {
         outer.with_doing("parse_order");
         outer.record("order_id", "42");
 
-        let error = StructError::from(TestDomainReason::TestError).attach_context(outer);
+        let error = StructError::from(TestDomainReason::TestError).with_context(outer);
 
         assert_eq!(error.action_main().as_deref(), Some("place_order"));
         assert_eq!(error.target_main().as_deref(), Some("place_order"));
@@ -1347,7 +1382,7 @@ mod tests {
 
         let mut combined_ctx = OperationContext::doing("parse config");
         combined_ctx.with_at("config.toml");
-        let combined = StructError::from(TestDomainReason::TestError).attach_context(combined_ctx);
+        let combined = StructError::from(TestDomainReason::TestError).with_context(combined_ctx);
 
         assert_eq!(split.target_path(), combined.target_path());
         assert_eq!(split.path_segments(), combined.path_segments());
@@ -1447,7 +1482,7 @@ mod tests {
         outer.with_doing("read_order_payload");
         outer.record("order_id", "42");
 
-        let error = StructError::from(TestDomainReason::TestError).attach_context(outer);
+        let error = StructError::from(TestDomainReason::TestError).with_context(outer);
 
         let json_value = serde_json::to_value(error.compat_serialize()).unwrap();
         assert_eq!(
@@ -1485,8 +1520,8 @@ mod tests {
             .with_meta("config.group", "infra");
 
         let error = StructError::from(TestDomainReason::TestError)
-            .attach_context(inner)
-            .attach_context(outer);
+            .with_context(inner)
+            .with_context(outer);
 
         let metadata = error.context_metadata();
         assert_eq!(metadata.get_str("config.kind"), Some("sink_defaults"));
@@ -1496,7 +1531,7 @@ mod tests {
 
     #[test]
     fn test_with_struct_source_preserves_source_context_metadata() {
-        let source = StructError::from(TestDomainReason::TestError).attach_context(
+        let source = StructError::from(TestDomainReason::TestError).with_context(
             OperationContext::doing("load sink defaults").with_meta("config.kind", "sink_defaults"),
         );
 
@@ -1519,8 +1554,32 @@ mod tests {
     }
 
     #[test]
+    fn test_with_source_auto_routes_std_source_kind() {
+        let error = StructError::from(TestDomainReason::TestError)
+            .with_source(std::io::Error::other("disk offline"));
+
+        assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Std));
+    }
+
+    #[test]
+    fn test_with_source_auto_routes_struct_source_kind() {
+        let source = StructError::from(TestDomainReason::TestError).with_context(
+            OperationContext::doing("load sink defaults").with_meta("config.kind", "sink_defaults"),
+        );
+
+        let error =
+            StructError::from(TestDomainReason::Uvs(UvsReason::system_error())).with_source(source);
+
+        assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Struct));
+        assert_eq!(
+            error.source_frames()[0].metadata.get_str("config.kind"),
+            Some("sink_defaults")
+        );
+    }
+
+    #[test]
     fn test_builder_source_struct_preserves_source_context_metadata() {
-        let source = StructError::from(TestDomainReason::TestError).attach_context(
+        let source = StructError::from(TestDomainReason::TestError).with_context(
             OperationContext::doing("load sink defaults").with_meta("config.kind", "sink_defaults"),
         );
 
@@ -1545,6 +1604,32 @@ mod tests {
     }
 
     #[test]
+    fn test_builder_source_auto_routes_std_source_kind() {
+        let error = StructError::builder(TestDomainReason::TestError)
+            .source(std::io::Error::other("disk offline"))
+            .finish();
+
+        assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Std));
+    }
+
+    #[test]
+    fn test_builder_source_auto_routes_struct_source_kind() {
+        let source = StructError::from(TestDomainReason::TestError).with_context(
+            OperationContext::doing("load sink defaults").with_meta("config.kind", "sink_defaults"),
+        );
+
+        let error = StructError::builder(TestDomainReason::Uvs(UvsReason::system_error()))
+            .source(source)
+            .finish();
+
+        assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Struct));
+        assert_eq!(
+            error.source_frames()[0].metadata.get_str("config.kind"),
+            Some("sink_defaults")
+        );
+    }
+
+    #[test]
     fn test_internal_source_payload_uses_distinct_std_and_struct_variants() {
         let std_error = StructError::from(TestDomainReason::TestError)
             .with_std_source(std::io::Error::other("disk offline"));
@@ -1555,7 +1640,7 @@ mod tests {
 
         let source = StructError::from(TestDomainReason::TestError)
             .with_detail("inner detail")
-            .attach_context(
+            .with_context(
                 OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
             );
         let struct_error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
@@ -1821,7 +1906,7 @@ mod tests {
 
     #[test]
     fn test_with_struct_source_keeps_nested_source_frame_metadata() {
-        let leaf = StructError::from(TestDomainReason::TestError).attach_context(
+        let leaf = StructError::from(TestDomainReason::TestError).with_context(
             OperationContext::doing("parse route")
                 .with_meta("config.kind", "sink_route")
                 .with_meta("config.group", "infra"),
@@ -1844,12 +1929,12 @@ mod tests {
 
     #[test]
     fn test_root_and_source_metadata_can_be_read_separately() {
-        let source = StructError::from(TestDomainReason::TestError).attach_context(
+        let source = StructError::from(TestDomainReason::TestError).with_context(
             OperationContext::doing("load sink defaults").with_meta("config.kind", "sink_defaults"),
         );
 
         let error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
-            .attach_context(
+            .with_context(
                 OperationContext::doing("start engine").with_meta("component.name", "engine"),
             )
             .with_struct_source(source);
@@ -1866,7 +1951,7 @@ mod tests {
 
     #[test]
     fn test_display_does_not_include_metadata() {
-        let error = StructError::from(TestDomainReason::TestError).attach_context(
+        let error = StructError::from(TestDomainReason::TestError).with_context(
             OperationContext::doing("load sink defaults")
                 .with_meta("config.kind", "sink_defaults")
                 .with_meta("config.group", "infra"),
@@ -1905,7 +1990,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_source_frame_serialization_includes_metadata() {
-        let error = StructError::from(TestDomainReason::TestError).attach_context(
+        let error = StructError::from(TestDomainReason::TestError).with_context(
             OperationContext::doing("load sink defaults")
                 .with_meta("config.kind", "sink_defaults")
                 .with_meta("parse.line", 1u32),
@@ -1922,5 +2007,29 @@ mod tests {
             json_value["source_frames"][0]["metadata"]["parse.line"],
             serde_json::json!(1)
         );
+    }
+
+    #[allow(deprecated)]
+    #[test]
+    fn test_attach_context_deprecated_alias_matches_with_context() {
+        let ctx = OperationContext::doing("load config").with_meta("tenant", "acme");
+        let via_new = StructError::from(TestDomainReason::TestError).with_context(ctx.clone());
+        let via_old = StructError::from(TestDomainReason::TestError).attach_context(ctx);
+
+        assert_eq!(via_old.contexts(), via_new.contexts());
+        assert_eq!(via_old.context_metadata(), via_new.context_metadata());
+    }
+
+    #[test]
+    fn test_inherent_with_context_accepts_call_context() {
+        let mut ctx = CallContext::default();
+        ctx.items.push(("tenant".to_string(), "acme".to_string()));
+
+        let error = StructError::from(TestDomainReason::TestError).with_context(ctx);
+
+        assert_eq!(error.contexts().len(), 1);
+        assert_eq!(error.contexts()[0].context().items.len(), 1);
+        assert_eq!(error.contexts()[0].context().items[0].0, "tenant");
+        assert_eq!(error.contexts()[0].context().items[0].1, "acme");
     }
 }

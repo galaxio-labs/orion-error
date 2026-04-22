@@ -3,3 +3,29 @@ pub trait ErrorCode {
         500
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ErrorCategory {
+    Conf,
+    Biz,
+    Logic,
+    Sys,
+}
+
+impl ErrorCategory {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Conf => "conf",
+            Self::Biz => "biz",
+            Self::Logic => "logic",
+            Self::Sys => "sys",
+        }
+    }
+}
+
+pub trait StableErrorIdentity {
+    fn stable_code(&self) -> &'static str;
+
+    fn error_category(&self) -> ErrorCategory;
+}

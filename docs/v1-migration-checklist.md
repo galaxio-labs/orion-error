@@ -274,19 +274,19 @@ ctx.record("path", "config.toml");
 read_file()
     .into_as(UvsReason::system_error(), "read config failed")?
     .doing("read file")
-    .attach_context(&ctx);
+    .with_context(&ctx);
 ```
 
 旧写法对照：
 
 - `OperationContext::want("op")` -> `OperationContext::doing("op")`
 - `.want("step")` -> `.doing("step")`
-- `.with(&ctx)` -> `.attach_context(&ctx)`
+- `.with(&ctx)` -> `.with_context(&ctx)`
 
 迁移要点：
 
 - `doing(...)` 在 `0.6.x` 里只是 `want(...)` 的别名
-- `attach_context(...)` 用于附加完整上下文帧；`at(...)` 应只用于 locator / resource 语义
+- `with_context(...)` 用于附加完整上下文帧；`at(...)` 应只用于 locator / resource 语义
 - V1 不承诺这一步会带来新的底层 target/path 语义
 
 ## 第三方错误集成边界
@@ -360,14 +360,14 @@ repo_call().wrap_as(UvsReason::system_error(), "service layer failed")?;
 
 ```rust
 let mut ctx = OperationContext::want("load_config");
-call().want("read file").attach_context(&ctx)?;
+call().want("read file").with_context(&ctx)?;
 ```
 
 新代码：
 
 ```rust
 let mut ctx = OperationContext::doing("load_config");
-call().doing("read file").attach_context(&ctx)?;
+call().doing("read file").with_context(&ctx)?;
 ```
 
 ### 示例四：普通 source 与结构化 source 分流

@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use super::ErrorCode;
+use super::{ErrorCategory, ErrorCode, StableErrorIdentity};
 
 /// Configuration error sub-classification
 /// 配置错误子分类
@@ -233,6 +233,46 @@ impl ErrorCode for UvsReason {
     }
 }
 
+impl StableErrorIdentity for UvsReason {
+    fn stable_code(&self) -> &'static str {
+        match self {
+            UvsReason::ValidationError => "biz.validation_error",
+            UvsReason::BusinessError => "biz.business_error",
+            UvsReason::RunRuleError => "biz.run_rule_error",
+            UvsReason::NotFoundError => "biz.not_found",
+            UvsReason::PermissionError => "biz.permission_denied",
+            UvsReason::DataError => "sys.data_error",
+            UvsReason::SystemError => "sys.io_error",
+            UvsReason::NetworkError => "sys.network_error",
+            UvsReason::ResourceError => "sys.resource_exhausted",
+            UvsReason::TimeoutError => "sys.timeout",
+            UvsReason::ConfigError(ConfErrReason::Core) => "conf.core_invalid",
+            UvsReason::ConfigError(ConfErrReason::Feature) => "conf.feature_invalid",
+            UvsReason::ConfigError(ConfErrReason::Dynamic) => "conf.dynamic_invalid",
+            UvsReason::ExternalError => "sys.external_service_error",
+            UvsReason::LogicError => "logic.internal_invariant_broken",
+        }
+    }
+
+    fn error_category(&self) -> ErrorCategory {
+        match self {
+            UvsReason::ConfigError(_) => ErrorCategory::Conf,
+            UvsReason::LogicError => ErrorCategory::Logic,
+            UvsReason::ValidationError
+            | UvsReason::BusinessError
+            | UvsReason::RunRuleError
+            | UvsReason::NotFoundError
+            | UvsReason::PermissionError => ErrorCategory::Biz,
+            UvsReason::DataError
+            | UvsReason::SystemError
+            | UvsReason::NetworkError
+            | UvsReason::ResourceError
+            | UvsReason::TimeoutError
+            | UvsReason::ExternalError => ErrorCategory::Sys,
+        }
+    }
+}
+
 impl UvsReason {
     /// Check if this error is retryable
     /// 检查错误是否可重试
@@ -342,6 +382,38 @@ mod tests {
     }
 
     #[test]
+    fn test_stable_code_values() {
+        assert_eq!(
+            UvsReason::validation_error().stable_code(),
+            "biz.validation_error"
+        );
+        assert_eq!(UvsReason::system_error().stable_code(), "sys.io_error");
+        assert_eq!(UvsReason::core_conf().stable_code(), "conf.core_invalid");
+        assert_eq!(
+            UvsReason::logic_error().stable_code(),
+            "logic.internal_invariant_broken"
+        );
+    }
+
+    #[test]
+    fn test_error_categories() {
+        assert_eq!(
+            UvsReason::validation_error().error_category(),
+            ErrorCategory::Biz
+        );
+        assert_eq!(
+            UvsReason::system_error().error_category(),
+            ErrorCategory::Sys
+        );
+        assert_eq!(UvsReason::core_conf().error_category(), ErrorCategory::Conf);
+        assert_eq!(
+            UvsReason::logic_error().error_category(),
+            ErrorCategory::Logic
+        );
+        assert_eq!(ErrorCategory::Biz.as_str(), "biz");
+    }
+
+    #[test]
     fn test_trait_implementations() {
         let reason: UvsReason = <UvsReason as UvsFrom>::from_net();
         assert_eq!(reason.error_code(), 202);
@@ -351,5 +423,6 @@ mod tests {
 
         let reason: UvsReason = <UvsReason as UvsFrom>::from_external();
         assert_eq!(reason.error_code(), 301);
+        assert_eq!(reason.error_category(), ErrorCategory::Sys);
     }
 }

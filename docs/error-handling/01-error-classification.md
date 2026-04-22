@@ -358,36 +358,46 @@ let result = critical_operation().map_err(|e| {
 
 1. **使用StructError进行错误包装**
    ```rust
-   // 使用StructError包装底层错误
-   let result = database_operation().map_err(|e| {
-       StructError::new(
-           UvsReason::DataError("Database connection failed".to_string()),
-           ErrStrategy::Retry
-       )
-   });
+   use orion_error::{conversion::IntoAs, reason::UvsReason};
+
+   let result = database_operation()
+       .into_as(UvsReason::data_error(), "database connection failed");
    ```
 
 2. **利用OperationContext管理上下文**
    ```rust
-   // 使用OperationContext添加上下文信息
-   let context = OperationContext::new("user_service")
-       .with("user_id", "12345")
-       .with("operation", "update_profile");
-   
-   let result = operation().map_err(|e| {
-       StructError::with_context(e.reason(), ErrStrategy::Throw, context)
-   });
+   use orion_error::{
+       conversion::{ErrorWith, IntoAs},
+       runtime::{ContextRecord, OperationContext},
+   };
+
+   let mut context = OperationContext::doing("user_service");
+   context.record("user_id", "12345");
+   context.record("operation", "update_profile");
+
+   let result = operation()
+       .into_as(UvsReason::business_error(), "update profile failed")
+       .with_context(&context);
    ```
 
 3. **实现From trait进行错误转换**
    ```rust
-   // 为自定义错误类型实现From trait
+   use derive_more::From;
+   use orion_error::reason::UvsReason;
+   use thiserror::Error;
+
+   #[derive(Debug, Error, Clone, PartialEq, From)]
+   enum DatabaseServiceError {
+       #[error("database unavailable")]
+       DatabaseUnavailable,
+       #[error("{0}")]
+       Uvs(UvsReason),
+   }
+
    impl From<DatabaseError> for StructError<UvsReason> {
        fn from(err: DatabaseError) -> Self {
-           StructError::new(
-               UvsReason::DataError(format!("Database error: {}", err)),
-               ErrStrategy::Retry
-           )
+           StructError::from(UvsReason::data_error())
+               .with_detail(format!("database error: {}", err))
        }
    }
    ```

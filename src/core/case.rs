@@ -65,7 +65,7 @@ mod tests {
         let mut ctx = OperationContext::doing("user_profile");
         ctx.record("user_id", "12345");
 
-        let err = StructError::from(TestDomainReason::Why1).attach_context(ctx);
+        let err = StructError::from(TestDomainReason::Why1).with_context(ctx);
 
         assert_eq!(err.target(), Some("user_profile".to_string()));
         assert!(err
@@ -100,7 +100,7 @@ mod tests {
             .with_detail("missing db config")
             .position("src/config.rs:42")
             .doing("database_config")
-            .attach_context(ctx);
+            .with_context(ctx);
 
         let display_output = format!("{err}");
         println!("{display_output}");

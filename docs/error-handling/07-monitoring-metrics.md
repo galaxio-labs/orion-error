@@ -1570,17 +1570,17 @@ impl MonitoringConfig {
         config
     }
     
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), &'static str> {
         if self.collection_interval < Duration::from_secs(10) {
-            return Err("Collection interval must be at least 10 seconds".to_string());
+            return Err("Collection interval must be at least 10 seconds");
         }
         
         if self.alert_thresholds.critical_error_rate <= self.alert_thresholds.warning_error_rate {
-            return Err("Critical error rate threshold must be greater than warning threshold".to_string());
+            return Err("Critical error rate threshold must be greater than warning threshold");
         }
         
         if self.sampling_rate < 0.0 || self.sampling_rate > 1.0 {
-            return Err("Sampling rate must be between 0.0 and 1.0".to_string());
+            return Err("Sampling rate must be between 0.0 and 1.0");
         }
         
         Ok(())

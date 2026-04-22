@@ -1,5 +1,7 @@
 #![allow(deprecated)]
 
+// Compat regression coverage: these tests intentionally keep legacy owe(...)
+// paths alive until the compatibility surface is removed.
 use orion_error::compat_prelude::ErrorOweBase;
 use orion_error::conversion::IntoAs;
 use orion_error::ErrorCode;

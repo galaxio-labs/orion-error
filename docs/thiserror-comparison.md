@@ -10,7 +10,7 @@
 - 新代码优先 `use orion_error::v2::*;` 或 `use orion_error::v2::prelude::*;`
 - 维护 V1 风格代码时，优先 `use orion_error::v1::*;`
 - 只按 trait 分组导入时可用 `use orion_error::traits_ext::*;`
-- 旧的 `owe(...)` / `err_wrap(...)` 兼容导入请显式使用 `use orion_error::compat_prelude::*;` 或 `use orion_error::compat_traits::*;`
+- 旧的 `owe(...)` / `err_wrap(...)` 兼容导入请显式从 compat prelude / compat traits 模块进入
 
 推荐组合方式是：
 

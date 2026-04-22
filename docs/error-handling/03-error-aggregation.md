@@ -329,40 +329,26 @@ impl WithContext {
 
 对于 `0.6.x / V1 API`：
 
-- 不再把 `WithContext::want(...)` / 链式 `.want(...)` 作为推荐主路径
+- 不再把旧的 `WithContext` target helper / 链式 target helper 作为推荐主路径
 - 不再把 `.owe(...)` 作为普通错误第一次进入结构化体系的首选写法
 - 请优先参考 `into_as(...)` / `wrap_as(...)` / `doing(...)` 的主路径说明
 
 ```rust
-fn place_order() -> Result<Order> {
-    // 创建错误上下文
-    let mut ctx = WithContext::want("place_order");
-    ctx.with(order_txt);
-    
-    // 解析订单并绑定上下文
-    parse_order()
-        .want("解析订单")
-        .attach_context(&ctx)  // 绑定上下文
-        .owe(BusinessError::default())?
-}
+use orion_error::{
+    conversion::{ErrorWith, IntoAs},
+    reason::UvsReason,
+    runtime::{ContextRecord, OperationContext, StructError},
+};
 
-impl<T, E> ResultExt<T, E> for Result<T, E> {
-    fn want(self, description: &str) -> Result<T, ContextualError<E>> {
-        self.map_err(|e| ContextualError::new(e, description))
-    }
-    
-    fn with(mut self, ctx: &WithContext) -> Result<T, ContextualError<E>> {
-        if let Err(ref mut contextual_error) = self {
-            contextual_error.request_context = ctx.request_context.clone();
-            contextual_error.business_context = ctx.business_context.clone();
-            contextual_error.context_frames.extend(ctx.error_context.clone());
-        }
-        self
-    }
-    
-    fn owe_biz(self) -> Result<T, BusinessError> {
-        self.map_err(|e| BusinessError::from_contextual_error(e))
-    }
+fn place_order(order_txt: &str) -> Result<(), StructError<UvsReason>> {
+    let mut ctx = OperationContext::doing("place_order");
+    ctx.record("order_txt", order_txt);
+
+    std::fs::read_to_string("order.txt")
+        .into_as(UvsReason::system_error(), "read order payload failed")
+        .doing("parse order")
+        .with_context(&ctx)
+        .map(|_| ())
 }
 ```
 

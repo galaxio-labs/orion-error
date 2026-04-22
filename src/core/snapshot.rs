@@ -1,7 +1,8 @@
 use crate::{DomainReason, StructError};
 
 use super::{
-    context::OperationResult, report::ErrorReport, ErrorMetadata, OperationContext, SourceFrame,
+    context::OperationResult, report::ErrorReport, ErrorCategory, ErrorMetadata, OperationContext,
+    SourceFrame, StableErrorIdentity,
 };
 
 pub const STABLE_SNAPSHOT_SCHEMA_VERSION: &str = "orion-error.snapshot.v2";
@@ -121,6 +122,24 @@ pub struct StableStructErrorSnapshot {
     pub context: Vec<StableSnapshotContextFrame>,
     pub root_metadata: ErrorMetadata,
     pub source_frames: Vec<StableSnapshotSourceFrame>,
+}
+
+/// V3-oriented identity-first snapshot view.
+///
+/// This additive view does not change the current V2 stable snapshot schema.
+/// It exists so governance, testing, and future policy/render layers can start
+/// consuming `code` and `category` without forcing a breaking change onto the
+/// existing `orion-error.snapshot.v2` export contract.
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErrorIdentitySnapshot {
+    pub code: String,
+    pub category: ErrorCategory,
+    pub reason: String,
+    pub detail: Option<String>,
+    pub position: Option<String>,
+    pub want: Option<String>,
+    pub path: Option<String>,
 }
 
 /// Explicit compatibility serialization view for `StructErrorSnapshot`.
@@ -580,14 +599,34 @@ impl<T: DomainReason> StructError<T> {
     }
 }
 
+impl<T> StructError<T>
+where
+    T: DomainReason + StableErrorIdentity,
+{
+    pub fn identity_snapshot(&self) -> ErrorIdentitySnapshot {
+        ErrorIdentitySnapshot {
+            code: self.stable_code().to_string(),
+            category: self.error_category(),
+            reason: self.reason().to_string(),
+            detail: self.detail().clone(),
+            position: self.position().clone(),
+            want: self.target_main(),
+            path: self.target_path(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{ContextRecord, ErrorCode, ErrorWith, OperationContext, StructError, UvsReason};
+    use crate::{
+        ContextRecord, ErrorCategory, ErrorCode, OperationContext, StableErrorIdentity,
+        StructError, UvsReason,
+    };
 
     use super::{
-        SnapshotCompat, SnapshotContextFrame, SnapshotSourceFrame, StableSnapshotCompat,
-        StableSnapshotContextFrame, StableSnapshotSourceFrame, StableStructErrorSnapshot,
-        StructErrorSnapshot, STABLE_SNAPSHOT_SCHEMA_VERSION,
+        ErrorIdentitySnapshot, SnapshotCompat, SnapshotContextFrame, SnapshotSourceFrame,
+        StableSnapshotCompat, StableSnapshotContextFrame, StableSnapshotSourceFrame,
+        StableStructErrorSnapshot, StructErrorSnapshot, STABLE_SNAPSHOT_SCHEMA_VERSION,
     };
     #[cfg(feature = "serde_json")]
     use super::{
@@ -618,15 +657,31 @@ mod tests {
         }
     }
 
+    impl StableErrorIdentity for TestReason {
+        fn stable_code(&self) -> &'static str {
+            match self {
+                TestReason::TestError => "test.test_error",
+                TestReason::Uvs(reason) => reason.stable_code(),
+            }
+        }
+
+        fn error_category(&self) -> ErrorCategory {
+            match self {
+                TestReason::TestError => ErrorCategory::Logic,
+                TestReason::Uvs(reason) => reason.error_category(),
+            }
+        }
+    }
+
     #[test]
     fn test_snapshot_captures_runtime_fields_and_source_frames() {
-        let source = StructError::from(TestReason::TestError).attach_context(
+        let source = StructError::from(TestReason::TestError).with_context(
             OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
         );
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("engine bootstrap failed")
             .with_position("src/main.rs:42")
-            .attach_context(
+            .with_context(
                 OperationContext::doing("start engine").with_meta("component.name", "engine"),
             )
             .with_struct_source(source);
@@ -649,15 +704,53 @@ mod tests {
     }
 
     #[test]
+    fn test_identity_snapshot_captures_v3_stable_identity_fields() {
+        let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
+            .with_detail("engine bootstrap failed")
+            .with_position("src/main.rs:42")
+            .with_context(OperationContext::doing("start engine"));
+
+        let identity = err.identity_snapshot();
+
+        assert_eq!(identity.code, "sys.io_error");
+        assert_eq!(identity.category, ErrorCategory::Sys);
+        assert_eq!(identity.reason, "system error");
+        assert_eq!(identity.detail.as_deref(), Some("engine bootstrap failed"));
+        assert_eq!(identity.position.as_deref(), Some("src/main.rs:42"));
+        assert_eq!(identity.want.as_deref(), Some("start engine"));
+        assert_eq!(identity.path.as_deref(), Some("start engine"));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_identity_snapshot_serialization_includes_code_and_category() {
+        let identity = ErrorIdentitySnapshot {
+            code: "sys.io_error".to_string(),
+            category: ErrorCategory::Sys,
+            reason: "system error".to_string(),
+            detail: Some("engine bootstrap failed".to_string()),
+            position: Some("src/main.rs:42".to_string()),
+            want: Some("start engine".to_string()),
+            path: Some("start engine".to_string()),
+        };
+
+        let value = serde_json::to_value(identity).unwrap();
+
+        assert_eq!(value["code"], serde_json::json!("sys.io_error"));
+        assert_eq!(value["category"], serde_json::json!("Sys"));
+        assert_eq!(value["reason"], serde_json::json!("system error"));
+    }
+
+    #[test]
     fn test_snapshot_preserves_v2_action_and_locator_context_fields() {
         let mut ctx = OperationContext::at("config.toml");
         ctx.with_doing("parse config");
 
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
-            .attach_context(
+            .with_context(
                 OperationContext::doing("load config").with_meta("component.name", "engine"),
             )
-            .attach_context(ctx);
+            .with_context(ctx);
 
         let snapshot = err.snapshot();
 
@@ -727,7 +820,7 @@ mod tests {
     fn test_snapshot_from_struct_error_matches_snapshot_method() {
         let err = StructError::from(TestReason::TestError)
             .with_detail("engine bootstrap failed")
-            .attach_context(OperationContext::doing("start engine"));
+            .with_context(OperationContext::doing("start engine"));
 
         let via_method = err.snapshot();
         let via_from = StructErrorSnapshot::from(&err);
@@ -739,7 +832,7 @@ mod tests {
     fn test_snapshot_from_owned_struct_error_matches_snapshot_method() {
         let err = StructError::from(TestReason::TestError)
             .with_detail("engine bootstrap failed")
-            .attach_context(OperationContext::doing("start engine"));
+            .with_context(OperationContext::doing("start engine"));
 
         let via_method = err.snapshot();
         let via_from = StructErrorSnapshot::from(err);
@@ -751,7 +844,7 @@ mod tests {
     fn test_struct_error_into_snapshot_matches_snapshot_method() {
         let err = StructError::from(TestReason::TestError)
             .with_detail("engine bootstrap failed")
-            .attach_context(OperationContext::doing("start engine"));
+            .with_context(OperationContext::doing("start engine"));
 
         let via_method = err.snapshot();
         let via_into = err.into_snapshot();
@@ -804,12 +897,12 @@ mod tests {
     fn test_snapshot_stable_helpers_prefer_snapshot_native_frames() {
         let source = StructError::from(TestReason::TestError)
             .with_detail("inner detail")
-            .attach_context(
+            .with_context(
                 OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
             );
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("outer detail")
-            .attach_context(OperationContext::doing("start engine"))
+            .with_context(OperationContext::doing("start engine"))
             .with_struct_source(source);
 
         let snapshot = err.snapshot();
@@ -834,14 +927,14 @@ mod tests {
     fn test_snapshot_stable_export_strips_compat_projection_fields() {
         let source = StructError::from(TestReason::TestError)
             .with_detail("inner detail")
-            .attach_context(
+            .with_context(
                 OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
             );
         let mut outer = OperationContext::at("engine.toml");
         outer.with_doing("start engine");
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("outer detail")
-            .attach_context(outer)
+            .with_context(outer)
             .with_struct_source(source);
 
         let snapshot = err.snapshot();
@@ -914,12 +1007,12 @@ mod tests {
     fn test_stable_snapshot_from_struct_error_matches_snapshot_stable_export() {
         let source = StructError::from(TestReason::TestError)
             .with_detail("inner detail")
-            .attach_context(
+            .with_context(
                 OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
             );
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("outer detail")
-            .attach_context(OperationContext::doing("start engine"))
+            .with_context(OperationContext::doing("start engine"))
             .with_struct_source(source);
 
         let via_method = err.snapshot().stable_export();
@@ -1230,13 +1323,13 @@ mod tests {
     fn test_snapshot_default_serialization_uses_stable_export_shape() {
         let source = StructError::from(TestReason::TestError)
             .with_detail("inner detail")
-            .attach_context(
+            .with_context(
                 OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
             );
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("engine bootstrap failed")
             .with_position("src/main.rs:42")
-            .attach_context(
+            .with_context(
                 OperationContext::doing("start engine").with_meta("component.name", "engine"),
             )
             .with_struct_source(source);
@@ -1319,13 +1412,13 @@ mod tests {
     fn test_to_compat_snapshot_json_preserves_compat_projection_shape() {
         let source = StructError::from(TestReason::TestError)
             .with_detail("inner detail")
-            .attach_context(
+            .with_context(
                 OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
             );
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("engine bootstrap failed")
             .with_position("src/main.rs:42")
-            .attach_context(
+            .with_context(
                 OperationContext::doing("start engine").with_meta("component.name", "engine"),
             )
             .with_struct_source(source);

@@ -1,69 +1,160 @@
-// 创造一个客户订单的用例,展示orion-error。
-// 用例包括: order_service, order_store, order_txt 相关概念。
-// 产生错语的原因可能： order_txt 格式错语， 客户帐户资金不足、 order_store 的空间不足等
-
 use derive_more::From;
 use orion_error::{
-    conversion::{ErrorConv, ErrorWith},
-    print_error,
-    reason::{ErrorCode, UvsReason},
-    report::{RedactPolicy, RenderMode},
-    runtime::{ContextRecord, OperationContext, StructError},
+    v2::{
+        conversion::{ErrorConv, ErrorWith},
+        reason::{ErrorCategory, ErrorCode, StableErrorIdentity, UvsReason},
+        report::{DefaultErrorPolicy, RedactPolicy, RenderMode},
+        runtime::{OperationContext, StructError},
+    },
+    ToStructError,
 };
-use std::sync::atomic::Ordering;
 use thiserror::Error;
 
-// ========== 领域错误定义 ==========
-#[derive(Debug, PartialEq, Clone, Error, From)]
-pub enum OrderReason {
-    #[error("format error")]
-    FormatError,
+#[derive(Debug, Clone, PartialEq, Error, From)]
+enum ParseReason {
+    #[error("invalid order text")]
+    InvalidText,
+    #[error("invalid amount")]
+    InvalidAmount,
+    #[error("{0}")]
+    Uvs(UvsReason),
+}
+
+impl ErrorCode for ParseReason {
+    fn error_code(&self) -> i32 {
+        match self {
+            Self::InvalidText => 1001,
+            Self::InvalidAmount => 1002,
+            Self::Uvs(reason) => reason.error_code(),
+        }
+    }
+}
+
+impl StableErrorIdentity for ParseReason {
+    fn stable_code(&self) -> &'static str {
+        match self {
+            Self::InvalidText => "biz.order_invalid_text",
+            Self::InvalidAmount => "biz.order_invalid_amount",
+            Self::Uvs(reason) => reason.stable_code(),
+        }
+    }
+
+    fn error_category(&self) -> ErrorCategory {
+        match self {
+            Self::InvalidText | Self::InvalidAmount => ErrorCategory::Biz,
+            Self::Uvs(reason) => reason.error_category(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Error, From)]
+enum UserReason {
+    #[error("user not found")]
+    NotFound,
+    #[error("{0}")]
+    Uvs(UvsReason),
+}
+
+impl ErrorCode for UserReason {
+    fn error_code(&self) -> i32 {
+        match self {
+            Self::NotFound => 1101,
+            Self::Uvs(reason) => reason.error_code(),
+        }
+    }
+}
+
+impl StableErrorIdentity for UserReason {
+    fn stable_code(&self) -> &'static str {
+        match self {
+            Self::NotFound => "biz.user_not_found",
+            Self::Uvs(reason) => reason.stable_code(),
+        }
+    }
+
+    fn error_category(&self) -> ErrorCategory {
+        match self {
+            Self::NotFound => ErrorCategory::Biz,
+            Self::Uvs(reason) => reason.error_category(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Error, From)]
+enum StoreReason {
+    #[error("storage full")]
+    StorageFull,
+    #[error("{0}")]
+    Uvs(UvsReason),
+}
+
+impl ErrorCode for StoreReason {
+    fn error_code(&self) -> i32 {
+        match self {
+            Self::StorageFull => 2101,
+            Self::Uvs(reason) => reason.error_code(),
+        }
+    }
+}
+
+impl StableErrorIdentity for StoreReason {
+    fn stable_code(&self) -> &'static str {
+        match self {
+            Self::StorageFull => "sys.storage_full",
+            Self::Uvs(reason) => reason.stable_code(),
+        }
+    }
+
+    fn error_category(&self) -> ErrorCategory {
+        match self {
+            Self::StorageFull => ErrorCategory::Sys,
+            Self::Uvs(reason) => reason.error_category(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Error, From)]
+enum OrderReason {
+    #[error("invalid order")]
+    InvalidOrder,
+    #[error("user not found")]
+    UserNotFound,
     #[error("insufficient funds")]
     InsufficientFunds,
     #[error("storage full")]
     StorageFull,
-    #[error("user not found")]
-    UserNotFound,
     #[error("{0}")]
     Uvs(UvsReason),
 }
+
 impl ErrorCode for OrderReason {
     fn error_code(&self) -> i32 {
         match self {
-            Self::Uvs(uvs_reason) => uvs_reason.error_code(),
-            _ => 500,
+            Self::InvalidOrder => 3001,
+            Self::UserNotFound => 3002,
+            Self::InsufficientFunds => 3003,
+            Self::StorageFull => 3004,
+            Self::Uvs(reason) => reason.error_code(),
         }
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Error, From)]
-pub enum StoreReason {
-    #[error("storage full")]
-    StorageFull,
-    #[error("{0}")]
-    Uvs(UvsReason),
-}
-impl ErrorCode for StoreReason {
-    fn error_code(&self) -> i32 {
+impl StableErrorIdentity for OrderReason {
+    fn stable_code(&self) -> &'static str {
         match self {
-            Self::Uvs(uvs_reason) => uvs_reason.error_code(),
-            _ => 500,
+            Self::InvalidOrder => "biz.order_invalid",
+            Self::UserNotFound => "biz.user_not_found",
+            Self::InsufficientFunds => "biz.insufficient_funds",
+            Self::StorageFull => "sys.storage_full",
+            Self::Uvs(reason) => reason.stable_code(),
         }
     }
-}
 
-#[derive(Debug, Error, PartialEq, Clone, From)]
-pub enum ParseReason {
-    #[error("format error")]
-    FormatError,
-    #[error("{0}")]
-    Uvs(UvsReason),
-}
-impl ErrorCode for ParseReason {
-    fn error_code(&self) -> i32 {
+    fn error_category(&self) -> ErrorCategory {
         match self {
-            ParseReason::FormatError => 400,
-            ParseReason::Uvs(uvs_reason) => uvs_reason.error_code(),
+            Self::InvalidOrder | Self::UserNotFound | Self::InsufficientFunds => ErrorCategory::Biz,
+            Self::StorageFull => ErrorCategory::Sys,
+            Self::Uvs(reason) => reason.error_category(),
         }
     }
 }
@@ -71,25 +162,17 @@ impl ErrorCode for ParseReason {
 impl From<ParseReason> for OrderReason {
     fn from(value: ParseReason) -> Self {
         match value {
-            ParseReason::FormatError => Self::FormatError,
-            ParseReason::Uvs(uvs_reason) => Self::Uvs(uvs_reason),
+            ParseReason::InvalidText | ParseReason::InvalidAmount => Self::InvalidOrder,
+            ParseReason::Uvs(reason) => Self::Uvs(reason),
         }
     }
-}
-
-#[derive(Debug, PartialEq, Clone, Error, From)]
-pub enum UserReason {
-    #[error("not found")]
-    NotFound,
-    #[error("{0}")]
-    Uvs(UvsReason),
 }
 
 impl From<UserReason> for OrderReason {
     fn from(value: UserReason) -> Self {
         match value {
             UserReason::NotFound => Self::UserNotFound,
-            UserReason::Uvs(uvs_reason) => Self::Uvs(uvs_reason),
+            UserReason::Uvs(reason) => Self::Uvs(reason),
         }
     }
 }
@@ -98,20 +181,28 @@ impl From<StoreReason> for OrderReason {
     fn from(value: StoreReason) -> Self {
         match value {
             StoreReason::StorageFull => Self::StorageFull,
-            StoreReason::Uvs(uvs_reason) => Self::Uvs(uvs_reason),
+            StoreReason::Uvs(reason) => Self::Uvs(reason),
         }
     }
 }
-pub type OrderError = StructError<OrderReason>;
-pub type StoreError = StructError<StoreReason>;
-pub type ParseError = StructError<ParseReason>;
-pub type UserError = StructError<UserReason>;
+
+type ParseError = StructError<ParseReason>;
+type UserError = StructError<UserReason>;
+type StoreError = StructError<StoreReason>;
+type OrderError = StructError<OrderReason>;
+
+#[derive(Debug, Clone)]
+struct OrderDraft {
+    user_id: u32,
+    amount: u64,
+    item: String,
+}
 
 struct ExampleRedactPolicy;
 
 impl RedactPolicy for ExampleRedactPolicy {
     fn redact_key(&self, key: &str) -> bool {
-        matches!(key, "order" | "config.secret")
+        matches!(key, "order.raw" | "trace.secret")
     }
 
     fn redact_value(&self, _key: Option<&str>, _value: &str) -> Option<String> {
@@ -119,185 +210,140 @@ impl RedactPolicy for ExampleRedactPolicy {
     }
 }
 
-// ========== 数据层 ==========
-pub mod storage {
-    use std::sync::{
-        atomic::{AtomicUsize, Ordering},
-        Mutex,
-    };
-
-    use super::*;
-
-    #[derive(Clone)]
-    pub struct Order {
-        pub user_id: u32,
-        pub amount: f64,
-    }
-
-    pub static STORAGE_CAPACITY: AtomicUsize = AtomicUsize::new(2);
-    static ORDERS: Mutex<Vec<Order>> = Mutex::new(Vec::new());
-    pub fn save(order: Order) -> Result<(), StoreError> {
-        save_db_impl(order).map_err(|e| match e.kind() {
-            std::io::ErrorKind::OutOfMemory => StructError::from(StoreReason::StorageFull)
-                .with_detail("storage capacity exceeded")
-                .with_std_source(e),
-            _ => StructError::from(StoreReason::from(UvsReason::system_error()))
-                .with_detail("persist order failed")
-                .with_std_source(e),
-        })
-    }
-
-    fn save_db_impl(order: Order) -> Result<(), std::io::Error> {
-        let capacity = STORAGE_CAPACITY.load(Ordering::Relaxed);
-        let mut orders = ORDERS
-            .lock()
-            .map_err(|_| std::io::Error::other("Failed to lock orders mutex"))?;
-
-        if orders.len() >= capacity {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::OutOfMemory,
-                "Storage capacity exceeded",
-            ));
-        }
-        orders.push(order);
-        Ok(())
-    }
-}
-
-// ========== 业务逻辑层 ==========
 struct OrderService;
 
 impl OrderService {
-    /// 创建订单完整流程
-    pub fn place_order(
-        user_id: u32,
-        amount: f64,
-        order_txt: &str,
-    ) -> Result<storage::Order, OrderError> {
+    fn place_order(user_id: u32, amount: u64, raw_order: &str) -> Result<OrderDraft, OrderError> {
         let mut ctx = OperationContext::doing("place_order");
-        ctx.record("order", order_txt);
+        ctx.record_field("user_id", user_id.to_string());
+        ctx.record_field("order.raw", raw_order);
         ctx.record_meta("component.name", "order_service");
-        ctx.record_meta("config.secret", "/prod/orders/api-token");
-        let order = Self::parse_order(order_txt, amount)
-            .doing("解析订单")
-            .attach_context(&ctx)
+        ctx.record_meta("trace.secret", "prod-token");
+
+        let draft = Self::parse_order(user_id, amount, raw_order)
+            .doing("parse order")
+            .with_context(&ctx)
             .err_conv()?;
 
-        Self::validate_funds(user_id, order.amount)
-            .doing("验证资金")
-            .attach_context(&ctx)?;
+        Self::load_user(draft.user_id)
+            .doing("load user")
+            .with_context(&ctx)
+            .err_conv()?;
 
-        let order = storage::Order { user_id, amount };
-        Self::save_order(order)
-            .doing("保存订单")
-            .attach_context(&ctx)
+        Self::ensure_balance(draft.amount)
+            .doing("check balance")
+            .with_context(&ctx)?;
+
+        Self::save_order(&draft)
+            .doing("save order")
+            .with_context(&ctx)
+            .err_conv()?;
+
+        Ok(draft)
     }
 
-    fn parse_order(txt: &str, amount: f64) -> Result<storage::Order, ParseError> {
-        if txt.is_empty() {
-            return Err(StructError::builder(ParseReason::FormatError)
-                .detail("订单文本不能为空")
-                .context(
-                    OperationContext::doing("parse order text")
-                        .with_meta("config.kind", "order_txt")
-                        .with_meta("parse.field", "order_txt"),
-                )
-                .finish());
+    fn parse_order(user_id: u32, amount: u64, raw_order: &str) -> Result<OrderDraft, ParseError> {
+        if raw_order.trim().is_empty() {
+            return Err(ParseReason::InvalidText
+                .to_err()
+                .with_detail("order text must not be empty"));
         }
 
-        // 模拟解析逻辑 - 验证金额
-        if amount <= 0.0 {
-            return Err(StructError::builder(ParseReason::FormatError)
-                .detail("订单金额必须大于零")
-                .context(
-                    OperationContext::doing("parse order amount")
-                        .with_meta("parse.field", "amount"),
-                )
-                .finish());
+        if amount == 0 {
+            return Err(ParseReason::InvalidAmount
+                .to_err()
+                .with_detail("amount must be greater than zero"));
         }
 
-        Ok(storage::Order {
-            user_id: 123,
+        Ok(OrderDraft {
+            user_id,
             amount,
+            item: raw_order.trim().to_string(),
         })
     }
 
-    fn validate_funds(user_id: u32, amount: f64) -> Result<(), OrderError> {
-        //let balance = Self::get_balance(user_id).map_err(stc_err_conv)?;
-        let balance = Self::get_balance(user_id).err_conv()?;
+    fn load_user(user_id: u32) -> Result<(), UserError> {
+        if user_id == 42 {
+            Ok(())
+        } else {
+            Err(UserReason::NotFound
+                .to_err()
+                .with_detail(format!("user {user_id} does not exist")))
+        }
+    }
 
-        if balance < amount {
-            Err(StructError::builder(OrderReason::InsufficientFunds)
-                .detail(format!("当前余额：{balance}，需要：{amount}"))
-                .finish())
+    fn ensure_balance(amount: u64) -> Result<(), OrderError> {
+        let balance = 300;
+        if amount > balance {
+            Err(OrderReason::InsufficientFunds
+                .to_err()
+                .with_detail(format!("balance={balance}, required={amount}")))
         } else {
             Ok(())
         }
     }
 
-    fn get_balance(user_id: u32) -> Result<f64, UserError> {
-        if user_id != 123 {
-            Err(StructError::builder(UserReason::NotFound)
-                .detail(format!("uid:{user_id}"))
-                .finish())
-        } else {
-            Ok(500.0)
-        }
-    }
-
-    fn save_order(order: storage::Order) -> Result<storage::Order, OrderError> {
-        storage::save(order.clone()).err_conv()?;
-        Ok(order)
+    fn save_order(draft: &OrderDraft) -> Result<(), StoreError> {
+        persist_order(draft.item.as_str())
     }
 }
 
-// ========== 展示错误处理 ==========
+fn persist_order(item: &str) -> Result<(), StoreError> {
+    write_impl(item).map_err(|err| match err.kind() {
+        std::io::ErrorKind::OutOfMemory => StoreReason::StorageFull
+            .to_err()
+            .with_detail("storage quota exceeded")
+            .with_source(err),
+        _ => StoreReason::from(UvsReason::system_error())
+            .to_err()
+            .with_detail("write order record failed")
+            .with_source(err),
+    })
+}
 
-fn print_verbose_report(err: &OrderError) {
+fn write_impl(item: &str) -> Result<(), std::io::Error> {
+    if item == "overflow" {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::OutOfMemory,
+            "storage full",
+        ));
+    }
+    Ok(())
+}
+
+fn print_v3_views(err: &OrderError) {
+    let policy = DefaultErrorPolicy;
+
+    println!("identity      : {:?}", err.identity_snapshot());
+    println!(
+        "policy        : {:?}",
+        err.policy_snapshot(&policy).decision
+    );
+    println!("http response : {:?}", err.http_response(&policy));
+    println!("cli response  : {:?}", err.cli_response(&policy));
+    println!("log response  : {:?}", err.log_response(&policy));
+    println!("rpc response  : {:?}", err.rpc_response(&policy));
     println!("verbose report:\n{}", err.render(RenderMode::Verbose));
     println!(
-        "redacted verbose report:\n{}",
+        "redacted report:\n{}",
         err.render_redacted(RenderMode::Verbose, &ExampleRedactPolicy)
     );
 }
 
+fn run_case(name: &str, user_id: u32, amount: u64, raw_order: &str) {
+    println!("\n== {name} ==");
+    match OrderService::place_order(user_id, amount, raw_order) {
+        Ok(order) => println!(
+            "created order: user={} amount={}",
+            order.user_id, order.amount
+        ),
+        Err(err) => print_v3_views(&err),
+    }
+}
+
 fn main() {
-    // 测试用例 1: 空订单文本
-    let case1 = OrderService::place_order(123, 200.0, "");
-    if let Err(e) = case1 {
-        print_error(&e);
-        println!("root metadata: {:?}", e.context_metadata().as_map());
-        let report = e.report();
-        println!("report path: {:?}", report.path);
-        print_verbose_report(&e);
-    }
-
-    // 测试用例 2: 用户不存在
-    let case2 = OrderService::place_order(456, 200.0, "valid_order");
-    if let Err(e) = case2 {
-        print_error(&e);
-    }
-
-    // 测试用例 3: 余额不足
-    let case3 = OrderService::place_order(123, 600.0, "valid_order");
-    if let Err(e) = case3 {
-        print_error(&e);
-    }
-
-    // 测试用例 4: 存储空间不足
-    storage::STORAGE_CAPACITY.store(0, Ordering::Relaxed);
-    let case4 = OrderService::place_order(123, 200.0, "valid_order");
-    if let Err(e) = case4 {
-        print_error(&e);
-        if let Some(frame) = e.source_frames().first() {
-            println!("first source metadata: {:?}", frame.metadata.as_map());
-        }
-    }
-
-    // 测试用例 5: 金额验证失败
-    let case5 = OrderService::place_order(123, 0.0, "negative_amount");
-    if let Err(e) = case5 {
-        print_error(&e);
-        println!("root metadata: {:?}", e.context_metadata().as_map());
-    }
+    run_case("invalid input", 42, 100, "");
+    run_case("user missing", 7, 100, "coffee");
+    run_case("insufficient funds", 42, 500, "coffee");
+    run_case("storage full", 42, 100, "overflow");
 }

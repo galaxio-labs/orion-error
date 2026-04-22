@@ -216,7 +216,7 @@ use orion_error::compat_traits::*;
 
 截至 `2026-04-22`：
 
-- `StructError::with_source(...)` / `StructErrorBuilder::source(...)` 已从主代码移除
+- `StructError::with_source(...)` / `StructErrorBuilder::source(...)` 已退出主路径；当前作为 `IntoSourcePayload` 自动分流糖衣保留
 - `ErrorWrap::err_wrap(...)` / `WrapStructError::wrap(...)` 已从主代码移除
 - `ErrorOweSourceBase::owe_source(...)` / `ErrorOweSource::owe_*_source()` 已从主代码移除
 - `ErrorOweBase::owe(...)` 已实际加上 `#[deprecated(since = "0.7.0", ...)]`
@@ -226,8 +226,8 @@ use orion_error::compat_traits::*;
 - `ErrorWith::with(...)` 已实际加上 `#[deprecated(since = "0.7.0", ...)]`
 - crate root 上的 legacy trait re-export 已加 `#[deprecated]`
 - `compat_prelude` / `compat_traits` 继续作为维护旧路径的显式入口
-- 公开示例、README、教程、versioned namespace 编译测试已改到 `attach_context(...)`
-- `with_std_source(...)`、`source_std(...)`、`wrap_as(...)`、`attach_context(...)` 等新主路径内部已不再转调 deprecated 旧接口
+- 公开示例、README、教程、versioned namespace 编译测试已改到 `with_context(...)`
+- `with_std_source(...)`、`source_std(...)`、`wrap_as(...)`、`with_context(...)` 等新主路径内部已不再转调 deprecated 旧接口
 - compat 行为测试仍保留，但只在明确验证旧路径时允许 `deprecated`
 - `with(...)` 已从“文档层降级”推进到“正式 deprecated + 新主路径迁移完成”
 

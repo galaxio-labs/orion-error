@@ -54,7 +54,7 @@
 但还没有完成最终桥接模型：
 
 - 结构化 source 分支当前仍通过内部 `StdError` bridge wrapper 支撑 `source()`
-- 历史 `with_source(...)` / `builder.source(...)` 已从主代码移除
+- 历史 `with_source(...)` / `builder.source(...)` 已退出主路径；当前作为 `IntoSourcePayload` 自动分流糖衣保留
 
 ### 2.2 `StructError: StdError` 仍然压着 bridge 设计
 
