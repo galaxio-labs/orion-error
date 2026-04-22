@@ -17,35 +17,74 @@ Structured error handling for Rust services with:
 
 ```toml
 [dependencies]
-orion-error = "0.6.1"
+orion-error = "0.7.0"
 ```
 
 Optional features:
 
 ```toml
 [dependencies]
-orion-error = { version = "0.6.1", features = ["serde"] }
+orion-error = { version = "0.7.0", features = ["serde"] }
 # or
-orion-error = { version = "0.6.1", features = ["tracing"] }
+orion-error = { version = "0.7.0", features = ["tracing"] }
 ```
 
 Default features include `log`.
+
+`StructError<R>` no longer implements `std::error::Error`. Standard-error
+ecosystem boundaries should use the explicit bridge APIs instead:
+
+```rust
+let owned_std = err.clone().into_std();
+let borrowed_std = err.as_std();
+let boxed_std = err.into_boxed_std();
+```
+
+Default builds should use `source_ref()`, `report()`, `snapshot()`, or the
+bridge APIs instead of calling `std::error::Error::source(&err)` directly on
+`StructError<R>`.
 
 V1 fix and review baseline:
 
 - [docs/v1-fix-and-review-plan.md](./docs/v1-fix-and-review-plan.md)
 
+V2 first-phase design baseline:
+
+- [docs/v2-development-plan.md](./docs/v2-development-plan.md)
+- [docs/v2-runtime-snapshot-report-layering.md](./docs/v2-runtime-snapshot-report-layering.md)
+- [docs/v2-bridge-source-payload.md](./docs/v2-bridge-source-payload.md)
+- [docs/v2-structerror-stderror-strategy.md](./docs/v2-structerror-stderror-strategy.md)
+- [docs/v2-compat-deprecation-plan.md](./docs/v2-compat-deprecation-plan.md)
+
 Import guidance:
 
+- `orion_error::v1::*` is the versioned V1 namespace
+- `orion_error::v1::prelude::*` is the V1 primary-path wildcard import
+- `orion_error::v1::compat_prelude::*` is the V1 legacy compatibility import for `owe(...)`
+- `orion_error::v2::*` is the V2 layered root namespace
+- `orion_error::v2::prelude::*` is the V2 convenience wildcard import
 - `orion_error::prelude::*` is the V1 primary-path wildcard import
-- legacy `owe_*()` / `err_wrap(...)` helper imports should be taken explicitly from `orion_error::compat_prelude::*` or `orion_error::compat_traits::*`
+- V2 layered imports are now available:
+  - `orion_error::runtime::*`
+  - `orion_error::conversion::*`
+  - `orion_error::snapshot::*`
+  - `orion_error::report::*`
+  - `orion_error::bridge::*`
+  - `orion_error::reason::*`
+- legacy `owe(...)` helper imports should be taken explicitly from `orion_error::compat_prelude::*` or `orion_error::compat_traits::*`
+
+For new code that wants to keep runtime / snapshot / report concerns separated,
+prefer `orion_error::v2::*` or `orion_error::v2::prelude::*` over a flat crate-root import set.
+For older code that still follows the V1 surface, prefer `orion_error::v1::*` over root-level historical aliases.
 
 ## Quick Start
 
 ```rust
 use derive_more::From;
 use orion_error::{
-    ContextRecord, ErrorCode, ErrorWith, IntoAs, OperationContext, StructError, UvsReason,
+    conversion::{ErrorWith, IntoAs},
+    reason::{ErrorCode, UvsReason},
+    runtime::{ContextRecord, OperationContext, StructError},
 };
 use thiserror::Error;
 
@@ -75,17 +114,35 @@ fn load_config() -> Result<String, StructError<AppError>> {
     std::fs::read_to_string("config.toml")
         .into_as(AppError::from(UvsReason::system_error()), "read config file failed")
         .doing("read config file")
-        .with(&ctx)
+        .attach_context(&ctx)
 }
 ```
 
 Notes:
 
 - `DomainReason` is usually implemented automatically when your enum satisfies `From<UvsReason> + Display + PartialEq`.
-- Use `record(...)` on `OperationContext`; `with(...)` on the context itself is deprecated.
+- Use `record(...)` on `OperationContext`; `attach_context(...)` is the primary error-side API for full context frames.
 - Default to `into_as(...)` for plain `Result<T, E: Error>` entering the structured system the first time.
 - Use `wrap_as(...)` when the upstream value is already `StructError<_>` and the upper layer wants a new reason boundary.
-- Use legacy `owe_*()` / `owe_*_source()` and `err_wrap(...)` only as compatibility paths.
+- Use `snapshot()` for export-layer work.
+- Use `into_snapshot()` when the runtime error can be consumed into an owned snapshot.
+- Use `snapshot().stable_export()` when you want the V2-stable snapshot field set.
+- Use `snapshot().into_stable_export()` or `StableStructErrorSnapshot::from(snapshot)` when the snapshot can be consumed.
+- Use `StableStructErrorSnapshot::from(&err)` / `ErrorReport::from(&err)` for direct read-only runtime projections.
+- Use `stable.report()` for report-layer rendering from a stable snapshot.
+- `stable.compat_export()` is a deprecated migration-only path for legacy compat projections.
+- With the `serde_json` feature, use `snapshot().to_stable_snapshot_json()` for stable JSON output.
+- Stable snapshot JSON includes `schema_version = "orion-error.snapshot.v2"`.
+- `snapshot().to_compat_snapshot_json()` and `serde_json::to_value(snapshot.compat_serialize())` are deprecated migration-only paths when you still need the previous compat projection.
+- Use `report()` for human-facing rendering/redaction views.
+- Use `into_report()` when the runtime error or snapshot can be consumed into an owned report view.
+- Use `into_std()` / `OwnedStdStructError::from(err)` / `as_std()` / `StdStructRef::from(&err)` when explicitly bridging a `StructError<_>` into the standard error ecosystem.
+- Use `OwnedStdStructError::into_struct()` when you need to come back from the owned bridge to the structured runtime carrier.
+- Use `into_dyn_std()` only when an owned, type-erased official bridge is required, such as an `anyhow::Error` boundary that must later be recognized by `into_as(...)`.
+- Use `into_boxed_std()` when a boundary requires `Box<dyn std::error::Error + Send + Sync>`.
+- Use `source_payload()` / `source_payload_kind()` only for read-only inspection of the V2 source payload branch.
+- Use legacy `owe(...)` only as a compatibility path for `Display`-only values.
+- `with_source(...)` and `builder.source(...)` have been removed in V2; use `with_std_source(...)` / `with_struct_source(...)` and `source_std(...)` / `source_struct(...)`.
 
 ## Core Concepts
 
@@ -135,7 +192,7 @@ With preserved source:
 ```rust
 let err = StructError::builder(UvsReason::system_error())
     .detail("failed to read config")
-    .source(std::io::Error::other("disk offline"))
+    .source_std(std::io::Error::other("disk offline"))
     .finish();
 ```
 
@@ -150,7 +207,10 @@ let err = StructError::from(UvsReason::system_error())
 ### 3. Context Propagation
 
 ```rust
-use orion_error::{ContextRecord, ErrorWith, OperationContext};
+use orion_error::{
+    conversion::ErrorWith,
+    runtime::{ContextRecord, OperationContext},
+};
 
 let mut ctx = OperationContext::doing("process_order");
 ctx.record("order_id", "123");
@@ -158,16 +218,16 @@ ctx.record("user_id", "42");
 
 let result = do_work()
     .doing("validate order")
-    .with(&ctx);
+    .attach_context(&ctx);
 ```
 
 Rules of thumb:
 
 - `OperationContext::doing("process_order")` is the V1 primary naming path for the outermost goal.
 - Chained `.doing("validate order")` on an error appends an inner path segment instead of replacing the outer goal.
-- In V1, `doing(...)` is only naming sugar over `want(...)`; it does not change the underlying `OperationContext` model.
+- In `0.7.x / V2`, `doing(...)` writes the structured `action` field and keeps `target/path` as the compat projection; `want(...)` is a deprecated compat alias.
+- Use `action_main()` / `locator_main()` to read the V2 primary semantics; use `target_main()` / `target_path()` when you need the compat projection.
 - Display and `serde` now expose both `Want` and `Path`, for example: `Want=process_order`, `Path=process_order / validate order`.
-- Use `target_main()` to read the outermost goal and `target_path()` to read the full path.
 
 ### 3.1 Typed Metadata
 
@@ -181,7 +241,7 @@ let ctx = OperationContext::doing("load sink defaults")
     .with_meta("config.scope", "sink")
     .with_meta("parse.line", 1u32);
 
-let err = StructError::from(UvsReason::config_error()).with(ctx);
+let err = StructError::from(UvsReason::config_error()).attach_context(ctx);
 assert_eq!(err.context_metadata().get_str("config.kind"), Some("sink_defaults"));
 ```
 
@@ -197,7 +257,7 @@ Recommended usage:
 Default recommendation for plain `Result<T, E: Error>` entering the structured system:
 
 ```rust
-use orion_error::IntoAs;
+use orion_error::{conversion::IntoAs, reason::UvsReason};
 
 read_file().into_as(UvsReason::system_error(), "read file failed")?;
 http_call().into_as(UvsReason::network_error(), "http call failed")?;
@@ -208,7 +268,11 @@ Use `raw_source(...)` only when you must explicitly mark a downstream opt-in raw
 ```rust
 use std::fmt;
 
-use orion_error::{raw_source, IntoAs, RawStdError, UvsReason};
+use orion_error::{
+    bridge::{raw_source, RawStdError},
+    conversion::IntoAs,
+    reason::UvsReason,
+};
 
 #[derive(Debug)]
 struct ThirdPartyError;
@@ -240,11 +304,13 @@ This is the intended V1 design:
 
 In other words, V1 keeps the explicit escape hatch without reopening a blanket `E: StdError` path.
 
-Use legacy `owe_*()` only for values that are not real error types and only implement `Display`:
+With the `anyhow` feature, `anyhow::Error` is still treated as an aggregated but unstructured error by default. The only structured exception is a top-level official `OwnedDynStdStructError` created from `StructError<_>::into_dyn_std()`. `orion-error` does not scan arbitrary `anyhow` source chains and does not guess third-party wrappers.
+
+Use legacy `owe(...)` only for values that are not real error types and only implement `Display`:
 
 ```rust
-parse_input().owe_validation()?;
-message_only_result.owe_biz()?;
+message_only_result.owe(UvsReason::validation_error())?;
+other_message_only_result.owe(UvsReason::business_error())?;
 ```
 
 For converting one `StructError<R1>` into another `StructError<R2>`, prefer `err_conv()`:
@@ -258,7 +324,7 @@ repo_call().err_conv()?;
 If the upper layer wants to redefine the reason instead of converting it, use `wrap_as(...)` to keep the lower `StructError` as `source`:
 
 ```rust
-use orion_error::ErrorWrapAs;
+use orion_error::{conversion::ErrorWrapAs, reason::UvsReason};
 
 repo_call().wrap_as(UvsReason::system_error(), "service call failed")?;
 ```
@@ -268,20 +334,26 @@ In other words:
 - `into_as(...)` is for `Result<T, E>` where `E` is a real non-structured error type
 - `err_conv()` is for `Result<T, StructError<R1>>` to `Result<T, StructError<R2>>`
 - `wrap_as(...)` is for `Result<T, StructError<R1>>` when the upper layer wants a new reason boundary
-- `err_wrap(...)` remains for compatibility and should not be treated as the V1 primary API
+- `err_wrap(...)` / `wrap(...)` have been removed in V2; migrate them to `wrap_as(...)`
 
 If you want to attach a lower `StructError` directly and preserve its structured source frames, use `with_struct_source(...)`:
 
 ```rust
-use orion_error::{ErrorWith, OperationContext, StructError, UvsReason};
+use orion_error::{
+    conversion::ErrorWith,
+    reason::UvsReason,
+    runtime::{OperationContext, StructError},
+};
 
-let source = StructError::from(UvsReason::config_error()).with(
+let source = StructError::from(UvsReason::config_error()).attach_context(
     OperationContext::doing("load sink defaults")
         .with_meta("config.kind", "sink_defaults")
 );
 
 let err = StructError::from(UvsReason::system_error())
-    .with(OperationContext::doing("start engine").with_meta("component.name", "engine"))
+    .attach_context(
+        OperationContext::doing("start engine").with_meta("component.name", "engine"),
+    )
     .with_struct_source(source);
 
 assert_eq!(err.context_metadata().get_str("component.name"), Some("engine"));
@@ -291,14 +363,18 @@ assert_eq!(
 );
 ```
 
-The same rule applies to the builder API: use `.source_struct(lower_err)` for `StructError<_>` sources, and keep `.source(err)` for ordinary non-structured errors.
+The same rule applies to the builder API: use `.source_struct(lower_err)` for `StructError<_>` sources, and `.source_std(err)` for ordinary non-structured errors.
 
 ## Reports and Redaction
 
 Default `Display` should stay concise. For diagnostics, logs, or structured export, use `ErrorReport` and the explicit render APIs:
 
 ```rust
-use orion_error::{RedactPolicy, RenderMode, StructError, UvsReason};
+use orion_error::{
+    reason::UvsReason,
+    report::{RedactPolicy, RenderMode},
+    runtime::StructError,
+};
 
 struct SimplePolicy;
 
@@ -314,7 +390,7 @@ impl RedactPolicy for SimplePolicy {
 
 let err = StructError::from(UvsReason::config_error())
     .with_detail("load config failed")
-    .with(
+    .attach_context(
         orion_error::OperationContext::doing("load config")
             .with_meta("config.kind", "sink_defaults")
             .with_meta("config.secret", "/prod/secrets/api-key"),
@@ -342,7 +418,8 @@ Recommended usage:
 `OperationContext` supports optional logging integration.
 
 ```rust
-use orion_error::{op_context, ContextRecord};
+use orion_error::op_context;
+use orion_error::runtime::ContextRecord;
 
 let mut ctx = op_context!("sync-user").with_auto_log();
 ctx.record("user_id", "42");
@@ -356,16 +433,17 @@ Use `scoped_success()` if you want RAII-style success marking.
 
 ## Source Chain
 
-If you use `with_std_source(...)`, `raw_source(...)`, or compatibility APIs such as `owe_*_source()`, the original error remains available:
+If you use `with_std_source(...)`, `raw_source(...)`, or `into_as(...)`, the original error remains available:
 
 ```rust
-use orion_error::IntoAs;
+use orion_error::{conversion::IntoAs, reason::UvsReason, StructError};
 
 let err: StructError<UvsReason> = std::fs::read_to_string("config.toml")
     .into_as(UvsReason::system_error(), "read config failed")
     .unwrap_err();
 
-assert!(std::error::Error::source(&err).is_some());
+assert!(err.source_ref().is_some());
+assert!(std::error::Error::source(&err.as_std()).is_some());
 assert!(err.root_cause().is_some());
 ```
 
@@ -377,7 +455,7 @@ let frames = err.source_frames();
 let pretty = err.display_chain();
 ```
 
-With the `serde` feature, serialized output also includes:
+With the `serde` feature, the default `Serialize for StructError` remains a compatibility runtime projection. It still includes:
 
 - `want`
 - `path`
@@ -403,7 +481,9 @@ For `StructError` sources, `message` is the stable reason text and `display` car
 
 The underlying trait object itself is still not serialized.
 
-If you use legacy `owe_*()` helpers, only the display string is copied into `detail`, so they are not the preferred path for normal Rust errors.
+If you need this historical runtime JSON shape explicitly, use `err.compat_serialize()` or `serde_json::to_value(err.compat_serialize())`. For new export paths, prefer `err.snapshot()`, `err.report()`, or the stable snapshot JSON helpers.
+
+If you use legacy `owe(...)` helpers, only the display string is copied into `detail`, so they are not the preferred path for normal Rust errors.
 
 ## `thiserror` Integration
 
@@ -423,7 +503,8 @@ Prefer these current names:
 - `CwdGuard`-style example does not apply here; ignore older cross-project docs
 - `OperationContext::record(...)` instead of deprecated `with(...)`
 - `with_auto_log()` instead of deprecated `with_exit_log()`
-- prefer `owe_*_source()` by default; keep `owe_*()` for `Display`-only cases
+- prefer `into_as(reason, detail)` for real `StdError` sources
+- keep `owe(...)` only for legacy `Display`-only cases
 
 ## Validation
 

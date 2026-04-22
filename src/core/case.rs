@@ -62,10 +62,10 @@ mod tests {
 
     #[test]
     fn test_error_context() {
-        let mut ctx = OperationContext::want("user_profile");
+        let mut ctx = OperationContext::doing("user_profile");
         ctx.record("user_id", "12345");
 
-        let err = StructError::from(TestDomainReason::Why1).with(ctx);
+        let err = StructError::from(TestDomainReason::Why1).attach_context(ctx);
 
         assert_eq!(err.target(), Some("user_profile".to_string()));
         assert!(err
@@ -82,7 +82,7 @@ mod tests {
         let original = StructError::from(TestDomainReason::Why1)
             .with_detail("conversion test")
             .with_position("test.rs:1")
-            .with_context(OperationContext::want("ctx").context().clone());
+            .with_context(OperationContext::doing("ctx").context().clone());
 
         let converted: StructError<OtherDomainReason> = convert_error(original);
 
@@ -99,8 +99,8 @@ mod tests {
         let err = StructError::from(TestDomainReason::Uvs(UvsReason::core_conf()))
             .with_detail("missing db config")
             .position("src/config.rs:42")
-            .want("database_config")
-            .with(ctx);
+            .doing("database_config")
+            .attach_context(ctx);
 
         let display_output = format!("{err}");
         println!("{display_output}");

@@ -7,9 +7,10 @@
 
 导入约定：
 
-- 新代码优先 `use orion_error::prelude::*;`
+- 新代码优先 `use orion_error::v2::*;` 或 `use orion_error::v2::prelude::*;`
+- 维护 V1 风格代码时，优先 `use orion_error::v1::*;`
 - 只按 trait 分组导入时可用 `use orion_error::traits_ext::*;`
-- 旧的 `owe_*()` / `err_wrap(...)` 兼容导入请显式使用 `use orion_error::compat_prelude::*;` 或 `use orion_error::compat_traits::*;`
+- 旧的 `owe(...)` / `err_wrap(...)` 兼容导入请显式使用 `use orion_error::compat_prelude::*;` 或 `use orion_error::compat_traits::*;`
 
 推荐组合方式是：
 
@@ -32,7 +33,11 @@
 
 ```rust
 use derive_more::From;
-use orion_error::{ErrorCode, IntoAs, StructError, UvsReason};
+use orion_error::{
+    conversion::IntoAs,
+    reason::{ErrorCode, UvsReason},
+    runtime::StructError,
+};
 use thiserror::Error;
 
 #[derive(Debug, Error, Clone, PartialEq, From)]
@@ -62,10 +67,10 @@ fn handle() -> Result<(), StructError<AppError>> {
 
 这里不需要再写空的 `impl DomainReason for AppError {}`。
 
-## 什么时候用 `into_as(...)`，什么时候保留 `owe_*()`
+## 什么时候用 `into_as(...)`，什么时候保留 `owe(...)`
 
 - `into_as(...)`：V1 默认推荐，适合 `E: std::error::Error` 第一次进入结构化体系
-- `owe_*()`：兼容路径，只保留字符串 detail，适合 `E: Display`
+- `owe(...)`：兼容路径，只保留字符串 detail，适合 `E: Display`
 
 如果你关心：
 
@@ -76,15 +81,15 @@ fn handle() -> Result<(), StructError<AppError>> {
 
 默认优先使用 `into_as(...)`。
 
-如果上游已经是 `StructError<_>`，则不要再走 `.into_as(...)` 或 `.owe_*()`：
+如果上游已经是 `StructError<_>`，则不要再走 `.into_as(...)` 或兼容态的 `.owe(...)`：
 
 - 做 reason 类型转换时，优先 `err_conv()`
 - 做上层语义包装时，优先 `wrap_as(...)`
 
 兼容说明：
 
-- `owe_*_source()` 仍然保留，但不再是 V1 主路径
-- `err_wrap(...)` 仍然保留，但属于 compat/bridge 层
+- `owe_*_source()` 已从当前主代码移除；新代码优先使用 `into_as(reason, detail)`
+- `err_wrap(...)` 仍然保留，但已进入 `0.7.0` deprecated path，属于 compat/bridge 层
 - `with_source(...)` 建议改成 `with_std_source(...)` 或 `with_struct_source(...)`
 - 如果旧代码必须继续导入这些 compat helper，请和 `prelude::*` 分开写，避免把 V1 主路径和兼容层混成一个默认接口
 

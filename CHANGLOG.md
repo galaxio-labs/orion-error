@@ -1,5 +1,88 @@
 # 更新日志 (CHANGELOG)
 
+## [v0.7.0] - 2026-04-21
+
+### ✨ V2 启动
+- **版本切换到 `0.7.0`**：以 `0.6.3` 的 V1 收口结果为基线，正式进入 V2 第一阶段开发。
+- **V2 计划落档**：新增 `docs/v2-development-plan.md`，冻结 V2 的起点、执行顺序与第一阶段范围。
+- **compat 收缩分级落档**：新增 `docs/v2-compat-deprecation-plan.md`，明确哪些旧 API 立即进入 `#[deprecated]`，哪些仍只保留 compat / bridge 语义。
+
+### 🔄 兼容接口收缩
+- 为以下旧接口添加 `#[deprecated(since = "0.7.0", ...)]`：
+  - `StructError::with_source(...)`
+  - `StructErrorBuilder::source(...)`
+  - `ErrorWrap::err_wrap(...)`
+  - `WrapStructError::wrap(...)`
+  - `ErrorOweSourceBase::owe_source(...)`
+  - `ErrorOweSource::{owe_logic_source, owe_biz_source, owe_rule_source, owe_validation_source, owe_data_source, owe_conf_source, owe_res_source, owe_net_source, owe_timeout_source, owe_sys_source}(...)`
+- `with_std_source(...)`、`source_std(...)`、`wrap_as(...)` 等新主路径内部不再转调 deprecated 旧接口，避免库内部告警噪音。
+- crate root 上 legacy trait re-export 进入 `#[deprecated]`；维护旧路径请显式使用 `compat_prelude::*` / `compat_traits::*`。
+- 仓库内测试已切到新命名；只有明确验证 compat 行为的测试保留 `#[allow(deprecated)]`。
+
+### 🧱 Runtime / Snapshot / Report 分层
+- 新增 `StructErrorSnapshot` 第一阶段能力：
+  - `StructError::snapshot()`
+  - `StructError::into_snapshot()`
+  - `StructErrorSnapshot::stable_export()`
+  - `StructErrorSnapshot::into_stable_export()`
+  - `StructErrorSnapshot::compat_export()`
+  - `StructErrorSnapshot::report()`
+  - `StructErrorSnapshot::into_report()`
+- 新增 stable snapshot schema：
+  - `StableStructErrorSnapshot`
+  - `StableSnapshotContextFrame`
+  - `StableSnapshotSourceFrame`
+  - `STABLE_SNAPSHOT_SCHEMA_VERSION = "orion-error.snapshot.v1"`
+  - `snapshot().to_stable_snapshot_json()`（`serde_json` feature 下）
+- 补齐 runtime / snapshot / stable / report 的只读转换路径：
+  - `From<&StructError<_>>` / `From<StructError<_>>` 到 `StructErrorSnapshot`
+  - `From<&StructError<_>>` / `From<StructError<_>>` 到 `StableStructErrorSnapshot`
+  - `From<&StructError<_>>` / `From<StructError<_>>` 到 `ErrorReport`
+  - `From<&StructErrorSnapshot>` / `From<StructErrorSnapshot>` 到 `StableStructErrorSnapshot`
+  - `From<&StructErrorSnapshot>` / `From<StructErrorSnapshot>` 到 `ErrorReport`
+  - `StableStructErrorSnapshot::compat_export()` / `report()`，作为有损兼容投影
+
+### 🌉 Bridge / Source Payload
+- 内部 source 存储拆成 `InternalSourcePayload::Std / Struct` 双通道，避免继续用单一 source 概念混淆普通 source 与结构化 source。
+- 新增默认关闭的 `struct-error-std` feature，作为 V2 过渡兼容开关：
+  - 默认构建下，`StructError<R>` 本体不再直接进入 `StdError` 生态。
+  - 需要兼容旧边界时，可显式开启该 feature。
+  - 标准错误生态兼容应优先改用 `into_std()` / `as_std()` / `into_boxed_std()` / `into_dyn_std()` 等显式 bridge。
+- 新增公开 bridge 类型：
+  - `OwnedStdStructError<R>`
+  - `StdStructRef<'a, R>`
+  - `OwnedDynStdStructError`
+- 新增 bridge 方法：
+  - `StructError::into_std()`
+  - `StructError::as_std()`
+  - `StructError::into_boxed_std()`
+  - `StructError::into_dyn_std()`
+- `anyhow::Error` 的 `into_as(...)` 只识别顶层官方 `OwnedDynStdStructError`；普通 `anyhow` 仍按未结构化错误处理，不扫描 source 链，不猜第三方 wrapper。
+- 新增只读 source payload 观察 API：
+  - `SourcePayloadKind`
+  - `SourcePayloadRef<'_>`
+  - `StructError::source_payload()`
+  - `StructError::source_payload_kind()`
+- 仍不公开 `attach_source(...)` / `IntoSourcePayload`，也不提供 `E: StdError` blanket。
+
+### 📚 文档同步
+- 顶层 `README.md`、`docs/README.md` 与 V2 计划文档已同步到 `0.7.0` 口径。
+- 明确区分：
+  - 已正式 deprecated：`with_source(...)`、`builder.source(...)`、`err_wrap(...)`、`wrap(...)`、`owe_source(...)`、`owe_*_source()`
+  - 仍为 compat / 文档层降级：`want(...)`、`with(...)`、`owe_*()`
+- 新增并持续更新：
+  - `docs/v2-runtime-snapshot-report-layering.md`
+  - `docs/v2-stable-snapshot-schema.md`
+  - `docs/v2-bridge-source-payload.md`
+  - `docs/v2-structerror-stderror-strategy.md`
+
+### 🧪 验证
+- 通过：
+  - `cargo fmt --all -- --check`
+  - `cargo test -- --test-threads=1`
+  - `cargo test --all-features -- --test-threads=1`
+  - `cargo test --no-default-features --features serde,serde_json,anyhow,toml -- --test-threads=1`
+
 ## [v0.6.3] - 2026-04-21
 
 ### ✨ 能力更新
@@ -72,7 +155,7 @@
 
 ### 使用提示
 - 旧的 `.owe_*()` 仍可用，但只会把上游错误文本写入 `detail`。
-- 如果你需要保留真实底层错误链，请优先使用 `.owe_*_source()`、`with_source(...)` 或 `err_wrap(...)`。
+- 这是 `0.6.1` 当时的历史建议；从 `0.7.0` 起，真实 `StdError` 第一次进入结构化体系优先使用 `into_as(reason, detail)`，普通 source 使用 `with_std_source(...)`，结构化上卷使用 `wrap_as(reason, detail)`。
 
 ## [v0.6.0] - 2026-02-22
 

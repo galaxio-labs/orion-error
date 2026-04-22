@@ -2,6 +2,9 @@ use std::{error::Error as StdError, fmt};
 
 use crate::{DomainReason, StructError};
 
+#[cfg(feature = "anyhow")]
+use crate::OwnedDynStdStructError;
+
 mod private {
     pub trait Sealed {}
 }
@@ -177,7 +180,12 @@ impl UnstructuredSource for anyhow::Error {
     where
         R: DomainReason,
     {
-        attach_std_source(AnyhowStdSource(self), reason, detail)
+        match self.downcast::<OwnedDynStdStructError>() {
+            Ok(source) => StructError::from(reason)
+                .with_detail(detail)
+                .with_dyn_struct_source(source),
+            Err(err) => attach_std_source(AnyhowStdSource(err), reason, detail),
+        }
     }
 }
 
@@ -234,6 +242,8 @@ mod tests {
     use std::{fmt, io};
 
     use super::{raw_source, IntoAs, RawStdError};
+    #[cfg(feature = "anyhow")]
+    use crate::StructError;
     use crate::UvsReason;
 
     #[derive(Debug)]
@@ -272,5 +282,46 @@ mod tests {
 
         assert_eq!(err.detail().as_deref(), Some("parse config failed"));
         assert_eq!(err.source_ref().unwrap().to_string(), "parser aborted");
+    }
+
+    #[cfg(feature = "anyhow")]
+    #[test]
+    fn test_into_as_for_anyhow_defaults_to_unstructured_source() {
+        let result: Result<(), anyhow::Error> = Err(anyhow::anyhow!("network offline"));
+
+        let err = result
+            .into_as(UvsReason::system_error(), "load config failed")
+            .expect_err("expected structured error");
+
+        assert_eq!(err.detail().as_deref(), Some("load config failed"));
+        assert_eq!(err.source_ref().unwrap().to_string(), "network offline");
+        assert_eq!(err.source_frames()[0].message, "network offline");
+    }
+
+    #[cfg(feature = "anyhow")]
+    #[test]
+    fn test_into_as_for_anyhow_extracts_top_level_official_dyn_bridge() {
+        let structured = StructError::from(UvsReason::validation_error())
+            .with_detail("invalid port")
+            .with_std_source(io::Error::other("not a number"));
+        let structured_display = structured.to_string();
+        let result: Result<(), anyhow::Error> = Err(anyhow::Error::new(structured.into_dyn_std()));
+
+        let err = result
+            .into_as(UvsReason::system_error(), "load config failed")
+            .expect_err("expected structured error");
+
+        assert_eq!(err.detail().as_deref(), Some("load config failed"));
+        assert_eq!(err.source_ref().unwrap().to_string(), structured_display);
+        assert_eq!(err.source_frames()[0].message, "validation error");
+        assert_eq!(
+            err.source_frames()[0].reason.as_deref(),
+            Some("validation error")
+        );
+        assert_eq!(
+            err.source_frames()[0].detail.as_deref(),
+            Some("invalid port")
+        );
+        assert_eq!(err.root_cause().unwrap().to_string(), "not a number");
     }
 }

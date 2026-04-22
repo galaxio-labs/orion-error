@@ -5,16 +5,27 @@ mod error;
 mod metadata;
 mod reason;
 mod report;
+mod snapshot;
 mod universal;
 use std::fmt::Display;
 
 pub use context::ContextAdd;
 pub use context::{ContextRecord, OperationContext, OperationScope, WithContext};
 pub use domain::DomainReason;
-pub use error::{convert_error, SourceFrame, StructError, StructErrorBuilder, StructErrorTrait};
+pub use error::{
+    convert_error, IntoSourcePayload, OwnedDynStdStructError, OwnedStdStructError, SourceFrame,
+    SourcePayload, SourcePayloadKind, SourcePayloadRef, StdStructRef, StructError,
+    StructErrorBuilder, StructErrorTrait,
+};
 pub use metadata::{ErrorMetadata, MetadataValue};
 pub use reason::ErrorCode;
 pub use report::{ErrorReport, RedactPolicy, RenderMode};
+pub use snapshot::{
+    SnapshotCompat, SnapshotContextFrame, SnapshotSourceFrame, StableSnapshotCompat,
+    StableSnapshotContextFrame, StableSnapshotSourceFrame, StableStructErrorSnapshot,
+    StructErrorSnapshot, STABLE_SNAPSHOT_CONTEXT_FIELDS, STABLE_SNAPSHOT_SCHEMA_VERSION,
+    STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS, STABLE_SNAPSHOT_TOP_LEVEL_FIELDS,
+};
 pub use universal::{ConfErrReason, UvsFrom, UvsReason};
 
 pub enum ErrStrategy {

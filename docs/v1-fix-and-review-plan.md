@@ -151,7 +151,8 @@ V1 不调整底层 `OperationContext` 模型语义。
 兼容 API 可以保留，但必须满足：
 
 - `err_wrap(...)` 只作为 compat/bridge
-- `owe_*()` / `owe_*_source()` 只作为 compat
+- `owe(...)` 只作为 compat
+- `owe_*()` / `owe_*_source()` 已从当前主代码移除
 - `want(...)` / `with_source(...)` 不再占据主叙事位
 
 ## 6. 评审输出格式

@@ -23,11 +23,11 @@ ctx.record_meta("component.name", "order_service");
 ```rust
 Self::parse_order(order_txt, amount)
     .doing("解析订单")
-    .with(&ctx)
+    .attach_context(&ctx)
     .err_conv()?;
 ```
 
-- 用户查询和存储层也都走 `err_conv()`，而不是再回退到 `.owe_*()`。
+- 用户查询和存储层也都走 `err_conv()`，而不是再回退到兼容态的 `.owe(...)`。
 
 - 存储层把底层 `io::Error` 转成结构化错误时，直接保留真实 source：
 

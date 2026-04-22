@@ -1,7 +1,8 @@
 //! 展示 OperationContext 日志记录功能的示例。
 //! 此示例使用当前更推荐的 `op_context!` + `record(...)` + `scoped_success()` 组合。
 
-use orion_error::{op_context, ContextRecord};
+use orion_error::op_context;
+use orion_error::runtime::ContextRecord;
 
 fn main() {
     // 初始化日志系统（实际项目中需要在main函数开始处初始化）

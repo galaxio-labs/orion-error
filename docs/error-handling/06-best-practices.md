@@ -14,7 +14,7 @@
 - 普通 source：`with_std_source(...)`
 - 结构化 source：`with_struct_source(...)`
 - 上下文命名优先 `doing(...)` / `at(...)`
-- `owe_*()`、`err_wrap(...)`、`want(...)`、`with_source(...)` 只作为 compat 路径
+- `owe(...)`、`err_wrap(...)`、`want(...)`、`with_source(...)` 只作为 compat 路径；`owe_*()` 已移除
 
 下面的大段代码和类型定义是历史草稿与伪代码，不是当前 crate 已提供的 API，也不建议直接复制到新实现里。
 
@@ -1747,7 +1747,7 @@ fn test_error_scenarios() {
 
 - 在汇聚链路上优先使用 `StructError::builder`：可一次性设置 `detail()`、`position()` 与多条上下文，避免在 `Result` 链中多次克隆。
 - 使用 `builder.context_ref(&ctx)` 复用既有 `OperationContext`，库内部会共享 `Arc<Vec<_>>`，不会重复分配。
-- 与 `err_conv()`/`owe_*()` 组合时，可先构建领域级错误，再通过转换保持上下文连续。
+- 与 `err_conv()`/`owe(...)` 组合时，可先构建领域级错误，再通过转换保持上下文连续。
 
 ```rust
 let err = StructError::builder(OrderError::InsufficientInventory)

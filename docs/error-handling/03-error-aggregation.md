@@ -3,6 +3,7 @@
 > 历史设计说明：
 > 本页主要保存早期的错误归集和跨层传播设计示意，不是 `orion-error 0.6.x / V1 API` 的直接使用手册。
 > 文中的 `StructReason`、`UvsReason::from_*`、手写链路模型以及自定义包装示例，很多都不对应当前源码中的公开接口。
+> 文中的 `owe_biz()` / `owe_*()` 也只是历史示意；当前代码仅保留兼容态的 `owe(...)`，`owe_*()` 已移除。
 > 当前 V1 主路径请以 `into_as(...)` / `wrap_as(...)` / `err_conv()` / `with_std_source(...)` / `with_struct_source(...)` 为准，详见 [使用教程](../tutorial.md) 和 [V1 修复与评审基线](../v1-fix-and-review-plan.md)。
 
 ## 当前 V1 对照
@@ -329,7 +330,7 @@ impl WithContext {
 对于 `0.6.x / V1 API`：
 
 - 不再把 `WithContext::want(...)` / 链式 `.want(...)` 作为推荐主路径
-- 不再把 `.owe_*()` 作为普通错误第一次进入结构化体系的首选写法
+- 不再把 `.owe(...)` 作为普通错误第一次进入结构化体系的首选写法
 - 请优先参考 `into_as(...)` / `wrap_as(...)` / `doing(...)` 的主路径说明
 
 ```rust
@@ -341,8 +342,8 @@ fn place_order() -> Result<Order> {
     // 解析订单并绑定上下文
     parse_order()
         .want("解析订单")
-        .with(&ctx)  // 绑定上下文
-        .owe_biz()?
+        .attach_context(&ctx)  // 绑定上下文
+        .owe(BusinessError::default())?
 }
 
 impl<T, E> ResultExt<T, E> for Result<T, E> {

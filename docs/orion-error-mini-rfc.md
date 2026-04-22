@@ -34,6 +34,12 @@
 3. 误用有时在运行时 panic，而不是更早暴露
 4. `owe_conf_source / with_source / wrap / with_struct_source` 的边界不够直观
 
+说明：
+
+- 本文中提到的 `owe_conf()` / `owe_conf_source()` / `owe_*()` / `owe_*_source()` 均属于历史讨论对象
+- 当前代码只保留兼容态的 `owe(...)`
+- `owe_*()` 与 `owe_*_source()` 已从主代码移除
+
 因此，本 RFC 的目标不是改变理念，而是改善 API 人体工学。
 
 ## 2. 设计目标
@@ -313,7 +319,8 @@ pub trait ErrorContext {
 
 建议：
 
-- `at(...)` 替代大部分 `with(path)`
+- `attach_context(...)` 取代 error-side 的通用 `with(...)`
+- `at(...)` 只用于明确的 locator / resource 引用
 - `doing(...)` 替代大部分 `want(...)`
 
 示例：

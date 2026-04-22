@@ -23,7 +23,7 @@ const DEFAULT_MOD_PATH: &str = module_path!();
 #[macro_export]
 macro_rules! op_context {
     ($target:expr) => {
-        $crate::OperationContext::want($target).with_mod_path(module_path!())
+        $crate::OperationContext::doing($target).with_mod_path(module_path!())
     };
 }
 
@@ -34,6 +34,10 @@ pub struct OperationContext {
     result: OperationResult,
     exit_log: bool,
     mod_path: String,
+    #[cfg_attr(feature = "serde", serde(default))]
+    action: Option<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    locator: Option<String>,
     target: Option<String>,
     #[cfg_attr(feature = "serde", serde(default))]
     path: Vec<String>,
@@ -48,6 +52,8 @@ impl Default for OperationContext {
     fn default() -> Self {
         Self {
             context: CallContext::default(),
+            action: None,
+            locator: None,
             target: None,
             path: Vec::new(),
             result: OperationResult::Fail,
@@ -63,6 +69,8 @@ impl From<CallContext> for OperationContext {
         OperationContext {
             context: value,
             result: OperationResult::Fail,
+            action: None,
+            locator: None,
             target: None,
             path: Vec::new(),
             exit_log: false,
@@ -125,10 +133,18 @@ impl Drop for OperationContext {
 
 impl Display for OperationContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(target) = &self.target {
-            writeln!(f, "want: {target}")?;
+        if let Some(action) = &self.action {
+            writeln!(f, "doing: {action}")?;
         }
-        if let Some(path) = self.path_string() {
+        if let Some(locator) = &self.locator {
+            writeln!(f, "at: {locator}")?;
+        }
+        if let Some(target) = &self.target {
+            if self.action.as_deref() != Some(target.as_str()) {
+                writeln!(f, "want: {target}")?;
+            }
+        }
+        if let Some(path) = self.normalized_path_string() {
             if self.target.as_deref() != Some(path.as_str()) {
                 writeln!(f, "path: {path}")?;
             }
@@ -185,6 +201,63 @@ where
 }
 
 impl OperationContext {
+    pub(crate) fn from_target(target: String) -> Self {
+        Self {
+            action: None,
+            locator: None,
+            target: Some(target.clone()),
+            path: vec![target],
+            context: CallContext::default(),
+            result: OperationResult::Fail,
+            exit_log: false,
+            mod_path: DEFAULT_MOD_PATH.into(),
+            metadata: ErrorMetadata::default(),
+        }
+    }
+
+    pub(crate) fn push_target_segment(&mut self, target: String) {
+        if target.is_empty() {
+            return;
+        }
+
+        let locator_at_end = self
+            .locator
+            .as_ref()
+            .is_some_and(|locator| self.path.last() == Some(locator));
+
+        if self.target.is_none() {
+            self.target = Some(target.clone());
+            if self.path.is_empty() {
+                self.path.push(target);
+                return;
+            }
+            if self.path.first() != Some(&target) {
+                self.path.insert(0, target);
+            }
+        } else {
+            let root = self.target.clone().expect("checked above");
+            if self.path.is_empty() {
+                self.path.push(root.clone());
+            }
+            if self.path.first() != Some(&root) {
+                self.path.insert(0, root);
+            }
+
+            let insert_index = if locator_at_end {
+                self.path.len().saturating_sub(1)
+            } else {
+                self.path.len()
+            };
+            let prev = insert_index
+                .checked_sub(1)
+                .and_then(|idx| self.path.get(idx));
+            let current = self.path.get(insert_index);
+            if prev != Some(&target) && current != Some(&target) {
+                self.path.insert(insert_index, target);
+            }
+        }
+    }
+
     pub fn context(&self) -> &CallContext {
         &self.context
     }
@@ -205,6 +278,14 @@ impl OperationContext {
         &self.target
     }
 
+    pub fn action(&self) -> &Option<String> {
+        &self.action
+    }
+
+    pub fn locator(&self) -> &Option<String> {
+        &self.locator
+    }
+
     pub fn path(&self) -> &[String] {
         &self.path
     }
@@ -216,6 +297,8 @@ impl OperationContext {
     pub fn new() -> Self {
         Self {
             target: None,
+            action: None,
+            locator: None,
             path: Vec::new(),
             context: CallContext::default(),
             result: OperationResult::Fail,
@@ -224,20 +307,32 @@ impl OperationContext {
             metadata: ErrorMetadata::default(),
         }
     }
+    #[deprecated(
+        since = "0.7.0",
+        note = "use doing(...) for action contexts; use at(...) for locator/resource contexts"
+    )]
     pub fn want<S: Into<String>>(target: S) -> Self {
-        let target = target.into();
+        Self::from_target(target.into())
+    }
+    pub fn doing<S: Into<String>>(action: S) -> Self {
+        let action = action.into();
+        let mut ctx = Self::from_target(action.clone());
+        ctx.action = Some(action);
+        ctx
+    }
+    pub fn at<S: Into<String>>(locator: S) -> Self {
+        let locator = locator.into();
         Self {
-            target: Some(target.clone()),
-            path: vec![target],
+            action: None,
+            locator: Some(locator.clone()),
+            target: None,
+            path: vec![locator],
             context: CallContext::default(),
             result: OperationResult::Fail,
             exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
-    }
-    pub fn doing<S: Into<String>>(target: S) -> Self {
-        Self::want(target)
     }
     #[deprecated(since = "0.5.4", note = "use with_auto_log")]
     pub fn with_exit_log(mut self) -> Self {
@@ -264,38 +359,114 @@ impl OperationContext {
             .push((key.into(), format!("{}", val.into().display())));
     }
 
+    #[deprecated(
+        since = "0.7.0",
+        note = "use with_doing(...) for action path segments; use with_at(...) for locator segments"
+    )]
     pub fn with_want<S: Into<String>>(&mut self, target: S) {
-        let target = target.into();
-        if target.is_empty() {
+        self.push_target_segment(target.into());
+    }
+    pub fn with_doing<S: Into<String>>(&mut self, action: S) {
+        let action = action.into();
+        if action.is_empty() {
             return;
         }
-
-        if let Some(root) = &self.target {
-            if self.path.is_empty() {
-                self.path.push(root.clone());
-            }
-            if self.path.last() != Some(&target) {
-                self.path.push(target);
-            }
-        } else {
-            self.target = Some(target.clone());
-            self.path.push(target);
+        if self.action.is_none() {
+            self.action = Some(action.clone());
+        }
+        self.push_target_segment(action)
+    }
+    pub fn with_at<S: Into<String>>(&mut self, locator: S) {
+        let locator = locator.into();
+        if locator.is_empty() {
+            return;
+        }
+        self.locator = Some(locator.clone());
+        if self.path.last() != Some(&locator) {
+            self.path.push(locator);
         }
     }
-    pub fn with_doing<S: Into<String>>(&mut self, target: S) {
-        self.with_want(target)
+
+    pub(crate) fn path_string_with_segments(&self, path: &[String]) -> Option<String> {
+        if path.is_empty() {
+            None
+        } else {
+            Some(path.join(" / "))
+        }
+    }
+
+    pub(crate) fn normalized_path_segments(&self) -> Vec<String> {
+        let mut path = Vec::new();
+
+        match (&self.action, &self.target) {
+            (Some(action), Some(target)) => {
+                path.push(target.clone());
+                for segment in self.path.iter().skip(1) {
+                    if path.last() != Some(segment) {
+                        path.push(segment.clone());
+                    }
+                }
+                if path.last() != Some(action) && self.path.len() == 1 {
+                    path.push(action.clone());
+                }
+            }
+            (Some(action), None) => {
+                path.push(action.clone());
+                for segment in &self.path {
+                    if path.last() != Some(segment) {
+                        path.push(segment.clone());
+                    }
+                }
+            }
+            _ => {
+                for segment in &self.path {
+                    if path.last() != Some(segment) {
+                        path.push(segment.clone());
+                    }
+                }
+            }
+        }
+
+        if let Some(locator) = &self.locator {
+            if path.last() != Some(locator) {
+                path.push(locator.clone());
+            }
+        }
+
+        path
+    }
+
+    pub(crate) fn normalized_path_string(&self) -> Option<String> {
+        self.path_string_with_segments(&self.normalized_path_segments())
+    }
+
+    pub(crate) fn into_at_context(mut self) -> Self {
+        if self.locator.is_none() && self.target.is_none() {
+            if self.path.len() == 1 {
+                self.locator = self.path.first().cloned();
+            } else if self.context.items.len() == 1 {
+                let (key, value) = &self.context.items[0];
+                if key == "key" || key == "path" {
+                    self.locator = Some(value.clone());
+                }
+            }
+        }
+
+        if let Some(locator) = &self.locator {
+            if self.path.last() != Some(locator) {
+                self.path.push(locator.clone());
+            }
+        }
+
+        self
     }
     /// 别名：设置目标资源/操作名；首次设置根 want，后续调用仅追加 path
     pub fn set_target<S: Into<String>>(&mut self, target: S) {
-        self.with_want(target)
+        self.push_target_segment(target.into())
     }
 
     pub fn path_string(&self) -> Option<String> {
-        if self.path.is_empty() {
-            None
-        } else {
-            Some(self.path.join(" / "))
-        }
+        self.normalized_path_string()
     }
 
     pub fn record_meta<K, V>(&mut self, key: K, value: V)
@@ -326,12 +497,30 @@ impl OperationContext {
     #[cfg_attr(not(any(feature = "log", feature = "tracing")), allow(dead_code))]
     fn format_context(&self) -> String {
         let want = self.target.clone().unwrap_or_default();
-        let path = self.path_string().unwrap_or_default();
-        let head = match (want.is_empty(), path.is_empty() || path == want) {
-            (true, true) => String::new(),
-            (false, true) => format!("want={want}"),
-            (false, false) => format!("want={want} path={path}"),
-            (true, false) => format!("path={path}"),
+        let path = self.normalized_path_string().unwrap_or_default();
+        let action = self.action.clone().unwrap_or_default();
+        let locator = self.locator.clone().unwrap_or_default();
+        let mut parts = Vec::new();
+        if !action.is_empty() {
+            parts.push(format!("doing={action}"));
+        } else if !want.is_empty() {
+            parts.push(format!("want={want}"));
+        }
+        if !locator.is_empty() {
+            parts.push(format!("at={locator}"));
+        }
+        if !path.is_empty() && path != want && path != locator {
+            parts.push(format!("path={path}"));
+        }
+        let head = if parts.is_empty() {
+            match (want.is_empty(), path.is_empty() || path == want) {
+                (true, true) => String::new(),
+                (false, true) => format!("want={want}"),
+                (false, false) => format!("want={want} path={path}"),
+                (true, false) => format!("path={path}"),
+            }
+        } else {
+            parts.join(" ")
         };
         if self.context.items.is_empty() {
             return head;
@@ -472,6 +661,14 @@ impl OperationContext {
         self.target = target;
     }
 
+    pub(crate) fn replace_action_for_report(&mut self, action: Option<String>) {
+        self.action = action;
+    }
+
+    pub(crate) fn replace_locator_for_report(&mut self, locator: Option<String>) {
+        self.locator = locator;
+    }
+
     pub(crate) fn replace_path_for_report(&mut self, path: Vec<String>) {
         self.path = path;
     }
@@ -530,6 +727,8 @@ impl From<String> for OperationContext {
     fn from(value: String) -> Self {
         Self {
             target: None,
+            action: None,
+            locator: None,
             path: Vec::new(),
             context: CallContext::from(("key", value.to_string())),
             result: OperationResult::Fail,
@@ -544,6 +743,8 @@ impl From<&PathBuf> for OperationContext {
     fn from(value: &PathBuf) -> Self {
         Self {
             target: None,
+            action: None,
+            locator: Some(format!("{}", value.display())),
             path: Vec::new(),
             context: CallContext::from(("path", format!("{}", value.display()))),
             result: OperationResult::Fail,
@@ -558,6 +759,8 @@ impl From<&Path> for OperationContext {
     fn from(value: &Path) -> Self {
         Self {
             target: None,
+            action: None,
+            locator: Some(format!("{}", value.display())),
             path: Vec::new(),
             context: CallContext::from(("path", format!("{}", value.display()))),
             result: OperationResult::Fail,
@@ -572,6 +775,8 @@ impl From<&str> for OperationContext {
     fn from(value: &str) -> Self {
         Self {
             target: None,
+            action: None,
+            locator: None,
             path: Vec::new(),
             context: CallContext::from(("key", value.to_string())),
             result: OperationResult::Fail,
@@ -586,6 +791,8 @@ impl From<(&str, &str)> for OperationContext {
     fn from(value: (&str, &str)) -> Self {
         Self {
             target: None,
+            action: None,
+            locator: None,
             path: Vec::new(),
             context: CallContext::from((value.0, value.1)),
             result: OperationResult::Fail,
@@ -600,6 +807,8 @@ impl From<(&str, String)> for OperationContext {
     fn from(value: (&str, String)) -> Self {
         Self {
             target: None,
+            action: None,
+            locator: None,
             path: Vec::new(),
             context: CallContext::from((value.0, value.1)),
             result: OperationResult::Fail,
@@ -624,6 +833,8 @@ where
     fn from(value: (&str, V)) -> Self {
         Self {
             target: None,
+            action: None,
+            locator: None,
             path: Vec::new(),
             context: CallContext {
                 items: vec![(
@@ -643,6 +854,8 @@ impl From<(String, String)> for OperationContext {
     fn from(value: (String, String)) -> Self {
         Self {
             target: None,
+            action: None,
+            locator: None,
             path: Vec::new(),
             context: CallContext::from((value.0, value.1)),
             result: OperationResult::Fail,
@@ -736,11 +949,30 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_withcontext_want() {
         let ctx = OperationContext::want("test_target");
         assert_eq!(*ctx.target(), Some("test_target".to_string()));
         assert_eq!(ctx.path(), &["test_target".to_string()]);
         assert_eq!(ctx.context().items.len(), 0);
+    }
+
+    #[test]
+    fn test_doing_records_v2_action_with_compat_target_projection() {
+        let mut ctx = OperationContext::doing("load_config");
+        ctx.with_at("config.toml");
+
+        assert_eq!(ctx.action().as_deref(), Some("load_config"));
+        assert_eq!(ctx.locator().as_deref(), Some("config.toml"));
+        assert_eq!(ctx.target().as_deref(), Some("load_config"));
+        assert_eq!(
+            ctx.path(),
+            &["load_config".to_string(), "config.toml".to_string()]
+        );
+
+        let rendered = ctx.to_string();
+        assert!(rendered.contains("doing: load_config"));
+        assert!(rendered.contains("at: config.toml"));
     }
 
     #[test]
@@ -771,6 +1003,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_withcontext_with_want() {
         let mut ctx = OperationContext::new();
         ctx.with_want("new_target");
@@ -780,6 +1013,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_withcontext_with_want_appends_path() {
         let mut ctx = OperationContext::want("place_order");
         ctx.with_want("read_order_payload");
@@ -952,10 +1186,10 @@ mod tests {
 
     #[test]
     fn test_withcontext_display_with_target() {
-        let mut ctx = OperationContext::want("test_target");
+        let mut ctx = OperationContext::doing("test_target");
         ctx.record("key1", "value1");
         let display = format!("{ctx}");
-        assert!(display.contains("want: test_target"));
+        assert!(display.contains("doing: test_target"));
         assert!(display.contains("1. key1: value1"));
     }
 
@@ -982,9 +1216,9 @@ mod tests {
 
     #[test]
     fn test_withcontext_from_withcontext() {
-        let mut ctx1 = OperationContext::want("target1");
+        let mut ctx1 = OperationContext::doing("target1");
         ctx1.record("key1", "value1");
-        ctx1.with_want("step1");
+        ctx1.with_doing("step1");
         let ctx2 = OperationContext::from(&ctx1);
         assert_eq!(*ctx2.target(), Some("target1".to_string()));
         assert_eq!(ctx2.path(), &["target1".to_string(), "step1".to_string()]);
@@ -1049,7 +1283,7 @@ mod tests {
 
     #[test]
     fn test_withcontext_clone() {
-        let mut ctx = OperationContext::want("target");
+        let mut ctx = OperationContext::doing("target");
         ctx.record("key", "value");
 
         let cloned = ctx.clone();
@@ -1090,14 +1324,14 @@ mod tests {
         let ctx = OperationContext::new().with_auto_log();
         assert!(ctx.exit_log);
 
-        let ctx2 = OperationContext::want("test").with_auto_log();
+        let ctx2 = OperationContext::doing("test").with_auto_log();
         assert!(ctx2.exit_log);
         assert_eq!(*ctx2.target(), Some("test".to_string()));
     }
 
     #[test]
     fn test_scope_marks_success() {
-        let mut ctx = OperationContext::want("scope_success");
+        let mut ctx = OperationContext::doing("scope_success");
         {
             let _scope = ctx.scoped_success();
         }
@@ -1106,7 +1340,7 @@ mod tests {
 
     #[test]
     fn test_scope_preserves_failure() {
-        let mut ctx = OperationContext::want("scope_fail");
+        let mut ctx = OperationContext::doing("scope_fail");
         {
             let mut scope = ctx.scoped_success();
             scope.mark_failure();
@@ -1116,7 +1350,7 @@ mod tests {
 
     #[test]
     fn test_scope_cancel() {
-        let mut ctx = OperationContext::want("scope_cancel");
+        let mut ctx = OperationContext::doing("scope_cancel");
         {
             let mut scope = ctx.scoped_success();
             scope.cancel();
@@ -1126,13 +1360,13 @@ mod tests {
 
     #[test]
     fn test_format_context_with_target() {
-        let mut ctx = OperationContext::want("test_target");
+        let mut ctx = OperationContext::doing("test_target");
         ctx.record("key1", "value1");
 
         let formatted = ctx.format_context();
         assert_eq!(
             formatted,
-            "want=test_target: \ncall context:\n\tkey1 : value1\n"
+            "doing=test_target: \ncall context:\n\tkey1 : value1\n"
         );
     }
 
@@ -1154,27 +1388,48 @@ mod tests {
 
     #[test]
     fn test_format_context_with_target_only() {
-        let ctx = OperationContext::want("test_target");
+        let ctx = OperationContext::doing("test_target");
         let formatted = ctx.format_context();
-        assert_eq!(formatted, "want=test_target");
+        assert_eq!(formatted, "doing=test_target");
     }
 
     #[test]
     fn test_format_context_with_path() {
-        let mut ctx = OperationContext::want("place_order");
-        ctx.with_want("read_order_payload");
+        let mut ctx = OperationContext::doing("place_order");
+        ctx.with_doing("read_order_payload");
         ctx.record("order_id", "42");
 
         let formatted = ctx.format_context();
         assert_eq!(
             formatted,
-            "want=place_order path=place_order / read_order_payload: \ncall context:\n\torder_id : 42\n"
+            "doing=place_order path=place_order / read_order_payload: \ncall context:\n\torder_id : 42\n"
         );
     }
 
     #[test]
+    fn test_path_string_and_display_use_normalized_action_locator_order() {
+        let mut ctx = OperationContext::at("engine.toml");
+        ctx.with_doing("start engine");
+
+        assert_eq!(
+            ctx.path_string().as_deref(),
+            Some("start engine / engine.toml")
+        );
+        assert_eq!(
+            ctx.path(),
+            &["start engine".to_string(), "engine.toml".to_string()]
+        );
+
+        let rendered = format!("{ctx}");
+        assert!(rendered.contains("doing: start engine"));
+        assert!(rendered.contains("at: engine.toml"));
+        assert!(rendered.contains("path: start engine / engine.toml"));
+        assert!(!rendered.contains("path: engine.toml / start engine"));
+    }
+
+    #[test]
     fn test_logging_methods() {
-        let ctx = OperationContext::want("test_target");
+        let ctx = OperationContext::doing("test_target");
 
         // 这些方法主要测试它们不会panic，实际日志输出需要日志框架支持
         ctx.info("info message");
@@ -1218,7 +1473,7 @@ mod tests {
     #[test]
     fn test_drop_trait_with_success() {
         {
-            let mut ctx = OperationContext::want("test_drop").with_auto_log();
+            let mut ctx = OperationContext::doing("test_drop").with_auto_log();
             ctx.record("operation", "test");
             ctx.mark_suc(); // 标记为成功
                             // ctx 在这里离开作用域，会触发Drop trait
@@ -1230,7 +1485,7 @@ mod tests {
     #[test]
     fn test_drop_trait_with_failure() {
         {
-            let mut ctx = OperationContext::want("test_drop_fail").with_auto_log();
+            let mut ctx = OperationContext::doing("test_drop_fail").with_auto_log();
             ctx.record("operation", "test_fail");
             // 不调用mark_suc，保持is_suc = false
             // ctx 在这里离开作用域，会触发Drop trait
@@ -1242,7 +1497,7 @@ mod tests {
     #[test]
     fn test_drop_trait_without_exit_log() {
         {
-            let mut ctx = OperationContext::want("test_no_log");
+            let mut ctx = OperationContext::doing("test_no_log");
             ctx.record("operation", "no_log");
             ctx.mark_suc();
             // exit_log = false，不会触发日志输出
@@ -1254,7 +1509,7 @@ mod tests {
     #[test]
     fn test_complex_context_scenario() {
         // 模拟一个复杂的操作场景
-        let mut ctx = OperationContext::want("user_registration").with_auto_log();
+        let mut ctx = OperationContext::doing("user_registration").with_auto_log();
 
         // 添加各种上下文信息
         ctx.record("user_id", "12345");
@@ -1287,8 +1542,8 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_context_serialization() {
-        let mut ctx = OperationContext::want("serialization_test");
-        ctx.with_want("inner_step");
+        let mut ctx = OperationContext::doing("serialization_test");
+        ctx.with_doing("inner_step");
         ctx.record("key1", "value1");
         ctx.record("key2", "value2");
 
@@ -1341,7 +1596,7 @@ mod tests {
     #[test]
     fn test_context_builder_pattern() {
         // 测试构建器模式的使用
-        let ctx = OperationContext::want("builder_test").with_auto_log();
+        let ctx = OperationContext::doing("builder_test").with_auto_log();
 
         assert_eq!(*ctx.target(), Some("builder_test".to_string()));
         assert_eq!(ctx.path(), &["builder_test".to_string()]);
@@ -1576,7 +1831,7 @@ mod tests {
 
     #[test]
     fn test_context_metadata_records_values() {
-        let ctx = OperationContext::want("load")
+        let ctx = OperationContext::doing("load")
             .with_meta("config.kind", "wpsrc")
             .with_meta("parse.line", 1u32)
             .with_meta("parse.strict", true);
@@ -1610,7 +1865,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_context_serialization_skips_empty_metadata_and_reads_missing_field() {
-        let ctx = OperationContext::want("serialization_test");
+        let ctx = OperationContext::doing("serialization_test");
 
         let serialized = serde_json::to_value(&ctx).expect("序列化失败");
         assert!(!serialized
@@ -1626,7 +1881,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_context_serialization_preserves_metadata() {
-        let ctx = OperationContext::want("serialization_test")
+        let ctx = OperationContext::doing("serialization_test")
             .with_meta("config.kind", "sink_defaults")
             .with_meta("parse.line", 3u32);
 

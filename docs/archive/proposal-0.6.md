@@ -1,5 +1,9 @@
 # orion-error 0.6 改进提案
 
+> 历史提案说明：
+> 本文基于更早期源码讨论 `ErrorOweBase` / `ErrorOwe` 拆分。
+> 当前代码状态已经继续演进：只保留兼容态 `ErrorOweBase::owe(...)`，`ErrorOwe::owe_*()` 已移除。
+
 > 基于 orion-error 0.5.6 源码的逐项验证报告
 
 ---
@@ -275,7 +279,7 @@ fn add_context(&mut self, ctx: &OperationContext) {
 
 clone 副本保留了 `exit_log` 字段值。如果原始 ctx 的 `exit_log == true`，clone 副本 drop 时也会触发日志。原始 ctx 可能已 `mark_suc()`，但副本保持默认 `Fail` 状态，会产生一条误导性的 "fail!" 日志。
 
-**严重程度**: 中低。取决于实际场景中 `with_auto_log()` 的 OperationContext 是否会通过 `.with(&ctx)` 传入 StructError。
+**严重程度**: 中低。取决于实际场景中 `with_auto_log()` 的 `OperationContext` 是否会通过 `.attach_context(&ctx)` 传入 `StructError`。
 
 **结论**: 耦合存在，隐患真实但非高频。**可选改进**，不是必须。
 

@@ -4,8 +4,11 @@
 
 use derive_more::From;
 use orion_error::{
-    print_error, ContextRecord, ErrorCode, ErrorConv, ErrorWith, OperationContext, RedactPolicy,
-    RenderMode, StructError, UvsReason,
+    conversion::{ErrorConv, ErrorWith},
+    print_error,
+    reason::{ErrorCode, UvsReason},
+    report::{RedactPolicy, RenderMode},
+    runtime::{ContextRecord, OperationContext, StructError},
 };
 use std::sync::atomic::Ordering;
 use thiserror::Error;
@@ -177,15 +180,17 @@ impl OrderService {
         ctx.record_meta("config.secret", "/prod/orders/api-token");
         let order = Self::parse_order(order_txt, amount)
             .doing("解析订单")
-            .with(&ctx)
+            .attach_context(&ctx)
             .err_conv()?;
 
         Self::validate_funds(user_id, order.amount)
             .doing("验证资金")
-            .with(&ctx)?;
+            .attach_context(&ctx)?;
 
         let order = storage::Order { user_id, amount };
-        Self::save_order(order).doing("保存订单").with(&ctx)
+        Self::save_order(order)
+            .doing("保存订单")
+            .attach_context(&ctx)
     }
 
     fn parse_order(txt: &str, amount: f64) -> Result<storage::Order, ParseError> {

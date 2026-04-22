@@ -1,6 +1,9 @@
 use crate::{DomainReason, StructError};
 
-use super::{ErrorMetadata, MetadataValue, OperationContext, SourceFrame};
+use super::{
+    snapshot::{StableStructErrorSnapshot, StructErrorSnapshot},
+    ErrorMetadata, MetadataValue, OperationContext, SourceFrame,
+};
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq)]
@@ -33,20 +36,51 @@ pub trait RedactPolicy {
 
 impl<T: DomainReason> StructError<T> {
     pub fn report(&self) -> ErrorReport {
-        ErrorReport {
-            reason: self.reason().to_string(),
-            detail: self.detail().clone(),
-            position: self.position().clone(),
-            want: self.target_main(),
-            path: self.target_path(),
-            context: self.contexts().to_vec(),
-            root_metadata: self.context_metadata(),
-            source_frames: self.source_frames().to_vec(),
-        }
+        self.snapshot().report()
+    }
+
+    pub fn into_report(self) -> ErrorReport {
+        self.into_snapshot().into_report()
     }
 
     pub fn report_redacted(&self, policy: &impl RedactPolicy) -> ErrorReport {
         self.report().redacted(policy)
+    }
+}
+
+impl From<&StructErrorSnapshot> for ErrorReport {
+    fn from(value: &StructErrorSnapshot) -> Self {
+        value.report()
+    }
+}
+
+impl From<StructErrorSnapshot> for ErrorReport {
+    fn from(value: StructErrorSnapshot) -> Self {
+        value.into_report()
+    }
+}
+
+impl<T: DomainReason> From<&StructError<T>> for ErrorReport {
+    fn from(value: &StructError<T>) -> Self {
+        value.report()
+    }
+}
+
+impl<T: DomainReason> From<StructError<T>> for ErrorReport {
+    fn from(value: StructError<T>) -> Self {
+        value.into_report()
+    }
+}
+
+impl From<&StableStructErrorSnapshot> for ErrorReport {
+    fn from(value: &StableStructErrorSnapshot) -> Self {
+        value.report()
+    }
+}
+
+impl From<StableStructErrorSnapshot> for ErrorReport {
+    fn from(value: StableStructErrorSnapshot) -> Self {
+        value.into_report()
     }
 }
 
@@ -174,12 +208,16 @@ fn redact_context(mut ctx: OperationContext, policy: &impl RedactPolicy) -> Oper
 
     ctx.context_mut_for_report().items = redacted_items;
     let redacted_want = redact_optional_text(Some("want"), ctx.target().as_deref(), policy);
+    let redacted_action = redact_optional_text(Some("action"), ctx.action().as_deref(), policy);
+    let redacted_locator = redact_optional_text(Some("locator"), ctx.locator().as_deref(), policy);
     let redacted_path = ctx
         .path()
         .iter()
         .filter_map(|segment| redact_optional_text(Some("path"), Some(segment.as_str()), policy))
         .collect::<Vec<_>>();
     ctx.replace_target_for_report(redacted_want);
+    ctx.replace_action_for_report(redacted_action);
+    ctx.replace_locator_for_report(redacted_locator);
     ctx.replace_path_for_report(redacted_path);
     ctx.replace_metadata_for_report(redact_metadata(ctx.metadata(), policy));
     ctx
@@ -246,6 +284,10 @@ mod tests {
     };
 
     use super::{ErrorReport, RedactPolicy, RenderMode};
+    use crate::{
+        StableSnapshotContextFrame, StableSnapshotSourceFrame, StableStructErrorSnapshot,
+        STABLE_SNAPSHOT_SCHEMA_VERSION,
+    };
 
     #[derive(Debug)]
     struct TestPolicy;
@@ -285,11 +327,13 @@ mod tests {
 
     #[test]
     fn test_report_contains_root_and_source_data() {
-        let source = StructError::from(TestReason::TestError).with(
-            OperationContext::want("load defaults").with_meta("config.kind", "sink_defaults"),
+        let source = StructError::from(TestReason::TestError).attach_context(
+            OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
         );
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
-            .with(OperationContext::want("start engine").with_meta("component.name", "engine"))
+            .attach_context(
+                OperationContext::doing("start engine").with_meta("component.name", "engine"),
+            )
             .with_struct_source(source);
 
         let report = err.report();
@@ -303,6 +347,80 @@ mod tests {
             report.source_frames[0].metadata.get_str("config.kind"),
             Some("sink_defaults")
         );
+    }
+
+    #[test]
+    fn test_struct_error_into_report_matches_borrowed_report() {
+        let source = StructError::from(TestReason::TestError).attach_context(
+            OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
+        );
+        let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
+            .attach_context(
+                OperationContext::doing("start engine").with_meta("component.name", "engine"),
+            )
+            .with_struct_source(source);
+
+        let via_borrowed = err.report();
+        let via_owned = err.into_report();
+
+        assert_eq!(via_owned, via_borrowed);
+    }
+
+    #[test]
+    fn test_report_from_struct_error_matches_report_methods() {
+        let source = StructError::from(TestReason::TestError).attach_context(
+            OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
+        );
+        let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
+            .attach_context(
+                OperationContext::doing("start engine").with_meta("component.name", "engine"),
+            )
+            .with_struct_source(source);
+
+        let via_method = err.report();
+        let via_borrowed = ErrorReport::from(&err);
+        let via_owned = ErrorReport::from(err);
+
+        assert_eq!(via_borrowed, via_method);
+        assert_eq!(via_owned, via_method);
+    }
+
+    #[test]
+    fn test_report_from_stable_snapshot_matches_report_methods() {
+        let stable = StableStructErrorSnapshot {
+            schema_version: STABLE_SNAPSHOT_SCHEMA_VERSION,
+            reason: "system error".to_string(),
+            detail: Some("outer detail".to_string()),
+            position: None,
+            want: Some("start engine".to_string()),
+            path: Some("start engine".to_string()),
+            context: vec![StableSnapshotContextFrame {
+                target: Some("start engine".to_string()),
+                action: None,
+                locator: None,
+                path: vec!["start engine".to_string()],
+                metadata: crate::ErrorMetadata::new(),
+            }],
+            root_metadata: crate::ErrorMetadata::new(),
+            source_frames: vec![StableSnapshotSourceFrame {
+                index: 0,
+                message: "db unavailable".to_string(),
+                error_code: None,
+                reason: None,
+                want: Some("load config".to_string()),
+                path: Some("load config / read".to_string()),
+                detail: Some("inner detail".to_string()),
+                metadata: crate::ErrorMetadata::new(),
+                is_root_cause: true,
+            }],
+        };
+
+        let via_method = stable.report();
+        let via_borrowed = ErrorReport::from(&stable);
+        let via_owned = ErrorReport::from(stable);
+
+        assert_eq!(via_borrowed, via_method);
+        assert_eq!(via_owned, via_method);
     }
 
     #[test]
@@ -349,8 +467,8 @@ mod tests {
     fn test_report_redaction_masks_sensitive_fields() {
         let err = StructError::from(TestReason::TestError)
             .with_detail("token=abc")
-            .with_source(std::io::Error::other("token=abc"))
-            .with(OperationContext::want("load").with_meta("config.secret", "abc"));
+            .with_std_source(std::io::Error::other("token=abc"))
+            .attach_context(OperationContext::doing("load").with_meta("config.secret", "abc"));
 
         let rendered = err.render_redacted(RenderMode::Verbose, &TestPolicy);
         assert!(rendered.contains("<redacted>"));
@@ -360,7 +478,7 @@ mod tests {
     #[test]
     fn test_report_redaction_masks_source_frame_message() {
         let err = StructError::from(TestReason::TestError)
-            .with_source(std::io::Error::other("https://svc.local?token=abc"));
+            .with_std_source(std::io::Error::other("https://svc.local?token=abc"));
 
         let rendered = err.render_redacted(RenderMode::Verbose, &TestPolicy);
 
@@ -446,7 +564,7 @@ mod tests {
             position: Some("/srv/app/config.toml:10".to_string()),
             want: Some("load /srv/app/config.toml".to_string()),
             path: Some("load /srv/app/config.toml / parse".to_string()),
-            context: vec![OperationContext::want("load /srv/app/config.toml")],
+            context: vec![OperationContext::at("/srv/app/config.toml")],
             root_metadata: crate::ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
                 index: 0,
@@ -470,7 +588,7 @@ mod tests {
         impl RedactPolicy for PathPolicy {
             fn redact_value(&self, key: Option<&str>, value: &str) -> Option<String> {
                 match key {
-                    Some("position") | Some("want") | Some("path") => {
+                    Some("position") | Some("want") | Some("path") | Some("locator") => {
                         Some(value.replace("/srv/app/config.toml", "<path-redacted>"))
                     }
                     _ => Some(value.to_string()),
@@ -549,8 +667,8 @@ mod tests {
 
         let err = StructError::from(TestReason::TestError)
             .with_detail("token=abc")
-            .with({
-                let mut ctx = OperationContext::want("load");
+            .attach_context({
+                let mut ctx = OperationContext::doing("load");
                 ctx.record("token", "abc");
                 ctx.record_meta("config.secret", "abc");
                 ctx
@@ -568,11 +686,13 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_report_serialization_supports_structured_export() {
-        let source = StructError::from(TestReason::TestError).with(
-            OperationContext::want("load defaults").with_meta("config.kind", "sink_defaults"),
+        let source = StructError::from(TestReason::TestError).attach_context(
+            OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
         );
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
-            .with(OperationContext::want("start engine").with_meta("component.name", "engine"))
+            .attach_context(
+                OperationContext::doing("start engine").with_meta("component.name", "engine"),
+            )
             .with_struct_source(source);
 
         let json_value = serde_json::to_value(err.report()).expect("serialize report");
@@ -593,8 +713,8 @@ mod tests {
     fn test_report_redacted_supports_structured_export() {
         let err = StructError::from(TestReason::TestError)
             .with_detail("token=abc")
-            .with_source(std::io::Error::other("token=abc"))
-            .with(OperationContext::want("load").with_meta("config.secret", "abc"));
+            .with_std_source(std::io::Error::other("token=abc"))
+            .attach_context(OperationContext::doing("load").with_meta("config.secret", "abc"));
 
         let json_value =
             serde_json::to_value(err.report_redacted(&TestPolicy)).expect("serialize redacted");

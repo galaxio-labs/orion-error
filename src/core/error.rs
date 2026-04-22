@@ -29,6 +29,68 @@ impl<T: DomainReason + ErrorCode> ErrorCode for StructError<T> {
 
 type BoxedSource = Arc<dyn StdError + Send + Sync + 'static>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub enum SourcePayloadKind {
+    Std,
+    Struct,
+}
+
+#[derive(Debug)]
+struct InternalSourceState {
+    source: BoxedSource,
+    kind: SourcePayloadKind,
+    frames: Vec<SourceFrame>,
+}
+
+/// Owned V2 source payload.
+///
+/// This is the public write-side counterpart of [`SourcePayloadRef`].  It keeps
+/// ordinary standard errors and already-structured errors in separate payload
+/// channels before attaching them to a [`StructError`].
+#[derive(Debug)]
+pub struct SourcePayload {
+    state: InternalSourceState,
+}
+
+#[derive(Debug, Clone)]
+enum InternalSourcePayload {
+    Std {
+        source: BoxedSource,
+        frames: Arc<Vec<SourceFrame>>,
+    },
+    Struct {
+        source: BoxedSource,
+        frames: Arc<Vec<SourceFrame>>,
+    },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SourcePayloadRef<'a> {
+    payload: &'a InternalSourcePayload,
+}
+
+pub trait IntoSourcePayload {
+    fn into_source_payload(self) -> SourcePayload;
+}
+
+#[derive(Debug, Clone)]
+pub struct OwnedStdStructError<R: DomainReason> {
+    inner: StructError<R>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OwnedDynStdStructError {
+    display: String,
+    source: Option<BoxedSource>,
+    frames: Arc<Vec<SourceFrame>>,
+}
+
+#[derive(Debug)]
+pub struct StdStructRef<'a, R: DomainReason> {
+    inner: &'a StructError<R>,
+}
+
 fn is_struct_error_type_name(type_name: &str) -> bool {
     type_name.contains("StructError<")
 }
@@ -154,11 +216,341 @@ where
     frames
 }
 
-/// Structured error type containing detailed error information
-/// including error source, contextual data, and debugging information.
+impl InternalSourceState {
+    fn from_std<E>(source: E) -> Self
+    where
+        E: StdError + Send + Sync + 'static,
+    {
+        assert_non_struct_source(
+            std::any::type_name::<E>(),
+            "use with_struct_source(...) when attaching StructError sources",
+        );
+        let frames = collect_source_frames_from(&source);
+        Self {
+            source: Arc::new(source),
+            kind: SourcePayloadKind::Std,
+            frames,
+        }
+    }
+
+    fn from_struct<R>(source: StructError<R>) -> Self
+    where
+        R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    {
+        let frames = collect_struct_error_source_frames(&source);
+        Self {
+            source: internal_into_std_bridge(source),
+            kind: SourcePayloadKind::Struct,
+            frames,
+        }
+    }
+
+    #[cfg(feature = "anyhow")]
+    fn from_dyn_struct(source: OwnedDynStdStructError) -> Self {
+        let frames = source.source_frames().to_vec();
+        Self {
+            source: Arc::new(source),
+            kind: SourcePayloadKind::Struct,
+            frames,
+        }
+    }
+}
+
+impl SourcePayload {
+    fn from_state(state: InternalSourceState) -> Self {
+        Self { state }
+    }
+
+    fn into_internal_state(self) -> InternalSourceState {
+        self.state
+    }
+
+    pub fn kind(&self) -> SourcePayloadKind {
+        self.state.kind
+    }
+
+    pub fn source(&self) -> &(dyn StdError + 'static) {
+        self.state.source.as_ref()
+    }
+
+    pub fn frames(&self) -> &[SourceFrame] {
+        &self.state.frames
+    }
+}
+
+impl<E> IntoSourcePayload for E
+where
+    E: StdError + Send + Sync + 'static,
+{
+    fn into_source_payload(self) -> SourcePayload {
+        SourcePayload::from_state(InternalSourceState::from_std(self))
+    }
+}
+
+impl<R> IntoSourcePayload for StructError<R>
+where
+    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+{
+    fn into_source_payload(self) -> SourcePayload {
+        SourcePayload::from_state(InternalSourceState::from_struct(self))
+    }
+}
+
+fn internal_into_std_bridge<R>(source: StructError<R>) -> BoxedSource
+where
+    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+{
+    Arc::new(OwnedStdStructError { inner: source })
+}
+
+impl<R> OwnedStdStructError<R>
+where
+    R: DomainReason,
+{
+    pub fn into_struct(self) -> StructError<R> {
+        self.inner
+    }
+
+    #[deprecated(since = "0.7.0", note = "use into_struct()")]
+    pub fn into_inner(self) -> StructError<R> {
+        self.into_struct()
+    }
+
+    pub fn inner(&self) -> &StructError<R> {
+        &self.inner
+    }
+
+    pub fn into_boxed(self) -> Box<dyn StdError + Send + Sync + 'static>
+    where
+        R: ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    {
+        Box::new(self)
+    }
+}
+
+impl<R> From<StructError<R>> for OwnedStdStructError<R>
+where
+    R: DomainReason,
+{
+    fn from(value: StructError<R>) -> Self {
+        Self { inner: value }
+    }
+}
+
+impl OwnedDynStdStructError {
+    pub fn source_frames(&self) -> &[SourceFrame] {
+        self.frames.as_ref()
+    }
+
+    pub fn into_boxed(self) -> Box<dyn StdError + Send + Sync + 'static> {
+        Box::new(self)
+    }
+}
+
+impl<R> From<StructError<R>> for OwnedDynStdStructError
+where
+    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+{
+    fn from(value: StructError<R>) -> Self {
+        let display = value.to_string();
+        let source = value
+            .imp
+            .source_payload
+            .as_ref()
+            .map(InternalSourcePayload::source_arc);
+        let frames = Arc::new(collect_struct_error_source_frames(&value));
+        Self {
+            display,
+            source,
+            frames,
+        }
+    }
+}
+
+impl<R> From<OwnedStdStructError<R>> for OwnedDynStdStructError
+where
+    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+{
+    fn from(value: OwnedStdStructError<R>) -> Self {
+        value.into_struct().into()
+    }
+}
+
+impl Display for OwnedDynStdStructError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.display)
+    }
+}
+
+impl StdError for OwnedDynStdStructError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        self.source
+            .as_ref()
+            .map(|source| source.as_ref() as &(dyn StdError + 'static))
+    }
+}
+
+impl<'a, R> StdStructRef<'a, R>
+where
+    R: DomainReason,
+{
+    pub fn inner(&self) -> &'a StructError<R> {
+        self.inner
+    }
+}
+
+impl<'a, R> From<&'a StructError<R>> for StdStructRef<'a, R>
+where
+    R: DomainReason,
+{
+    fn from(value: &'a StructError<R>) -> Self {
+        Self { inner: value }
+    }
+}
+
+impl<R> Display for OwnedStdStructError<R>
+where
+    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.inner, f)
+    }
+}
+
+impl<R> StdError for OwnedStdStructError<R>
+where
+    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+{
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        self.inner.source_ref()
+    }
+}
+
+impl<'a, R> Display for StdStructRef<'a, R>
+where
+    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self.inner, f)
+    }
+}
+
+impl<'a, R> StdError for StdStructRef<'a, R>
+where
+    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+{
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        self.inner.source_ref()
+    }
+}
+
+impl InternalSourcePayload {
+    fn new(source: BoxedSource, kind: SourcePayloadKind, frames: Vec<SourceFrame>) -> Self {
+        let frames = Arc::new(frames);
+        match kind {
+            SourcePayloadKind::Std => Self::Std { source, frames },
+            SourcePayloadKind::Struct => Self::Struct { source, frames },
+        }
+    }
+
+    fn from_state(state: InternalSourceState) -> Self {
+        Self::new(state.source, state.kind, state.frames)
+    }
+
+    fn source_ref(&self) -> &(dyn StdError + 'static) {
+        match self {
+            Self::Std { source, .. } | Self::Struct { source, .. } => source.as_ref(),
+        }
+    }
+
+    fn source_arc(&self) -> BoxedSource {
+        match self {
+            Self::Std { source, .. } | Self::Struct { source, .. } => Arc::clone(source),
+        }
+    }
+
+    fn kind(&self) -> SourcePayloadKind {
+        match self {
+            Self::Std { .. } => SourcePayloadKind::Std,
+            Self::Struct { .. } => SourcePayloadKind::Struct,
+        }
+    }
+
+    fn frames(&self) -> &[SourceFrame] {
+        match self {
+            Self::Std { frames, .. } | Self::Struct { frames, .. } => frames.as_ref(),
+        }
+    }
+
+    fn root_cause(&self) -> &(dyn StdError + 'static) {
+        let mut cur = self.source_ref();
+        while let Some(next) = cur.source() {
+            cur = next;
+        }
+        cur
+    }
+
+    fn source_chain(&self) -> Vec<String> {
+        self.frames()
+            .iter()
+            .map(|frame| frame.message.clone())
+            .collect()
+    }
+}
+
+impl<'a> SourcePayloadRef<'a> {
+    pub fn kind(&self) -> SourcePayloadKind {
+        self.payload.kind()
+    }
+
+    pub fn source(&self) -> &'a (dyn StdError + 'static) {
+        self.payload.source_ref()
+    }
+
+    pub fn frames(&self) -> &'a [SourceFrame] {
+        self.payload.frames()
+    }
+
+    pub fn root_cause(&self) -> &'a (dyn StdError + 'static) {
+        self.payload.root_cause()
+    }
+
+    pub fn source_chain(&self) -> Vec<String> {
+        self.payload.source_chain()
+    }
+}
+
+/// Structured runtime error carrier with explicit bridge APIs for the standard
+/// error ecosystem.
+///
+/// ```compile_fail
+/// use orion_error::{StructError, UvsReason};
+///
+/// let err = StructError::from(UvsReason::system_error());
+/// let _ = std::error::Error::source(&err);
+/// ```
+///
+/// ```rust
+/// use orion_error::{StructError, UvsReason};
+///
+/// let err = StructError::from(UvsReason::system_error());
+/// let bridged = err.as_std();
+/// let _ = std::error::Error::source(&bridged);
+/// ```
 #[derive(Debug, Clone)]
 pub struct StructError<T: DomainReason> {
     imp: Box<StructErrorImpl<T>>,
+}
+
+/// Explicit compatibility serialization view for `StructError`.
+///
+/// This preserves the historical runtime JSON projection with `want`, `path`,
+/// `source_frames`, `source_message`, and `source_chain`. New export code
+/// should prefer `snapshot()` / `report()` instead of relying on runtime
+/// carrier serialization.
+#[cfg_attr(not(feature = "serde"), allow(dead_code))]
+pub struct CompatStructErrorRef<'a, T: DomainReason> {
+    err: &'a StructError<T>,
 }
 
 #[cfg(feature = "serde")]
@@ -170,19 +562,33 @@ where
     where
         S: serde::Serializer,
     {
+        self.compat_serialize().serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: DomainReason> serde::Serialize for CompatStructErrorRef<'_, T>
+where
+    T: serde::Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
         use serde::ser::SerializeStruct;
 
-        let source_frames = self.source_frames();
-        let source_chain = self.source_chain();
+        let err = self.err;
+        let source_frames = err.source_frames();
+        let source_chain = err.source_chain();
         let source_message = source_chain.first().cloned();
-        let want = self.target_main();
-        let path = self.target_path();
+        let want = err.target_main();
+        let path = err.target_path();
 
         let mut state = serializer.serialize_struct("StructError", 9)?;
-        state.serialize_field("reason", &self.imp.reason)?;
-        state.serialize_field("detail", &self.imp.detail)?;
-        state.serialize_field("position", &self.imp.position)?;
-        state.serialize_field("context", self.imp.context.as_ref())?;
+        state.serialize_field("reason", &err.imp.reason)?;
+        state.serialize_field("detail", &err.imp.detail)?;
+        state.serialize_field("position", &err.imp.position)?;
+        state.serialize_field("context", err.imp.context.as_ref())?;
         state.serialize_field("want", &want)?;
         state.serialize_field("path", &path)?;
         state.serialize_field("source_frames", &source_frames)?;
@@ -195,6 +601,10 @@ where
 impl<T: DomainReason> StructError<T> {
     pub fn imp(&self) -> &StructErrorImpl<T> {
         &self.imp
+    }
+
+    pub fn compat_serialize(&self) -> CompatStructErrorRef<'_, T> {
+        CompatStructErrorRef { err: self }
     }
 }
 
@@ -218,7 +628,7 @@ impl<T: DomainReason> StructError<T> {
         position: Option<String>,
         context: Vec<OperationContext>,
     ) -> Self {
-        Self::new_with_source(reason, detail, position, context, None, Vec::new())
+        Self::new_with_source(reason, detail, position, context, None)
     }
 
     fn new_with_source(
@@ -226,8 +636,7 @@ impl<T: DomainReason> StructError<T> {
         detail: Option<String>,
         position: Option<String>,
         context: Vec<OperationContext>,
-        source: Option<BoxedSource>,
-        source_frames: Vec<SourceFrame>,
+        source_payload: Option<InternalSourcePayload>,
     ) -> Self {
         StructError {
             imp: Box::new(StructErrorImpl {
@@ -235,8 +644,7 @@ impl<T: DomainReason> StructError<T> {
                 detail,
                 position,
                 context: Arc::new(context),
-                source,
-                source_frames: Arc::new(source_frames),
+                source_payload,
             }),
         }
     }
@@ -259,9 +667,7 @@ pub struct StructErrorImpl<T: DomainReason> {
     position: Option<String>,
     context: Arc<Vec<OperationContext>>,
     #[cfg_attr(feature = "serde", serde(skip_serializing))]
-    source: Option<BoxedSource>,
-    #[cfg_attr(feature = "serde", serde(skip_serializing))]
-    source_frames: Arc<Vec<SourceFrame>>,
+    source_payload: Option<InternalSourcePayload>,
 }
 
 impl<T: DomainReason> PartialEq for StructErrorImpl<T> {
@@ -291,11 +697,22 @@ impl<T: DomainReason> StructErrorImpl<T> {
     }
 
     pub fn source_ref(&self) -> Option<&(dyn StdError + 'static)> {
-        self.source.as_deref().map(|e| e as _)
+        self.source_payload
+            .as_ref()
+            .map(InternalSourcePayload::source_ref)
+    }
+
+    fn source_payload_ref(&self) -> Option<SourcePayloadRef<'_>> {
+        self.source_payload
+            .as_ref()
+            .map(|payload| SourcePayloadRef { payload })
     }
 
     pub fn source_frames(&self) -> &[SourceFrame] {
-        self.source_frames.as_ref()
+        self.source_payload
+            .as_ref()
+            .map(InternalSourcePayload::frames)
+            .unwrap_or(&[])
     }
 }
 
@@ -304,24 +721,32 @@ where
     R1: DomainReason,
     R2: DomainReason + From<R1>,
 {
-    StructError::new(
+    StructError::new_with_source(
         other.imp.reason.into(),
         other.imp.detail,
         other.imp.position,
         Arc::try_unwrap(other.imp.context).unwrap_or_else(|arc| (*arc).clone()),
+        other.imp.source_payload,
     )
-    .with_boxed_source_parts(other.imp.source, other.imp.source_frames)
 }
 
 impl<T: DomainReason> StructError<T> {
-    fn with_boxed_source_parts(
-        mut self,
-        source: Option<BoxedSource>,
-        source_frames: Arc<Vec<SourceFrame>>,
-    ) -> Self {
-        self.imp.source = source;
-        self.imp.source_frames = source_frames;
+    fn with_internal_source(mut self, state: InternalSourceState) -> Self {
+        self.imp.source_payload = Some(InternalSourcePayload::from_state(state));
         self
+    }
+
+    #[must_use]
+    /// Attach any source that can be converted into the V2 dual-channel source
+    /// payload model.
+    ///
+    /// Ordinary `StdError` values attach as `SourcePayloadKind::Std`, while
+    /// `StructError<_>` attaches as `SourcePayloadKind::Struct`.
+    pub fn attach_source<S>(self, source: S) -> Self
+    where
+        S: IntoSourcePayload,
+    {
+        self.with_internal_source(source.into_source_payload().into_internal_state())
     }
 
     #[must_use]
@@ -333,21 +758,7 @@ impl<T: DomainReason> StructError<T> {
     where
         E: StdError + Send + Sync + 'static,
     {
-        self.with_source(source)
-    }
-
-    #[must_use]
-    pub fn with_source<E>(mut self, source: E) -> Self
-    where
-        E: StdError + Send + Sync + 'static,
-    {
-        assert_non_struct_source(
-            std::any::type_name::<E>(),
-            "use with_struct_source(...) when attaching StructError sources",
-        );
-        self.imp.source_frames = Arc::new(collect_source_frames_from(&source));
-        self.imp.source = Some(Arc::new(source));
-        self
+        self.with_internal_source(InternalSourceState::from_std(source))
     }
 
     #[must_use]
@@ -355,8 +766,7 @@ impl<T: DomainReason> StructError<T> {
     where
         R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
     {
-        self.imp.source_frames = Arc::new(collect_struct_error_source_frames(&source));
-        self.imp.source = Some(Arc::new(source));
+        self = self.with_internal_source(InternalSourceState::from_struct(source));
         self
     }
 
@@ -373,15 +783,22 @@ impl<T: DomainReason> StructError<T> {
     }
 
     pub fn root_cause(&self) -> Option<&(dyn StdError + 'static)> {
-        let mut cur = self.source_ref()?;
-        while let Some(next) = cur.source() {
-            cur = next;
-        }
-        Some(cur)
+        self.imp
+            .source_payload
+            .as_ref()
+            .map(InternalSourcePayload::root_cause)
     }
 
     pub fn source_frames(&self) -> &[SourceFrame] {
         self.imp.source_frames()
+    }
+
+    pub fn source_payload(&self) -> Option<SourcePayloadRef<'_>> {
+        self.imp.source_payload_ref()
+    }
+
+    pub fn source_payload_kind(&self) -> Option<SourcePayloadKind> {
+        self.source_payload().map(|payload| payload.kind())
     }
 
     pub fn root_cause_frame(&self) -> Option<&SourceFrame> {
@@ -393,10 +810,39 @@ impl<T: DomainReason> StructError<T> {
     }
 
     pub fn source_chain(&self) -> Vec<String> {
-        self.source_frames()
-            .iter()
-            .map(|frame| frame.message.clone())
-            .collect()
+        self.imp
+            .source_payload
+            .as_ref()
+            .map(InternalSourcePayload::source_chain)
+            .unwrap_or_default()
+    }
+
+    pub fn into_std(self) -> OwnedStdStructError<T>
+    where
+        T: ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    {
+        self.into()
+    }
+
+    pub fn into_boxed_std(self) -> Box<dyn StdError + Send + Sync + 'static>
+    where
+        T: ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    {
+        self.into_std().into_boxed()
+    }
+
+    pub fn into_dyn_std(self) -> OwnedDynStdStructError
+    where
+        T: ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    {
+        self.into()
+    }
+
+    pub fn as_std(&self) -> StdStructRef<'_, T>
+    where
+        T: ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    {
+        self.into()
     }
 
     pub fn display_chain(&self) -> String
@@ -431,14 +877,10 @@ impl<T: DomainReason> StructError<T> {
     ) -> String {
         self.report().render_redacted(mode, policy)
     }
-}
 
-impl<T> StdError for StructError<T>
-where
-    T: DomainReason + ErrorCode + std::fmt::Debug + Display + 'static,
-{
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        self.source_ref()
+    #[cfg(feature = "anyhow")]
+    pub(crate) fn with_dyn_struct_source(self, source: OwnedDynStdStructError) -> Self {
+        self.with_internal_source(InternalSourceState::from_dyn_struct(source))
     }
 }
 
@@ -449,8 +891,7 @@ impl<T: DomainReason> StructError<T> {
             detail: None,
             position: None,
             contexts: Vec::new(),
-            source: None,
-            source_frames: Vec::new(),
+            source_payload: None,
         }
     }
 
@@ -487,6 +928,20 @@ impl<T: DomainReason> StructError<T> {
             .find_map(|ctx| ctx.target().clone())
     }
 
+    pub fn action_main(&self) -> Option<String> {
+        self.context
+            .iter()
+            .rev()
+            .find_map(|ctx| ctx.action().clone())
+    }
+
+    pub fn locator_main(&self) -> Option<String> {
+        self.context
+            .iter()
+            .rev()
+            .find_map(|ctx| ctx.locator().clone())
+    }
+
     /// Compatibility alias for `target_main()`.
     ///
     /// Prefer `target_main()` in new code when pairing it with `target_path()`.
@@ -496,14 +951,28 @@ impl<T: DomainReason> StructError<T> {
 
     pub fn path_segments(&self) -> Vec<String> {
         let mut path = Vec::new();
+        let mut pending_locators: Vec<String> = Vec::new();
+
         for ctx in self.context.iter().rev() {
-            let segments = if !ctx.path().is_empty() {
-                ctx.path().to_vec()
-            } else if let Some(target) = ctx.target().clone() {
-                vec![target]
-            } else {
-                Vec::new()
-            };
+            let locator_only = ctx.action().is_none()
+                && ctx.target().is_none()
+                && ctx.locator().is_some()
+                && ctx.path().len() <= 1;
+
+            if locator_only {
+                if let Some(locator) = ctx.locator().clone() {
+                    pending_locators.push(locator);
+                }
+                continue;
+            }
+
+            let mut segments = ctx.normalized_path_segments();
+
+            for locator in pending_locators.drain(..).rev() {
+                if segments.last() != Some(&locator) {
+                    segments.push(locator);
+                }
+            }
 
             for segment in segments {
                 if path.last() != Some(&segment) {
@@ -511,6 +980,13 @@ impl<T: DomainReason> StructError<T> {
                 }
             }
         }
+
+        for locator in pending_locators.into_iter().rev() {
+            if path.last() != Some(&locator) {
+                path.push(locator);
+            }
+        }
+
         path
     }
 
@@ -607,11 +1083,22 @@ pub struct StructErrorBuilder<T: DomainReason> {
     detail: Option<String>,
     position: Option<String>,
     contexts: Vec<OperationContext>,
-    source: Option<BoxedSource>,
-    source_frames: Vec<SourceFrame>,
+    source_payload: Option<InternalSourcePayload>,
 }
 
 impl<T: DomainReason> StructErrorBuilder<T> {
+    fn with_internal_source(mut self, state: InternalSourceState) -> Self {
+        self.source_payload = Some(InternalSourcePayload::from_state(state));
+        self
+    }
+
+    pub fn attach_source<S>(self, source: S) -> Self
+    where
+        S: IntoSourcePayload,
+    {
+        self.with_internal_source(source.into_source_payload().into_internal_state())
+    }
+
     pub fn detail(mut self, detail: impl Into<String>) -> Self {
         self.detail = Some(detail.into());
         self
@@ -640,28 +1127,14 @@ impl<T: DomainReason> StructErrorBuilder<T> {
     where
         E: StdError + Send + Sync + 'static,
     {
-        self.source(source)
-    }
-
-    pub fn source<E>(mut self, source: E) -> Self
-    where
-        E: StdError + Send + Sync + 'static,
-    {
-        assert_non_struct_source(
-            std::any::type_name::<E>(),
-            "use source_struct(...) when attaching StructError sources",
-        );
-        self.source_frames = collect_source_frames_from(&source);
-        self.source = Some(Arc::new(source));
-        self
+        self.with_internal_source(InternalSourceState::from_std(source))
     }
 
     pub fn source_struct<R>(mut self, source: StructError<R>) -> Self
     where
         R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
     {
-        self.source_frames = collect_struct_error_source_frames(&source);
-        self.source = Some(Arc::new(source));
+        self = self.with_internal_source(InternalSourceState::from_struct(source));
         self
     }
 
@@ -671,8 +1144,7 @@ impl<T: DomainReason> StructErrorBuilder<T> {
             self.detail,
             self.position,
             self.contexts,
-            self.source,
-            self.source_frames,
+            self.source_payload,
         )
     }
 }
@@ -682,9 +1154,9 @@ impl<T: DomainReason> ErrorWith for StructError<T> {
         let desc = desc.into();
         let ctx_stack = Arc::make_mut(&mut self.imp.context);
         if ctx_stack.is_empty() {
-            ctx_stack.push(OperationContext::want(desc));
+            ctx_stack.push(OperationContext::from_target(desc));
         } else if let Some(x) = ctx_stack.last_mut() {
-            x.with_want(desc);
+            x.push_target_segment(desc);
         }
         self
     }
@@ -693,7 +1165,7 @@ impl<T: DomainReason> ErrorWith for StructError<T> {
         self
     }
 
-    fn with<C: Into<OperationContext>>(mut self, ctx: C) -> Self {
+    fn attach_context<C: Into<OperationContext>>(mut self, ctx: C) -> Self {
         let ctx = ctx.into();
         self.add_context(ctx);
         self
@@ -777,7 +1249,7 @@ mod tests {
         );
 
         // Serialize to JSON
-        let json_value = serde_json::to_value(&error).unwrap();
+        let json_value = serde_json::to_value(error.compat_serialize()).unwrap();
         println!("{json_value:#}");
         assert!(json_value.get("reason").is_some());
         assert!(json_value.get("detail").is_some());
@@ -803,7 +1275,7 @@ mod tests {
     fn test_struct_error_source_tracking() {
         let error = StructError::builder(TestDomainReason::TestError)
             .detail("high-level detail")
-            .source(OuterError { source: InnerError })
+            .source_std(OuterError { source: InnerError })
             .finish();
 
         assert_eq!(error.source_ref().unwrap().to_string(), "outer source");
@@ -816,14 +1288,14 @@ mod tests {
 
     #[test]
     fn test_struct_error_uses_outer_want_and_full_path() {
-        let mut outer = OperationContext::want("place_order");
+        let mut outer = OperationContext::doing("place_order");
+        outer.with_doing("read_order_payload");
+        outer.with_doing("parse_order");
         outer.record("order_id", "42");
 
-        let error = StructError::from(TestDomainReason::TestError)
-            .want("read_order_payload")
-            .want("parse_order")
-            .with(outer);
+        let error = StructError::from(TestDomainReason::TestError).attach_context(outer);
 
+        assert_eq!(error.action_main().as_deref(), Some("place_order"));
         assert_eq!(error.target_main().as_deref(), Some("place_order"));
         assert_eq!(error.target().as_deref(), Some("place_order"));
         assert_eq!(
@@ -845,10 +1317,68 @@ mod tests {
     }
 
     #[test]
+    fn test_errorwith_doing_and_at_write_v2_context_semantics() {
+        let error = StructError::from(TestDomainReason::TestError)
+            .doing("parse config")
+            .at("config.toml");
+
+        assert_eq!(error.action_main().as_deref(), Some("parse config"));
+        assert_eq!(error.locator_main().as_deref(), Some("config.toml"));
+        assert_eq!(error.target_main().as_deref(), Some("parse config"));
+        assert_eq!(
+            error.target_path().as_deref(),
+            Some("parse config / config.toml")
+        );
+        assert_eq!(
+            error.contexts()[0].action().as_deref(),
+            Some("parse config")
+        );
+        assert_eq!(
+            error.contexts()[1].locator().as_deref(),
+            Some("config.toml")
+        );
+    }
+
+    #[test]
+    fn test_errorwith_doing_and_at_match_single_context_compat_path_order() {
+        let split = StructError::from(TestDomainReason::TestError)
+            .doing("parse config")
+            .at("config.toml");
+
+        let mut combined_ctx = OperationContext::doing("parse config");
+        combined_ctx.with_at("config.toml");
+        let combined = StructError::from(TestDomainReason::TestError).attach_context(combined_ctx);
+
+        assert_eq!(split.target_path(), combined.target_path());
+        assert_eq!(split.path_segments(), combined.path_segments());
+    }
+
+    #[test]
+    fn test_errorwith_multiple_at_segments_preserve_locator_chain() {
+        let error = StructError::from(TestDomainReason::TestError)
+            .doing("parse config")
+            .at("tenant-a")
+            .at("config.toml");
+
+        assert_eq!(
+            error.target_path().as_deref(),
+            Some("parse config / tenant-a / config.toml")
+        );
+        assert_eq!(
+            error.path_segments(),
+            vec![
+                "parse config".to_string(),
+                "tenant-a".to_string(),
+                "config.toml".to_string()
+            ]
+        );
+    }
+
+    #[test]
     fn test_struct_error_display_chain() {
         let error = StructError::builder(TestDomainReason::TestError)
             .detail("high-level detail")
-            .source(OuterError { source: InnerError })
+            .source_std(OuterError { source: InnerError })
             .finish();
 
         assert_eq!(
@@ -877,10 +1407,10 @@ mod tests {
     fn test_struct_error_serialization_includes_source_summary() {
         let error = StructError::builder(TestDomainReason::TestError)
             .detail("high-level detail")
-            .source(OuterError { source: InnerError })
+            .source_std(OuterError { source: InnerError })
             .finish();
 
-        let json_value = serde_json::to_value(&error).unwrap();
+        let json_value = serde_json::to_value(error.compat_serialize()).unwrap();
         assert_eq!(
             json_value.get("source_message"),
             Some(&serde_json::Value::String("outer source".to_string()))
@@ -913,14 +1443,13 @@ mod tests {
 
     #[test]
     fn test_struct_error_serialization_includes_want_and_path() {
-        let mut outer = OperationContext::want("place_order");
+        let mut outer = OperationContext::doing("place_order");
+        outer.with_doing("read_order_payload");
         outer.record("order_id", "42");
 
-        let error = StructError::from(TestDomainReason::TestError)
-            .want("read_order_payload")
-            .with(outer);
+        let error = StructError::from(TestDomainReason::TestError).attach_context(outer);
 
-        let json_value = serde_json::to_value(&error).unwrap();
+        let json_value = serde_json::to_value(error.compat_serialize()).unwrap();
         assert_eq!(
             json_value.get("want"),
             Some(&serde_json::Value::String("place_order".to_string()))
@@ -934,17 +1463,30 @@ mod tests {
     }
 
     #[test]
+    fn test_struct_error_default_serialize_matches_explicit_compat_wrapper() {
+        let error = StructError::builder(TestDomainReason::TestError)
+            .detail("high-level detail")
+            .source_std(OuterError { source: InnerError })
+            .finish();
+
+        let via_default = serde_json::to_value(&error).unwrap();
+        let via_compat = serde_json::to_value(error.compat_serialize()).unwrap();
+
+        assert_eq!(via_default, via_compat);
+    }
+
+    #[test]
     fn test_struct_error_context_metadata_prefers_inner_context() {
-        let inner = OperationContext::want("load sink defaults")
+        let inner = OperationContext::doing("load sink defaults")
             .with_meta("config.kind", "sink_defaults")
             .with_meta("file.path", "/tmp/defaults.toml");
-        let outer = OperationContext::want("load infra sink routes")
+        let outer = OperationContext::doing("load infra sink routes")
             .with_meta("config.kind", "sink_route")
             .with_meta("config.group", "infra");
 
         let error = StructError::from(TestDomainReason::TestError)
-            .with(inner)
-            .with(outer);
+            .attach_context(inner)
+            .attach_context(outer);
 
         let metadata = error.context_metadata();
         assert_eq!(metadata.get_str("config.kind"), Some("sink_defaults"));
@@ -954,13 +1496,14 @@ mod tests {
 
     #[test]
     fn test_with_struct_source_preserves_source_context_metadata() {
-        let source = StructError::from(TestDomainReason::TestError).with(
-            OperationContext::want("load sink defaults").with_meta("config.kind", "sink_defaults"),
+        let source = StructError::from(TestDomainReason::TestError).attach_context(
+            OperationContext::doing("load sink defaults").with_meta("config.kind", "sink_defaults"),
         );
 
         let error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
             .with_struct_source(source);
 
+        assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Struct));
         assert_eq!(
             error.source_frames()[0].metadata.get_str("config.kind"),
             Some("sink_defaults")
@@ -968,15 +1511,24 @@ mod tests {
     }
 
     #[test]
+    fn test_with_std_source_marks_internal_source_kind() {
+        let error = StructError::from(TestDomainReason::TestError)
+            .with_std_source(std::io::Error::other("disk offline"));
+
+        assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Std));
+    }
+
+    #[test]
     fn test_builder_source_struct_preserves_source_context_metadata() {
-        let source = StructError::from(TestDomainReason::TestError).with(
-            OperationContext::want("load sink defaults").with_meta("config.kind", "sink_defaults"),
+        let source = StructError::from(TestDomainReason::TestError).attach_context(
+            OperationContext::doing("load sink defaults").with_meta("config.kind", "sink_defaults"),
         );
 
         let error = StructError::builder(TestDomainReason::Uvs(UvsReason::system_error()))
             .source_struct(source)
             .finish();
 
+        assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Struct));
         assert_eq!(
             error.source_frames()[0].metadata.get_str("config.kind"),
             Some("sink_defaults")
@@ -984,9 +1536,293 @@ mod tests {
     }
 
     #[test]
+    fn test_builder_source_std_marks_internal_source_kind() {
+        let error = StructError::builder(TestDomainReason::TestError)
+            .source_std(std::io::Error::other("disk offline"))
+            .finish();
+
+        assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Std));
+    }
+
+    #[test]
+    fn test_internal_source_payload_uses_distinct_std_and_struct_variants() {
+        let std_error = StructError::from(TestDomainReason::TestError)
+            .with_std_source(std::io::Error::other("disk offline"));
+        assert!(matches!(
+            std_error.imp.source_payload.as_ref().unwrap(),
+            InternalSourcePayload::Std { .. }
+        ));
+
+        let source = StructError::from(TestDomainReason::TestError)
+            .with_detail("inner detail")
+            .attach_context(
+                OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
+            );
+        let struct_error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
+            .with_struct_source(source);
+        assert!(matches!(
+            struct_error.imp.source_payload.as_ref().unwrap(),
+            InternalSourcePayload::Struct { .. }
+        ));
+    }
+
+    #[test]
+    fn test_public_source_payload_ref_exposes_std_source_read_only() {
+        let error = StructError::from(TestDomainReason::TestError)
+            .with_std_source(std::io::Error::other("disk offline"));
+
+        let payload = error.source_payload().expect("expected source payload");
+
+        assert_eq!(payload.kind(), SourcePayloadKind::Std);
+        assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Std));
+        assert_eq!(payload.source().to_string(), "disk offline");
+        assert_eq!(payload.root_cause().to_string(), "disk offline");
+        assert_eq!(payload.frames()[0].message, "disk offline");
+        assert_eq!(payload.source_chain(), vec!["disk offline".to_string()]);
+    }
+
+    #[test]
+    fn test_public_source_payload_ref_exposes_struct_source_read_only() {
+        let source = StructError::from(TestDomainReason::TestError)
+            .with_detail("repo layer failed")
+            .with_std_source(std::io::Error::other("db unavailable"));
+        let error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
+            .with_struct_source(source);
+
+        let payload = error.source_payload().expect("expected source payload");
+
+        assert_eq!(payload.kind(), SourcePayloadKind::Struct);
+        assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Struct));
+        assert_eq!(
+            payload.source().to_string(),
+            "[1001] test error\n  -> Details: repo layer failed\n  -> Source: db unavailable"
+        );
+        assert_eq!(payload.root_cause().to_string(), "db unavailable");
+        assert_eq!(
+            payload.source_chain(),
+            vec!["test error".to_string(), "db unavailable".to_string()]
+        );
+        assert_eq!(payload.frames()[0].reason.as_deref(), Some("test error"));
+        assert_eq!(
+            payload.frames()[0].detail.as_deref(),
+            Some("repo layer failed")
+        );
+    }
+
+    #[test]
+    fn test_attach_source_routes_std_source_payload() {
+        let error = StructError::from(TestDomainReason::TestError)
+            .attach_source(std::io::Error::other("disk offline"));
+
+        assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Std));
+        assert_eq!(error.source_ref().unwrap().to_string(), "disk offline");
+        assert_eq!(error.source_frames()[0].message, "disk offline");
+    }
+
+    #[test]
+    fn test_attach_source_routes_struct_source_payload() {
+        let source = StructError::from(TestDomainReason::TestError)
+            .with_detail("repo layer failed")
+            .with_std_source(std::io::Error::other("db unavailable"));
+        let error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
+            .attach_source(source);
+
+        assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Struct));
+        assert_eq!(
+            error.source_frames()[0].reason.as_deref(),
+            Some("test error")
+        );
+        assert_eq!(error.root_cause().unwrap().to_string(), "db unavailable");
+    }
+
+    #[test]
+    fn test_builder_attach_source_routes_std_source_payload() {
+        let error = StructError::builder(TestDomainReason::TestError)
+            .attach_source(std::io::Error::other("disk offline"))
+            .finish();
+
+        assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Std));
+        assert_eq!(error.source_ref().unwrap().to_string(), "disk offline");
+    }
+
+    #[test]
+    fn test_internal_into_std_bridge_preserves_display_and_source_chain() {
+        let structured = StructError::from(TestDomainReason::TestError)
+            .with_detail("repo layer failed")
+            .with_std_source(std::io::Error::other("db unavailable"));
+
+        let bridged = internal_into_std_bridge(structured);
+
+        assert_eq!(
+            bridged.to_string(),
+            "[1001] test error\n  -> Details: repo layer failed\n  -> Source: db unavailable"
+        );
+        assert_eq!(
+            StdError::source(bridged.as_ref()).unwrap().to_string(),
+            "db unavailable"
+        );
+    }
+
+    #[test]
+    fn test_internal_as_std_bridge_matches_struct_error_std_view() {
+        let structured = StructError::from(TestDomainReason::TestError)
+            .with_detail("repo layer failed")
+            .with_std_source(std::io::Error::other("db unavailable"));
+
+        let bridged = structured.as_std();
+        let bridged_std: &dyn StdError = &bridged;
+
+        assert_eq!(bridged.to_string(), structured.to_string());
+        assert_eq!(
+            StdError::source(bridged_std).unwrap().to_string(),
+            "db unavailable"
+        );
+    }
+
+    #[test]
+    fn test_public_owned_std_bridge_preserves_display_source_and_inner() {
+        let structured = StructError::from(TestDomainReason::TestError)
+            .with_detail("repo layer failed")
+            .with_std_source(std::io::Error::other("db unavailable"));
+
+        let bridged = structured.clone().into_std();
+
+        assert_eq!(bridged.to_string(), structured.to_string());
+        assert_eq!(
+            StdError::source(&bridged).unwrap().to_string(),
+            "db unavailable"
+        );
+        assert_eq!(bridged.inner().detail(), structured.detail());
+        assert_eq!(bridged.into_struct(), structured);
+    }
+
+    #[test]
+    fn test_owned_std_bridge_from_struct_error_matches_into_std() {
+        let structured = StructError::from(TestDomainReason::TestError)
+            .with_detail("repo layer failed")
+            .with_std_source(std::io::Error::other("db unavailable"));
+
+        let via_from = OwnedStdStructError::from(structured.clone());
+        let via_method = structured.into_std();
+
+        assert_eq!(via_from.to_string(), via_method.to_string());
+        assert_eq!(
+            StdError::source(&via_from).unwrap().to_string(),
+            StdError::source(&via_method).unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn test_owned_std_bridge_into_boxed_preserves_display_and_source() {
+        let structured = StructError::from(TestDomainReason::TestError)
+            .with_detail("repo layer failed")
+            .with_std_source(std::io::Error::other("db unavailable"));
+
+        let boxed = structured.clone().into_std().into_boxed();
+
+        assert_eq!(boxed.to_string(), structured.to_string());
+        assert_eq!(boxed.source().unwrap().to_string(), "db unavailable");
+    }
+
+    #[test]
+    fn test_struct_error_into_boxed_std_preserves_display_and_source() {
+        let structured = StructError::from(TestDomainReason::TestError)
+            .with_detail("repo layer failed")
+            .with_std_source(std::io::Error::other("db unavailable"));
+
+        let boxed = structured.clone().into_boxed_std();
+
+        assert_eq!(boxed.to_string(), structured.to_string());
+        assert_eq!(boxed.source().unwrap().to_string(), "db unavailable");
+    }
+
+    #[test]
+    fn test_dyn_std_bridge_preserves_display_source_and_structured_frames() {
+        let structured = StructError::from(TestDomainReason::TestError)
+            .with_detail("repo layer failed")
+            .with_std_source(std::io::Error::other("db unavailable"));
+
+        let bridged = structured.clone().into_dyn_std();
+
+        assert_eq!(bridged.to_string(), structured.to_string());
+        assert_eq!(
+            StdError::source(&bridged).unwrap().to_string(),
+            "db unavailable"
+        );
+        assert_eq!(bridged.source_frames()[0].message, "test error");
+        assert_eq!(
+            bridged.source_frames()[0].detail.as_deref(),
+            structured.detail().as_deref()
+        );
+    }
+
+    #[test]
+    fn test_dyn_std_bridge_from_owned_std_bridge_matches_struct_error_conversion() {
+        let structured = StructError::from(TestDomainReason::TestError)
+            .with_detail("repo layer failed")
+            .with_std_source(std::io::Error::other("db unavailable"));
+
+        let via_owned = OwnedDynStdStructError::from(structured.clone().into_std());
+        let via_struct = structured.into_dyn_std();
+
+        assert_eq!(via_owned.to_string(), via_struct.to_string());
+        assert_eq!(
+            StdError::source(&via_owned).unwrap().to_string(),
+            StdError::source(&via_struct).unwrap().to_string()
+        );
+        assert_eq!(via_owned.source_frames(), via_struct.source_frames());
+    }
+
+    #[test]
+    fn test_dyn_std_bridge_into_boxed_preserves_display_and_source() {
+        let structured = StructError::from(TestDomainReason::TestError)
+            .with_detail("repo layer failed")
+            .with_std_source(std::io::Error::other("db unavailable"));
+
+        let boxed = structured.clone().into_dyn_std().into_boxed();
+
+        assert_eq!(boxed.to_string(), structured.to_string());
+        assert_eq!(boxed.source().unwrap().to_string(), "db unavailable");
+    }
+
+    #[test]
+    fn test_public_std_ref_bridge_preserves_display_and_source() {
+        let structured = StructError::from(TestDomainReason::TestError)
+            .with_detail("repo layer failed")
+            .with_std_source(std::io::Error::other("db unavailable"));
+
+        let bridged = structured.as_std();
+        let bridged_std: &dyn StdError = &bridged;
+
+        assert_eq!(bridged.to_string(), structured.to_string());
+        assert_eq!(
+            StdError::source(bridged_std).unwrap().to_string(),
+            "db unavailable"
+        );
+    }
+
+    #[test]
+    fn test_std_ref_bridge_from_struct_error_matches_as_std_and_exposes_inner() {
+        let structured = StructError::from(TestDomainReason::TestError)
+            .with_detail("repo layer failed")
+            .with_std_source(std::io::Error::other("db unavailable"));
+
+        let via_from = StdStructRef::from(&structured);
+        let via_method = structured.as_std();
+
+        assert_eq!(via_from.to_string(), via_method.to_string());
+        assert_eq!(
+            StdError::source(&via_from).unwrap().to_string(),
+            StdError::source(&via_method).unwrap().to_string()
+        );
+        assert_eq!(via_from.inner().detail(), structured.detail());
+        assert_eq!(via_from.inner().reason(), structured.reason());
+    }
+
+    #[test]
     fn test_with_struct_source_keeps_nested_source_frame_metadata() {
-        let leaf = StructError::from(TestDomainReason::TestError).with(
-            OperationContext::want("parse route")
+        let leaf = StructError::from(TestDomainReason::TestError).attach_context(
+            OperationContext::doing("parse route")
                 .with_meta("config.kind", "sink_route")
                 .with_meta("config.group", "infra"),
         );
@@ -1008,12 +1844,14 @@ mod tests {
 
     #[test]
     fn test_root_and_source_metadata_can_be_read_separately() {
-        let source = StructError::from(TestDomainReason::TestError).with(
-            OperationContext::want("load sink defaults").with_meta("config.kind", "sink_defaults"),
+        let source = StructError::from(TestDomainReason::TestError).attach_context(
+            OperationContext::doing("load sink defaults").with_meta("config.kind", "sink_defaults"),
         );
 
         let error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
-            .with(OperationContext::want("start engine").with_meta("component.name", "engine"))
+            .attach_context(
+                OperationContext::doing("start engine").with_meta("component.name", "engine"),
+            )
             .with_struct_source(source);
 
         assert_eq!(
@@ -1028,8 +1866,8 @@ mod tests {
 
     #[test]
     fn test_display_does_not_include_metadata() {
-        let error = StructError::from(TestDomainReason::TestError).with(
-            OperationContext::want("load sink defaults")
+        let error = StructError::from(TestDomainReason::TestError).attach_context(
+            OperationContext::doing("load sink defaults")
                 .with_meta("config.kind", "sink_defaults")
                 .with_meta("config.group", "infra"),
         );
@@ -1067,8 +1905,8 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_source_frame_serialization_includes_metadata() {
-        let error = StructError::from(TestDomainReason::TestError).with(
-            OperationContext::want("load sink defaults")
+        let error = StructError::from(TestDomainReason::TestError).attach_context(
+            OperationContext::doing("load sink defaults")
                 .with_meta("config.kind", "sink_defaults")
                 .with_meta("parse.line", 1u32),
         );
@@ -1084,27 +1922,5 @@ mod tests {
             json_value["source_frames"][0]["metadata"]["parse.line"],
             serde_json::json!(1)
         );
-    }
-
-    #[test]
-    fn test_with_source_debug_asserts_for_struct_error() {
-        let source = StructError::from(TestDomainReason::TestError);
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            StructError::from(TestDomainReason::Uvs(UvsReason::system_error())).with_source(source)
-        }));
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_builder_source_debug_asserts_for_struct_error() {
-        let source = StructError::from(TestDomainReason::TestError);
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            StructError::builder(TestDomainReason::Uvs(UvsReason::system_error()))
-                .source(source)
-                .finish()
-        }));
-
-        assert!(result.is_err());
     }
 }
