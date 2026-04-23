@@ -12,6 +12,8 @@
 6. [与 thiserror 的配合](./thiserror-comparison.md)
 7. [日志说明](./LOGGING.md)
 
+历史 RFC、阶段计划和设计草稿已移到 [archive/rfc](./archive/rfc/README.md)。这些归档文档仅用于追溯设计讨论，不作为当前 API 使用说明。
+
 ## 当前导入约定
 
 - 新代码优先使用 `orion_error::prelude::*` 或 crate root 小集合导入。
