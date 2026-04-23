@@ -7,32 +7,39 @@ extern crate self as orion_error;
 #[cfg(feature = "derive")]
 pub use orion_error_derive::{ErrorCode, ErrorIdentityProvider, OrionError};
 
+pub use core::{DefaultErrorPolicy, OperationContext, StructError, UvsReason};
+pub use traits::{ErrorWith, ErrorWrapAs, IntoAs};
+
+#[doc(hidden)]
 pub use core::ErrStrategy;
+#[doc(hidden)]
 pub use core::{
-    print_error, print_error_zh, ConfErrReason, DefaultErrorPolicy, DomainReason, ErrorCategory,
-    ErrorCliResponse, ErrorCode, ErrorHttpResponse, ErrorIdentity, ErrorIdentityProvider,
-    ErrorLogResponse, ErrorMetadata, ErrorPolicy, ErrorPolicyDecision, ErrorPolicyInput,
-    ErrorProtocolSnapshot, ErrorRenderer, ErrorReport, ErrorRpcResponse, ErrorSnapshot,
-    IntoSourcePayload, MetadataValue, OwnedDynStdStructError, OwnedStdStructError, RedactPolicy,
-    RenderMode, SnapshotContextFrame, SnapshotSourceFrame, SourceFrame, SourcePayload,
-    SourcePayloadKind, SourcePayloadRef, StableErrorSnapshot, StableSnapshotContextFrame,
-    StableSnapshotSourceFrame, StdStructRef, StructErrorTrait, TextReportRenderer, UvsFrom,
-    UvsReason, Visibility, CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS,
-    LOG_ERROR_RESPONSE_FIELDS, POLICY_DECISION_FIELDS, POLICY_SNAPSHOT_TOP_LEVEL_FIELDS,
-    RPC_ERROR_RESPONSE_FIELDS, STABLE_SNAPSHOT_CONTEXT_FIELDS, STABLE_SNAPSHOT_SCHEMA_VERSION,
-    STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS, STABLE_SNAPSHOT_TOP_LEVEL_FIELDS,
+    print_error, print_error_zh, ConfErrReason, DomainReason, ErrorCategory, ErrorCliResponse,
+    ErrorCode, ErrorHttpResponse, ErrorIdentity, ErrorIdentityProvider, ErrorLogResponse,
+    ErrorMetadata, ErrorPolicy, ErrorPolicyDecision, ErrorPolicyInput, ErrorProtocolSnapshot,
+    ErrorRenderer, ErrorReport, ErrorRpcResponse, ErrorSnapshot, IntoSourcePayload, MetadataValue,
+    OwnedDynStdStructError, OwnedStdStructError, RedactPolicy, RenderMode, SnapshotContextFrame,
+    SnapshotSourceFrame, SourceFrame, SourcePayload, SourcePayloadKind, SourcePayloadRef,
+    StableErrorSnapshot, StableSnapshotContextFrame, StableSnapshotSourceFrame, StdStructRef,
+    StructErrorTrait, TextReportRenderer, UvsFrom, Visibility, CLI_ERROR_RESPONSE_FIELDS,
+    HTTP_ERROR_RESPONSE_FIELDS, LOG_ERROR_RESPONSE_FIELDS, POLICY_DECISION_FIELDS,
+    POLICY_SNAPSHOT_TOP_LEVEL_FIELDS, RPC_ERROR_RESPONSE_FIELDS, STABLE_SNAPSHOT_CONTEXT_FIELDS,
+    STABLE_SNAPSHOT_SCHEMA_VERSION, STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS,
+    STABLE_SNAPSHOT_TOP_LEVEL_FIELDS,
 };
-pub use core::{ContextRecord, OperationContext, OperationScope, WithContext};
-pub use core::{StructError, StructErrorBuilder};
+#[doc(hidden)]
+pub use core::{ContextRecord, OperationScope, StructErrorBuilder, WithContext};
+#[doc(hidden)]
 pub use testcase::{
     assert_err_category, assert_err_code, assert_err_identity, assert_err_operation,
     assert_err_path, TestAssert, TestAssertWithMsg,
 };
-pub use traits::{
-    raw_source, ConvStructError, ErrorConv, ErrorWith, ErrorWrap, ErrorWrapAs, IntoAs, RawSource,
-    RawStdError, ToStructError, WrapStructError, WrapStructErrorAs,
-};
+#[doc(hidden)]
+pub use traits::{raw_source, ConvStructError, ErrorConv, RawSource, RawStdError, ToStructError};
+#[doc(hidden)]
 pub use traits::{ErrorOwe, ErrorOweBase, ErrorOweSource, ErrorOweSourceBase};
+#[doc(hidden)]
+pub use traits::{ErrorWrap, WrapStructError, WrapStructErrorAs};
 
 /// Primary-path traits and types for convenient wildcard imports.
 ///
@@ -46,12 +53,12 @@ pub mod prelude {
     pub use crate::{DefaultErrorPolicy, ErrorWith, ErrorWrapAs, IntoAs, StructError};
 }
 
-/// Full wildcard imports for advanced examples and migration work.
+/// Wildcard imports for advanced examples and migration work.
 ///
 /// Prefer [`prelude`] for new application code. Use this module when working on
 /// protocol projections, snapshot/schema checks, bridge internals, or broad
 /// migration tests.
-pub mod full_prelude {
+pub mod advanced_prelude {
     #[cfg(feature = "derive")]
     pub use crate::OrionError;
     pub use crate::{
@@ -70,6 +77,15 @@ pub mod full_prelude {
         RPC_ERROR_RESPONSE_FIELDS, STABLE_SNAPSHOT_CONTEXT_FIELDS, STABLE_SNAPSHOT_SCHEMA_VERSION,
         STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS, STABLE_SNAPSHOT_TOP_LEVEL_FIELDS,
     };
+}
+
+/// Deprecated name for [`advanced_prelude`].
+///
+/// Prefer `advanced_prelude` so wildcard imports do not look like the default
+/// or "more complete" application path.
+#[doc(hidden)]
+pub mod full_prelude {
+    pub use crate::advanced_prelude::*;
 }
 
 /// Compatibility wildcard imports for legacy conversion APIs.
@@ -150,10 +166,12 @@ pub mod reason {
 
 /// Conversion traits for the current primary paths.
 pub mod conversion {
-    pub use crate::{
-        ConvStructError, ErrorConv, ErrorWith, ErrorWrap, ErrorWrapAs, IntoAs, ToStructError,
-        WrapStructError, WrapStructErrorAs,
-    };
+    pub use crate::{ErrorConv, ErrorWith, ErrorWrapAs, IntoAs};
+}
+
+/// Advanced conversion helpers that are not part of the default import path.
+pub mod conversion_ext {
+    pub use crate::{ConvStructError, ToStructError, WrapStructErrorAs};
 }
 
 /// Grouped conversion and context extension traits.

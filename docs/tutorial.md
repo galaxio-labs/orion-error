@@ -25,7 +25,7 @@ orion-error = { version = "0.7.0", features = ["tracing"] }
 - `orion_error::prelude::*`：当前主路径通配导入，只包含 `OrionError`、`StructError`、`IntoAs`、`ErrorWith`、`ErrorWrapAs`、`DefaultErrorPolicy`
 - crate root 小集合导入：例如 `use orion_error::{StructError, OrionError};`，适合生产代码显式控制依赖
 - `orion_error::runtime::*` / `conversion::*` / `reason::*` / `snapshot::*` / `report::*` / `bridge::*`：按职责分层导入入口，适合需要明确 runtime / snapshot / report 边界的模块
-- `orion_error::full_prelude::*`：只用于高级协议/schema 检查和迁移测试，不作为业务默认入口
+- `orion_error::advanced_prelude::*`：只用于高级协议/schema 检查和迁移测试，不作为业务默认入口
 - crate root 下的 compat prelude / compat traits 模块：只用于兼容旧的 `owe(...)` 调用路径
 
 如果是新代码，优先使用 `orion_error::prelude::*` 加少量分层导入，或使用 crate root 小集合导入；不要把业务代码的 import 结构绑定到版本阶段命名上。

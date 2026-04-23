@@ -69,8 +69,8 @@ fn test_layered_modules_and_root_prelude_compile() {
 }
 
 #[test]
-fn test_full_prelude_exports_cli_projection_types_and_constants() {
-    use orion_error::full_prelude::*;
+fn test_advanced_prelude_exports_cli_projection_types_and_constants() {
+    use orion_error::advanced_prelude::*;
 
     let cli = ErrorCliResponse {
         code: "sys.io_error".to_string(),

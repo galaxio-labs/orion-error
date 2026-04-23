@@ -1,7 +1,6 @@
 use derive_more::From;
 use orion_error::{
-    DefaultErrorPolicy, ErrorConv, ErrorWith, OperationContext, OrionError, StructError,
-    ToStructError, UvsReason,
+    DefaultErrorPolicy, ErrorConv, ErrorWith, OperationContext, OrionError, StructError, UvsReason,
 };
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
@@ -117,14 +116,12 @@ impl OrderService {
 
     fn parse_order(user_id: u32, amount: u64, raw_order: &str) -> Result<OrderDraft, ParseError> {
         if raw_order.trim().is_empty() {
-            return Err(ParseReason::InvalidText
-                .to_err()
+            return Err(StructError::from(ParseReason::InvalidText)
                 .with_detail("order text must not be empty"));
         }
 
         if amount == 0 {
-            return Err(ParseReason::InvalidAmount
-                .to_err()
+            return Err(StructError::from(ParseReason::InvalidAmount)
                 .with_detail("amount must be greater than zero"));
         }
 
@@ -139,8 +136,7 @@ impl OrderService {
         if user_id == 42 {
             Ok(())
         } else {
-            Err(UserReason::NotFound
-                .to_err()
+            Err(StructError::from(UserReason::NotFound)
                 .with_detail(format!("user {user_id} does not exist")))
         }
     }
@@ -148,8 +144,7 @@ impl OrderService {
     fn ensure_balance(amount: u64) -> Result<(), OrderError> {
         let balance = 300;
         if amount > balance {
-            Err(OrderReason::InsufficientFunds
-                .to_err()
+            Err(StructError::from(OrderReason::InsufficientFunds)
                 .with_detail(format!("balance={balance}, required={amount}")))
         } else {
             Ok(())
@@ -163,12 +158,10 @@ impl OrderService {
 
 fn persist_order(item: &str) -> Result<(), StoreError> {
     write_impl(item).map_err(|err| match err.kind() {
-        std::io::ErrorKind::OutOfMemory => StoreReason::StorageFull
-            .to_err()
+        std::io::ErrorKind::OutOfMemory => StructError::from(StoreReason::StorageFull)
             .with_detail("storage quota exceeded")
             .with_source(err),
-        _ => StoreReason::from(UvsReason::system_error())
-            .to_err()
+        _ => StructError::from(StoreReason::from(UvsReason::system_error()))
             .with_detail("write order record failed")
             .with_source(err),
     })

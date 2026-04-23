@@ -56,7 +56,7 @@ Import guidance:
 
 - `orion_error::prelude::*` is the primary convenience wildcard import and intentionally exports only the main path: `OrionError`, `StructError`, `IntoAs`, `ErrorWith`, `ErrorWrapAs`, and `DefaultErrorPolicy`.
 - Small root imports such as `orion_error::{StructError, OrionError}` are preferred when you want explicit imports.
-- `orion_error::full_prelude::*` is only for advanced protocol/schema checks and migration tests.
+- `orion_error::advanced_prelude::*` is only for advanced protocol/schema checks and migration tests.
 - Layered imports are available when code needs stricter responsibility boundaries:
   - `orion_error::runtime::*`
   - `orion_error::conversion::*`
