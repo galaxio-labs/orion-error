@@ -1,6 +1,7 @@
 use orion_error::{
-    assert_err_identity, assert_err_operation, assert_err_path, v2, DefaultErrorPolicy,
-    ErrorCategory, ErrorRenderer, ErrorWith, IntoAs, RenderMode, TextReportRenderer, UvsReason,
+    assert_err_identity, assert_err_operation, assert_err_path, DefaultErrorPolicy, ErrorCategory,
+    ErrorRenderer, ErrorWith, IntoAs, OperationContext, RenderMode, StructError,
+    TextReportRenderer, UvsReason, Visibility,
 };
 
 #[test]
@@ -55,31 +56,30 @@ fn test_root_exports_support_v3_identity_and_policy_flow() {
 }
 
 #[test]
-fn test_v2_namespace_exports_support_v3_identity_and_policy_flow() {
-    let err = v2::conversion::ErrorWith::with_context(
-        v2::runtime::StructError::from(v2::reason::UvsReason::business_error())
-            .with_detail("order state invalid"),
-        v2::runtime::OperationContext::doing("validate order"),
+fn test_root_exports_support_business_identity_and_policy_flow() {
+    let err = ErrorWith::with_context(
+        StructError::from(UvsReason::business_error()).with_detail("order state invalid"),
+        OperationContext::doing("validate order"),
     );
 
     let identity = err.identity_snapshot();
     let view = err.policy_report();
-    let decision = view.decision(&v2::report::DefaultErrorPolicy);
-    let snapshot = err.policy_snapshot(&v2::report::DefaultErrorPolicy);
-    let http = err.http_response(&v2::report::DefaultErrorPolicy);
-    let cli = err.cli_response(&v2::report::DefaultErrorPolicy);
-    let log = err.log_response(&v2::report::DefaultErrorPolicy);
-    let rpc = err.rpc_response(&v2::report::DefaultErrorPolicy);
-    let renderer = v2::report::TextReportRenderer::new(v2::report::RenderMode::Verbose);
+    let decision = view.decision(&DefaultErrorPolicy);
+    let snapshot = err.policy_snapshot(&DefaultErrorPolicy);
+    let http = err.http_response(&DefaultErrorPolicy);
+    let cli = err.cli_response(&DefaultErrorPolicy);
+    let log = err.log_response(&DefaultErrorPolicy);
+    let rpc = err.rpc_response(&DefaultErrorPolicy);
+    let renderer = TextReportRenderer::new(RenderMode::Verbose);
     let rendered = view.render_with(renderer);
 
     assert_eq!(identity.code, "biz.business_error");
-    assert_eq!(identity.category, v2::reason::ErrorCategory::Biz);
+    assert_eq!(identity.category, ErrorCategory::Biz);
     assert_err_operation(&err, "validate order");
     assert_err_path(&err, "validate order");
     assert_eq!(view.identity(), &identity);
     assert_eq!(decision.http_status, 400);
-    assert_eq!(decision.visibility, v2::report::Visibility::Public);
+    assert_eq!(decision.visibility, Visibility::Public);
     assert!(decision.default_hints.is_empty());
     assert!(!decision.retryable);
     assert_eq!(snapshot.identity, identity);

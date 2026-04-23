@@ -7,8 +7,8 @@
 
 导入约定：
 
-- 新代码优先 `use orion_error::v2::*;` 或 `use orion_error::v2::prelude::*;`
-- 维护 V1 风格代码时，优先 `use orion_error::v1::*;`
+- 新代码优先 `use orion_error::prelude::*;` 或 crate root 小集合导入
+- 需要明确职责边界时，再使用 `runtime` / `conversion` / `reason` / `report` 等分层模块
 - 只按 trait 分组导入时可用 `use orion_error::traits_ext::*;`
 - 旧的 `owe(...)` / `err_wrap(...)` 兼容导入请显式从 compat prelude / compat traits 模块进入
 
@@ -69,7 +69,7 @@ fn handle() -> Result<(), StructError<AppError>> {
 
 ## 什么时候用 `into_as(...)`，什么时候保留 `owe(...)`
 
-- `into_as(...)`：V1 默认推荐，适合 `E: std::error::Error` 第一次进入结构化体系
+- `into_as(...)`：当前默认推荐，适合 `E: std::error::Error` 第一次进入结构化体系
 - `owe(...)`：兼容路径，只保留字符串 detail，适合 `E: Display`
 
 如果你关心：
@@ -88,10 +88,10 @@ fn handle() -> Result<(), StructError<AppError>> {
 
 兼容说明：
 
-- `owe_*_source()` 已从当前主代码移除；新代码优先使用 `into_as(reason, detail)`
+- `owe_*_source()` 仍保留用于 `0.6.3` 已公开语义的兼容维护；新代码优先使用 `into_as(reason, detail)`
 - `err_wrap(...)` 仍然保留，但已进入 `0.7.0` deprecated path，属于 compat/bridge 层
 - `with_source(...)` 建议改成 `with_std_source(...)` 或 `with_struct_source(...)`
-- 如果旧代码必须继续导入这些 compat helper，请和 `prelude::*` 分开写，避免把 V1 主路径和兼容层混成一个默认接口
+- 如果旧代码必须继续导入这些 compat helper，请和 `prelude::*` 分开写，避免把当前主路径和兼容层混成一个默认接口
 
 ## 实践建议
 

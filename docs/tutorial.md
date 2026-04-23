@@ -1,8 +1,6 @@
 # 使用教程
 
-本教程面向 `orion-error 0.7.0`，以当前源码与测试为准。
-
-在调整本教程中的主路径、边界约束和评审标准前，先以 [V1 修复与评审基线](./v1-fix-and-review-plan.md) 为准。
+本教程面向 `orion-error` 当前公开 API，以当前源码与测试为准。
 
 ## 安装
 
@@ -24,18 +22,14 @@ orion-error = { version = "0.7.0", features = ["tracing"] }
 
 ## 导入约定
 
-- `orion_error::prelude::*`：V1 主路径通配导入，包含 `IntoAs`、`ErrorWrapAs`、`ErrorConv`、`ErrorWith` 等推荐 API
-- `orion_error::v1::*`：V1 显式版本命名空间
-- `orion_error::v1::prelude::*`：V1 主路径通配导入
-- `orion_error::v1` 下的 compat prelude 模块：V1 兼容路径导入
-- `orion_error::v2::*`：V2 分层根命名空间
-- `orion_error::v2::prelude::*`：V2 便捷通配导入
-- `orion_error::runtime::*` / `conversion::*` / `reason::*` / `snapshot::*` / `report::*` / `bridge::*`：V2 分层导入入口，适合新代码按职责分层导入
-- `orion_error::traits_ext::*`：如果你只想按 trait 分组导入 V1 主路径扩展 trait，可以用这一层
+- `orion_error::prelude::*`：当前主路径通配导入，适合示例、教程和小型业务模块
+- crate root 小集合导入：例如 `use orion_error::{StructError, UvsReason, ErrorIdentityProvider};`，适合生产代码显式控制依赖
+- `orion_error::runtime::*` / `conversion::*` / `reason::*` / `snapshot::*` / `report::*` / `bridge::*`：按职责分层导入入口，适合需要明确 runtime / snapshot / report 边界的模块
+- `orion_error::traits_ext::*`：如果你只想按 trait 分组导入当前主路径扩展 trait，可以用这一层
 - crate root 下的 compat prelude / compat traits 模块：只用于兼容旧的 `owe(...)` 调用路径
 
-如果是新代码，优先使用 `orion_error::v2::*` 或 `orion_error::v2::prelude::*`；不要把 compat 导入和 `prelude::*` 混成一个体系。
-如果是维护 V1 风格旧代码，优先用 `orion_error::v1::*`，不要继续依赖 root 级历史别名。
+如果是新代码，优先使用 `orion_error::prelude::*` 或 crate root 小集合导入；不要把业务代码的 import 结构绑定到版本阶段命名上。
+如果是维护旧代码，兼容 helper 请显式从 `orion_error::compat_prelude::*` 或 `orion_error::compat_traits::*` 导入。
 
 ## 一分钟上手
 
@@ -81,12 +75,12 @@ fn load_user(user_id: u64) -> Result<String, StructError<UserError>> {
 - 领域错误一般不必手写 `impl DomainReason`；满足 `From<UvsReason> + Display + PartialEq` 即自动实现。
 - `record_field(...)` / `record_meta(...)` 是当前推荐的上下文字段写法。
 - `into_as(...)` 是普通错误进入结构化体系的主路径。
-- `doing(...)` 现在会写入 V2 的 `action` 语义字段；与 `with_context(&ctx)` 组合时，最外层上下文仍决定主语义边界。
+- `doing(...)` 会写入 `action` 语义字段；与 `with_context(&ctx)` 组合时，最外层上下文仍决定主语义边界。
 - 如果上游已经是 `StructError<_>`，优先用 `err_conv()` 或 `wrap_as(...)`，不要再回退到兼容态的 `owe(...)`。
 
-## V3 最小消费接口
+## 协议消费接口
 
-当前版本已经提供一组可直接使用的 V3 最小协议接口，用于稳定断言和统一出口消费：
+当前版本已经提供一组可直接使用的协议接口，用于稳定断言和统一出口消费：
 
 - `assert_err_code(...)`
 - `assert_err_category(...)`
@@ -99,6 +93,8 @@ fn load_user(user_id: u64) -> Result<String, StructError<UserError>> {
 - `StructError::cli_response(...)`
 - `StructError::log_response(...)`
 - `StructError::rpc_response(...)`
+- `StructError::render_user_debug(...)`
+- `StructError::render_user_debug_redacted(...)`
 
 示例：
 
@@ -107,7 +103,7 @@ use orion_error::{
     assert_err_identity,
     conversion::{ErrorWith, IntoAs},
     reason::{ErrorCategory, UvsReason},
-    report::{DefaultErrorPolicy, RenderMode, TextReportRenderer},
+    report::DefaultErrorPolicy,
     runtime::OperationContext,
 };
 
@@ -126,6 +122,7 @@ let http = err.http_response(&DefaultErrorPolicy);
 let cli = err.cli_response(&DefaultErrorPolicy);
 let log = err.log_response(&DefaultErrorPolicy);
 let rpc = err.rpc_response(&DefaultErrorPolicy);
+let user_debug = err.render_user_debug(&DefaultErrorPolicy);
 
 assert_eq!(identity.code, "sys.io_error");
 assert_eq!(policy_view.http_status(&DefaultErrorPolicy), 500);
@@ -137,9 +134,8 @@ assert_eq!(log.code, "sys.io_error");
 assert_eq!(log.reason, "system error");
 assert_eq!(rpc.code, "sys.io_error");
 assert_eq!(rpc.detail, None);
-
-let rendered = policy_view.render_with(TextReportRenderer::new(RenderMode::Compact));
-assert!(rendered.contains("system error"));
+assert!(user_debug.contains("code          : sys.io_error (Sys)"));
+assert!(user_debug.contains("detail        : read config failed"));
 ```
 
 ## 1. 定义领域错误
@@ -219,8 +215,8 @@ use orion_error::{
 };
 
 let mut ctx = OperationContext::doing("place_order");
-ctx.record("order_id", "A-1001");
-ctx.record("user_id", "42");
+ctx.record_field("order_id", "A-1001");
+ctx.record_field("user_id", "42");
 
 let result = check_inventory()
     .doing("check inventory")
@@ -232,7 +228,8 @@ let result = check_inventory()
 - `OperationContext::doing(...)` / `OperationContext::at(...)` 会分别写入 `action` / `locator`
 - 错误链上的 `.doing(...)` / `.at(...)` 也会走同一套结构化上下文语义
 - `target` / `path` 仍作为兼容投影保留，便于旧代码和旧导出继续读取
-- `record(...)` 写关键诊断键值
+- `record_field(...)` 写展示型诊断键值
+- `record_meta(...)` 写结构化 metadata
 - `detail(...)` / `with_detail(...)` 写补充调试说明
 
 上面的例子里，最终错误会体现为：
@@ -262,7 +259,7 @@ call_http_service()
     .into_as(UvsReason::network_error(), "call http service failed")?;
 ```
 
-这是 V1 推荐主路径。
+这是当前推荐主路径。
 
 ### 兼容路径：只保留 detail
 
@@ -312,12 +309,12 @@ fn service_call() -> Result<(), StructError<UvsReason>> {
 }
 ```
 
-这种方式更适合作为 V1 的公开主路径，用于 service/repository/infrastructure 分层包装。
+这种方式更适合作为当前公开主路径，用于 service/repository/infrastructure 分层包装。
 
 兼容说明：
 
 - `err_wrap(...)` 仍然保留
-- 但它属于兼容入口，不属于 V1 推荐主路径
+- 但它属于兼容入口，不属于当前推荐主路径
 
 ### 推荐决策顺序
 
@@ -350,12 +347,12 @@ use orion_error::runtime::ContextRecord;
 
 fn process_order(order_id: &str) -> Result<(), MyError> {
     let mut ctx = op_context!("process_order").with_auto_log();
-    ctx.record("order_id", order_id);
+    ctx.record_field("order_id", order_id);
     ctx.info("starting");
 
     {
         let mut scope = ctx.scoped_success();
-        scope.record("phase", "validation");
+        scope.record_field("phase", "validation");
         validate(order_id)?;
     }
 
@@ -380,7 +377,8 @@ fn process_order(order_id: &str) -> Result<(), MyError> {
 
 导入建议：
 
-- 新代码优先 `use orion_error::v2::*;` 或 `use orion_error::v2::prelude::*;`
+- 新代码优先 `use orion_error::prelude::*;` 或 crate root 小集合导入
+- 需要明确职责边界时，再使用 `runtime` / `conversion` / `reason` / `report` 等分层模块
 - 如果必须维护旧的 `owe(...)`，再显式从 compat prelude 模块导入对应 helper
 
 详见 [thiserror-comparison.md](./thiserror-comparison.md)。
@@ -430,13 +428,13 @@ fn process_order(order_id: &str) -> Result<(), MyError> {
 
 治理侧建议优先消费 `source_frames`；`source_chain` / `source_message` 主要作为兼容摘要保留。`type_name` 是 best-effort 信息，不应作为完整且稳定的分类键。
 
-如果你需要显式拿这个历史 runtime JSON 投影，可使用 `err.compat_serialize()`；新的导出主路径优先使用 `snapshot()` / `report()` / `to_stable_snapshot_json()`。
+新的导出主路径优先使用 `snapshot()` / `report()` / `to_stable_snapshot_json()`。
 
 底层 trait object 本体仍然不会直接序列化。
 
-旧的 `owe_*_source()` 已从当前主代码移除；
+旧的 `owe_*_source()` 属于 `0.6.3` 已公开的兼容语义，仅用于维护旧代码；
 `with_source(...)` 当前作为便捷糖衣存在，但新代码如果要明确 source 通道，仍优先使用 `with_std_source(...)` / `with_struct_source(...)`；
-`owe(...)` / `want(...)` 仍保留为兼容路径，但 V1 不建议新增使用。
+`owe(...)` / `want(...)` 仍保留为兼容路径，但新代码不建议新增使用。
 
 ## 9. 当前版本的兼容提示
 
@@ -457,7 +455,7 @@ fn process_order(order_id: &str) -> Result<(), MyError> {
 
 ```rust
 let mut ctx = OperationContext::doing("op");
-ctx.record("key", "value");
+ctx.record_field("key", "value");
 
 let err = StructError::from(UvsReason::validation_error())
     .with_detail("message");

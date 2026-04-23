@@ -1,25 +1,26 @@
-use orion_error::{v2, ErrorCode, ErrorWith, IntoAs, UvsReason};
+use orion_error::{conversion, reason, report, runtime, snapshot};
+use orion_error::{ErrorCode, ErrorWith, IntoAs, UvsReason};
 
 #[test]
-fn test_v2_namespace_layered_modules_and_prelude_compile() {
-    let err = v2::conversion::ErrorWith::with_context(
-        v2::runtime::StructError::from(v2::reason::UvsReason::system_error())
+fn test_layered_modules_and_root_prelude_compile() {
+    let err = conversion::ErrorWith::with_context(
+        runtime::StructError::from(reason::UvsReason::system_error())
             .with_detail("bootstrap failed"),
-        v2::runtime::OperationContext::doing("start engine"),
+        runtime::OperationContext::doing("start engine"),
     );
 
     let snapshot = err.snapshot();
     let stable = snapshot.stable_export();
     let report = stable.report();
     let bridge = err.as_std();
-    let cli_fields = v2::report::CLI_ERROR_RESPONSE_FIELDS;
-    let http_fields = v2::report::HTTP_ERROR_RESPONSE_FIELDS;
+    let cli_fields = report::CLI_ERROR_RESPONSE_FIELDS;
+    let http_fields = report::HTTP_ERROR_RESPONSE_FIELDS;
 
-    assert_eq!(v2::reason::ErrorCode::error_code(&err), 201);
+    assert_eq!(reason::ErrorCode::error_code(&err), 201);
     assert_eq!(snapshot.reason, "system error");
     assert_eq!(
         stable.schema_version,
-        v2::snapshot::STABLE_SNAPSHOT_SCHEMA_VERSION
+        snapshot::STABLE_SNAPSHOT_SCHEMA_VERSION
     );
     assert_eq!(report.reason, "system error");
     assert_eq!(cli_fields, orion_error::CLI_ERROR_RESPONSE_FIELDS);
@@ -27,16 +28,16 @@ fn test_v2_namespace_layered_modules_and_prelude_compile() {
     assert!(std::error::Error::source(&bridge).is_none());
 
     let io_result: Result<(), std::io::Error> = Err(std::io::Error::other("disk offline"));
-    let structured = v2::conversion::IntoAs::into_as(
+    let structured = conversion::IntoAs::into_as(
         io_result,
-        v2::reason::UvsReason::system_error(),
+        reason::UvsReason::system_error(),
         "load config failed",
     )
     .unwrap_err();
     assert_eq!(structured.source_ref().unwrap().to_string(), "disk offline");
 
-    fn build_with_v2_prelude() -> Result<(), v2::runtime::StructError<UvsReason>> {
-        use orion_error::v2::prelude::*;
+    fn build_with_root_prelude() -> Result<(), runtime::StructError<UvsReason>> {
+        use orion_error::prelude::*;
 
         let mut ctx = OperationContext::doing("load config");
         ctx.record("path", "config.toml");
@@ -48,7 +49,7 @@ fn test_v2_namespace_layered_modules_and_prelude_compile() {
             .map(|_| ())
     }
 
-    let err = build_with_v2_prelude().unwrap_err();
+    let err = build_with_root_prelude().unwrap_err();
     assert_eq!(err.error_code(), UvsReason::system_error().error_code());
     assert_eq!(err.action_main().as_deref(), Some("load config"));
     assert_eq!(err.locator_main(), None);
@@ -66,8 +67,8 @@ fn test_v2_namespace_layered_modules_and_prelude_compile() {
 }
 
 #[test]
-fn test_v2_prelude_exports_cli_projection_types_and_constants() {
-    use orion_error::v2::prelude::*;
+fn test_root_prelude_exports_cli_projection_types_and_constants() {
+    use orion_error::prelude::*;
 
     let cli = ErrorCliResponse {
         code: "sys.io_error".to_string(),
@@ -125,9 +126,9 @@ fn test_v2_prelude_exports_cli_projection_types_and_constants() {
 
 #[allow(deprecated)]
 #[test]
-fn test_v1_namespace_exposes_primary_and_compat_imports() {
-    fn build_with_v1_prelude() -> Result<(), orion_error::StructError<UvsReason>> {
-        use orion_error::v1::prelude::*;
+fn test_root_prelude_and_compat_imports_compile() {
+    fn build_with_prelude() -> Result<(), orion_error::StructError<UvsReason>> {
+        use orion_error::prelude::*;
 
         let mut ctx = OperationContext::doing("load config");
         ctx.record("path", "config.toml");
@@ -139,18 +140,18 @@ fn test_v1_namespace_exposes_primary_and_compat_imports() {
             .map(|_| ())
     }
 
-    fn build_with_v1_compat() -> Result<(), orion_error::StructError<UvsReason>> {
-        // Compat coverage is intentional here: V1 explicit namespace must keep
-        // exposing the legacy helper group until that surface is removed.
-        use orion_error::v1::compat_prelude::*;
+    fn build_with_compat() -> Result<(), orion_error::StructError<UvsReason>> {
+        // Compat coverage is intentional here: legacy helpers remain available
+        // only from explicit compat modules, not from a versioned namespace.
+        use orion_error::compat_prelude::*;
 
         let legacy: Result<(), &str> = Err("legacy failure");
         legacy.owe(UvsReason::business_error())
     }
 
-    let err = build_with_v1_prelude().unwrap_err();
+    let err = build_with_prelude().unwrap_err();
     assert_eq!(err.error_code(), UvsReason::system_error().error_code());
 
-    let err = build_with_v1_compat().unwrap_err();
+    let err = build_with_compat().unwrap_err();
     assert_eq!(err.error_code(), UvsReason::business_error().error_code());
 }

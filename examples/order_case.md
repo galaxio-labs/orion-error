@@ -3,7 +3,7 @@
 这个示例现在保留两件事：
 
 1. 多层错误体系与跨层转换
-2. `V3` 已落地的消费协议
+2. 当前已落地的消费协议
 
 也就是说，它不是一个“最短 hello world”，而是一个“复杂度受控，但仍能看出分层价值”的示例。
 
@@ -69,18 +69,19 @@ Result<T, StructError<OrderReason>>
 
 这比直接把所有底层 reason 暴露给上层更符合分层边界。
 
-### 4. V3 消费协议
+### 4. 消费协议
 
-每个失败场景最后都会直接展示：
+每个失败场景最后都会直接展示一组“摘要优先”的结果：
 
 - `identity_snapshot()`
 - `policy_snapshot(...).decision`
 - `http_response(...)`
-- `cli_response(...)`
-- `log_response(...)`
-- `rpc_response(...)`
+- `render_user_debug(...)`
 
-这说明多层错误体系和 `V3` 协议不是二选一，而是可以叠加的：
+这个示例最终选择 `render_user_debug(...)` 作为“给人读”的默认展示出口，而不是直接把
+`Debug` 结构体或完整 verbose report 打出来。
+
+这说明多层错误体系和消费协议不是二选一，而是可以叠加的：
 
 - 运行时传播时保留结构化层次
 - 出口消费时统一走稳定协议
@@ -102,6 +103,17 @@ ctx.record_meta("component.name", "order_service");
 
 - `record_field(...)` 适合展示型 field
 - `record_meta(...)` 适合结构化 metadata
+
+最终摘要输出大致会收敛成：
+
+```text
+code          : biz.order_invalid (Biz)
+detail        : order text must not be empty
+http          : 400 Public retryable=false
+path          : place_order / parse order
+context       : user_id="42", order.raw=""
+component     : order_service
+```
 
 ### `From` 映射的边界意义
 
@@ -138,7 +150,7 @@ ctx.record_meta("component.name", "order_service");
 
 - 保留多层 reason 和转换
 - 缩短每层逻辑
-- 直接把重点落在“分层传播 + V3 消费”上
+- 直接把重点落在“分层传播 + 协议消费”上
 
 ## 如果你只想运行
 
@@ -146,6 +158,6 @@ ctx.record_meta("component.name", "order_service");
 cargo run --example order_case
 ```
 
-如果你想看 `V3` 协议本身的正式说明，直接看：
+如果你想看协议本身的正式说明，直接看：
 
-- `docs/v3-protocol-contract.md`
+- `docs/protocol-contract.md`

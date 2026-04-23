@@ -1,8 +1,8 @@
 use crate::{DomainReason, ErrorCategory, StructError};
 
 use super::{
-    snapshot::{ErrorIdentitySnapshot, StableStructErrorSnapshot, StructErrorSnapshot},
-    ErrorMetadata, MetadataValue, OperationContext, SourceFrame,
+    snapshot::{ErrorIdentity, ErrorSnapshot, StableErrorSnapshot},
+    ErrorIdentityProvider, ErrorMetadata, MetadataValue, OperationContext, SourceFrame,
 };
 
 pub const POLICY_SNAPSHOT_TOP_LEVEL_FIELDS: &[&str] = &["identity", "decision", "report"];
@@ -85,8 +85,8 @@ pub struct ErrorPolicyDecision {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq)]
-pub struct ErrorPolicySnapshot {
-    pub identity: ErrorIdentitySnapshot,
+pub struct ErrorProtocolSnapshot {
+    pub identity: ErrorIdentity,
     pub decision: ErrorPolicyDecision,
     pub report: ErrorReport,
 }
@@ -143,23 +143,23 @@ pub struct ErrorRpcResponse {
 }
 
 pub trait ErrorPolicy {
-    fn http_status(&self, _identity: &ErrorIdentitySnapshot) -> u16 {
+    fn http_status(&self, _identity: &ErrorIdentity) -> u16 {
         500
     }
 
-    fn visibility(&self, _identity: &ErrorIdentitySnapshot) -> Visibility {
+    fn visibility(&self, _identity: &ErrorIdentity) -> Visibility {
         Visibility::Internal
     }
 
-    fn default_hints(&self, _identity: &ErrorIdentitySnapshot) -> &'static [&'static str] {
+    fn default_hints(&self, _identity: &ErrorIdentity) -> &'static [&'static str] {
         &[]
     }
 
-    fn retryable(&self, _identity: &ErrorIdentitySnapshot) -> bool {
+    fn retryable(&self, _identity: &ErrorIdentity) -> bool {
         false
     }
 
-    fn decide(&self, identity: &ErrorIdentitySnapshot) -> ErrorPolicyDecision {
+    fn decide(&self, identity: &ErrorIdentity) -> ErrorPolicyDecision {
         ErrorPolicyDecision {
             http_status: self.http_status(identity),
             visibility: self.visibility(identity),
@@ -176,17 +176,17 @@ pub trait ErrorRenderer {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ErrorPolicyView {
-    identity: ErrorIdentitySnapshot,
+pub struct ErrorPolicyInput {
+    identity: ErrorIdentity,
     report: ErrorReport,
 }
 
-impl ErrorPolicyView {
-    pub fn new(identity: ErrorIdentitySnapshot, report: ErrorReport) -> Self {
+impl ErrorPolicyInput {
+    pub fn new(identity: ErrorIdentity, report: ErrorReport) -> Self {
         Self { identity, report }
     }
 
-    pub fn identity(&self) -> &ErrorIdentitySnapshot {
+    pub fn identity(&self) -> &ErrorIdentity {
         &self.identity
     }
 
@@ -194,7 +194,7 @@ impl ErrorPolicyView {
         &self.report
     }
 
-    pub fn into_parts(self) -> (ErrorIdentitySnapshot, ErrorReport) {
+    pub fn into_parts(self) -> (ErrorIdentity, ErrorReport) {
         (self.identity, self.report)
     }
 
@@ -221,8 +221,8 @@ impl ErrorPolicyView {
         policy.decide(&self.identity)
     }
 
-    pub fn snapshot(&self, policy: &impl ErrorPolicy) -> ErrorPolicySnapshot {
-        ErrorPolicySnapshot {
+    pub fn snapshot(&self, policy: &impl ErrorPolicy) -> ErrorProtocolSnapshot {
+        ErrorProtocolSnapshot {
             identity: self.identity.clone(),
             decision: self.decision(policy),
             report: self.report.clone(),
@@ -243,6 +243,23 @@ impl ErrorPolicyView {
 
     pub fn rpc_response(&self, policy: &impl ErrorPolicy) -> ErrorRpcResponse {
         self.snapshot(policy).rpc_response()
+    }
+
+    pub fn render_user_debug(&self, policy: &impl ErrorPolicy) -> String {
+        self.snapshot(policy).render_user_debug()
+    }
+
+    pub fn render_user_debug_redacted(
+        &self,
+        policy: &impl ErrorPolicy,
+        redact_policy: &impl RedactPolicy,
+    ) -> String {
+        self.snapshot(policy)
+            .render_user_debug_redacted(redact_policy)
+    }
+
+    pub fn render_debug_summary(&self, policy: &impl ErrorPolicy) -> String {
+        self.render_user_debug(policy)
     }
 }
 
@@ -272,21 +289,21 @@ impl ErrorRenderer for TextReportRenderer {
 pub struct DefaultErrorPolicy;
 
 impl ErrorPolicy for DefaultErrorPolicy {
-    fn http_status(&self, identity: &ErrorIdentitySnapshot) -> u16 {
+    fn http_status(&self, identity: &ErrorIdentity) -> u16 {
         match identity.category {
             ErrorCategory::Biz => 400,
             ErrorCategory::Conf | ErrorCategory::Logic | ErrorCategory::Sys => 500,
         }
     }
 
-    fn visibility(&self, identity: &ErrorIdentitySnapshot) -> Visibility {
+    fn visibility(&self, identity: &ErrorIdentity) -> Visibility {
         match identity.category {
             ErrorCategory::Biz => Visibility::Public,
             ErrorCategory::Conf | ErrorCategory::Logic | ErrorCategory::Sys => Visibility::Internal,
         }
     }
 
-    fn default_hints(&self, identity: &ErrorIdentitySnapshot) -> &'static [&'static str] {
+    fn default_hints(&self, identity: &ErrorIdentity) -> &'static [&'static str] {
         match identity.code.as_str() {
             "sys.io_error" => &["check filesystem state", "verify file permissions"],
             "sys.network_error" => &["check network connectivity", "retry the request"],
@@ -298,7 +315,7 @@ impl ErrorPolicy for DefaultErrorPolicy {
         }
     }
 
-    fn retryable(&self, identity: &ErrorIdentitySnapshot) -> bool {
+    fn retryable(&self, identity: &ErrorIdentity) -> bool {
         matches!(identity.code.as_str(), "sys.network_error" | "sys.timeout")
     }
 }
@@ -329,23 +346,23 @@ impl<T: DomainReason> StructError<T> {
 
 impl<T> StructError<T>
 where
-    T: DomainReason + crate::StableErrorIdentity,
+    T: DomainReason + ErrorIdentityProvider,
 {
-    pub fn policy_report(&self) -> ErrorPolicyView {
-        ErrorPolicyView::new(self.identity_snapshot(), self.report())
+    pub fn policy_report(&self) -> ErrorPolicyInput {
+        ErrorPolicyInput::new(self.identity_snapshot(), self.report())
     }
 
-    pub fn into_policy_report(self) -> ErrorPolicyView {
+    pub fn into_policy_report(self) -> ErrorPolicyInput {
         let identity = self.identity_snapshot();
         let report = self.into_report();
-        ErrorPolicyView::new(identity, report)
+        ErrorPolicyInput::new(identity, report)
     }
 
-    pub fn policy_snapshot(&self, policy: &impl ErrorPolicy) -> ErrorPolicySnapshot {
+    pub fn policy_snapshot(&self, policy: &impl ErrorPolicy) -> ErrorProtocolSnapshot {
         self.policy_report().snapshot(policy)
     }
 
-    pub fn into_policy_snapshot(self, policy: &impl ErrorPolicy) -> ErrorPolicySnapshot {
+    pub fn into_policy_snapshot(self, policy: &impl ErrorPolicy) -> ErrorProtocolSnapshot {
         self.into_policy_report().snapshot(policy)
     }
 
@@ -364,16 +381,33 @@ where
     pub fn rpc_response(&self, policy: &impl ErrorPolicy) -> ErrorRpcResponse {
         self.policy_snapshot(policy).rpc_response()
     }
+
+    pub fn render_user_debug(&self, policy: &impl ErrorPolicy) -> String {
+        self.policy_snapshot(policy).render_user_debug()
+    }
+
+    pub fn render_user_debug_redacted(
+        &self,
+        policy: &impl ErrorPolicy,
+        redact_policy: &impl RedactPolicy,
+    ) -> String {
+        self.policy_snapshot(policy)
+            .render_user_debug_redacted(redact_policy)
+    }
+
+    pub fn render_debug_summary(&self, policy: &impl ErrorPolicy) -> String {
+        self.render_user_debug(policy)
+    }
 }
 
-impl From<&StructErrorSnapshot> for ErrorReport {
-    fn from(value: &StructErrorSnapshot) -> Self {
+impl From<&ErrorSnapshot> for ErrorReport {
+    fn from(value: &ErrorSnapshot) -> Self {
         value.report()
     }
 }
 
-impl From<StructErrorSnapshot> for ErrorReport {
-    fn from(value: StructErrorSnapshot) -> Self {
+impl From<ErrorSnapshot> for ErrorReport {
+    fn from(value: ErrorSnapshot) -> Self {
         value.into_report()
     }
 }
@@ -390,14 +424,14 @@ impl<T: DomainReason> From<StructError<T>> for ErrorReport {
     }
 }
 
-impl From<&StableStructErrorSnapshot> for ErrorReport {
-    fn from(value: &StableStructErrorSnapshot) -> Self {
+impl From<&StableErrorSnapshot> for ErrorReport {
+    fn from(value: &StableErrorSnapshot) -> Self {
         value.report()
     }
 }
 
-impl From<StableStructErrorSnapshot> for ErrorReport {
-    fn from(value: StableStructErrorSnapshot) -> Self {
+impl From<StableErrorSnapshot> for ErrorReport {
+    fn from(value: StableErrorSnapshot) -> Self {
         value.into_report()
     }
 }
@@ -505,14 +539,14 @@ impl ErrorReport {
 }
 
 impl ErrorReport {
-    pub fn policy_identity(&self) -> ErrorIdentitySnapshot {
+    pub fn policy_identity(&self) -> ErrorIdentity {
         let category = if self.reason.contains("configuration error") {
             ErrorCategory::Conf
         } else {
             ErrorCategory::Sys
         };
 
-        ErrorIdentitySnapshot {
+        ErrorIdentity {
             code: "report.unclassified".to_string(),
             category,
             reason: self.reason.clone(),
@@ -539,8 +573,8 @@ impl ErrorReport {
         policy.decide(&self.policy_identity())
     }
 
-    pub fn policy_snapshot(&self, policy: &impl ErrorPolicy) -> ErrorPolicySnapshot {
-        ErrorPolicySnapshot {
+    pub fn policy_snapshot(&self, policy: &impl ErrorPolicy) -> ErrorProtocolSnapshot {
+        ErrorProtocolSnapshot {
             identity: self.policy_identity(),
             decision: self.decision(policy),
             report: self.clone(),
@@ -571,8 +605,8 @@ impl ErrorReport {
         serde_json::to_value(self.policy_snapshot(policy))
     }
 
-    pub fn policy_view(self, identity: ErrorIdentitySnapshot) -> ErrorPolicyView {
-        ErrorPolicyView::new(identity, self)
+    pub fn policy_view(self, identity: ErrorIdentity) -> ErrorPolicyInput {
+        ErrorPolicyInput::new(identity, self)
     }
 
     #[cfg(feature = "serde_json")]
@@ -616,7 +650,65 @@ impl ErrorReport {
     }
 }
 
-impl ErrorPolicySnapshot {
+impl ErrorProtocolSnapshot {
+    pub fn render_user_debug(&self) -> String {
+        let mut lines = Vec::new();
+        lines.push(format!(
+            "code          : {} ({:?})",
+            self.identity.code, self.identity.category
+        ));
+
+        if let Some(detail) = self.report.detail.as_deref() {
+            lines.push(format!("detail        : {detail}"));
+        } else {
+            lines.push(format!("detail        : {}", self.identity.reason));
+        }
+
+        lines.push(format!(
+            "http          : {} {:?} retryable={}",
+            self.decision.http_status, self.decision.visibility, self.decision.retryable
+        ));
+
+        if let Some(path) = self.identity.path.as_deref() {
+            lines.push(format!("path          : {path}"));
+        }
+
+        let context_summary = self
+            .report
+            .context
+            .iter()
+            .flat_map(|ctx| ctx.context().items.iter())
+            .map(|(key, value)| format!("{key}={value:?}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if !context_summary.is_empty() {
+            lines.push(format!("context       : {context_summary}"));
+        }
+
+        if let Some(component) = self.report.root_metadata.get_str("component.name") {
+            lines.push(format!("component     : {component}"));
+        } else if !self.report.root_metadata.is_empty() {
+            lines.push(format!(
+                "metadata      : {}",
+                format_metadata_summary(&self.report.root_metadata)
+            ));
+        }
+
+        if let Some(source) = root_cause_source_frame(&self.report.source_frames) {
+            lines.push(format!("source        : {}", source.message));
+        }
+
+        lines.join("\n")
+    }
+
+    pub fn render_user_debug_redacted(&self, redact_policy: &impl RedactPolicy) -> String {
+        self.redacted(redact_policy).render_user_debug()
+    }
+
+    pub fn render_debug_summary(&self) -> String {
+        self.render_user_debug()
+    }
+
     pub fn http_response(&self) -> ErrorHttpResponse {
         ErrorHttpResponse {
             status: self.decision.http_status,
@@ -716,6 +808,54 @@ impl ErrorPolicySnapshot {
     #[cfg(feature = "serde_json")]
     pub fn to_rpc_error_json(&self) -> serde_json::Result<serde_json::Value> {
         serde_json::to_value(self.rpc_response())
+    }
+
+    pub fn redacted(&self, policy: &impl RedactPolicy) -> Self {
+        Self {
+            identity: ErrorIdentity {
+                code: self.identity.code.clone(),
+                category: self.identity.category,
+                reason: redact_required_text(Some("reason"), &self.identity.reason, policy),
+                detail: redact_optional_text(
+                    Some("detail"),
+                    self.identity.detail.as_deref(),
+                    policy,
+                ),
+                position: redact_optional_text(
+                    Some("position"),
+                    self.identity.position.as_deref(),
+                    policy,
+                ),
+                want: redact_optional_text(Some("want"), self.identity.want.as_deref(), policy),
+                path: redact_optional_text(Some("path"), self.identity.path.as_deref(), policy),
+            },
+            decision: self.decision.clone(),
+            report: self.report.redacted(policy),
+        }
+    }
+}
+
+fn root_cause_source_frame(source_frames: &[SourceFrame]) -> Option<&SourceFrame> {
+    source_frames
+        .iter()
+        .find(|frame| frame.is_root_cause)
+        .or_else(|| source_frames.last())
+}
+
+fn format_metadata_summary(metadata: &ErrorMetadata) -> String {
+    metadata
+        .iter()
+        .map(|(key, value)| format!("{key}={}", format_metadata_value(value)))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn format_metadata_value(value: &MetadataValue) -> String {
+    match value {
+        MetadataValue::String(value) => format!("{value:?}"),
+        MetadataValue::Bool(value) => value.to_string(),
+        MetadataValue::I64(value) => value.to_string(),
+        MetadataValue::U64(value) => value.to_string(),
     }
 }
 
@@ -817,19 +957,19 @@ fn redact_required_text(key: Option<&str>, value: &str, policy: &impl RedactPoli
 #[cfg(test)]
 mod tests {
     use crate::{
-        ContextRecord, ErrorCategory, ErrorCode, ErrorIdentitySnapshot, OperationContext,
-        SourceFrame, StableErrorIdentity, StructError, UvsReason,
+        ContextRecord, ErrorCategory, ErrorCode, ErrorIdentity, ErrorIdentityProvider,
+        ErrorMetadata, OperationContext, SourceFrame, StructError, UvsReason,
     };
 
     use super::{
         DefaultErrorPolicy, ErrorCliResponse, ErrorHttpResponse, ErrorLogResponse, ErrorPolicy,
-        ErrorPolicyDecision, ErrorPolicySnapshot, ErrorPolicyView, ErrorRenderer, ErrorReport,
+        ErrorPolicyDecision, ErrorPolicyInput, ErrorProtocolSnapshot, ErrorRenderer, ErrorReport,
         ErrorRpcResponse, RedactPolicy, RenderMode, TextReportRenderer, Visibility,
         CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS, LOG_ERROR_RESPONSE_FIELDS,
         POLICY_DECISION_FIELDS, POLICY_SNAPSHOT_TOP_LEVEL_FIELDS, RPC_ERROR_RESPONSE_FIELDS,
     };
     use crate::{
-        StableSnapshotContextFrame, StableSnapshotSourceFrame, StableStructErrorSnapshot,
+        StableErrorSnapshot, StableSnapshotContextFrame, StableSnapshotSourceFrame,
         STABLE_SNAPSHOT_SCHEMA_VERSION,
     };
 
@@ -869,7 +1009,7 @@ mod tests {
         }
     }
 
-    impl StableErrorIdentity for TestReason {
+    impl ErrorIdentityProvider for TestReason {
         fn stable_code(&self) -> &'static str {
             match self {
                 TestReason::TestError => "test.test_error",
@@ -947,7 +1087,7 @@ mod tests {
 
     #[test]
     fn test_report_from_stable_snapshot_matches_report_methods() {
-        let stable = StableStructErrorSnapshot {
+        let stable = StableErrorSnapshot {
             schema_version: STABLE_SNAPSHOT_SCHEMA_VERSION,
             reason: "system error".to_string(),
             detail: Some("outer detail".to_string()),
@@ -1072,7 +1212,7 @@ mod tests {
     #[test]
     fn test_default_error_policy_maps_category_to_http_status_and_visibility() {
         let policy = DefaultErrorPolicy;
-        let biz_identity = ErrorIdentitySnapshot {
+        let biz_identity = ErrorIdentity {
             code: "biz.validation_error".to_string(),
             category: ErrorCategory::Biz,
             reason: "validation error".to_string(),
@@ -1081,7 +1221,7 @@ mod tests {
             want: None,
             path: None,
         };
-        let sys_identity = ErrorIdentitySnapshot {
+        let sys_identity = ErrorIdentity {
             code: "sys.io_error".to_string(),
             category: ErrorCategory::Sys,
             reason: "system error".to_string(),
@@ -1122,7 +1262,7 @@ mod tests {
             root_metadata: crate::ErrorMetadata::new(),
             source_frames: vec![],
         };
-        let identity = ErrorIdentitySnapshot {
+        let identity = ErrorIdentity {
             code: "biz.validation_error".to_string(),
             category: ErrorCategory::Biz,
             reason: "validation error".to_string(),
@@ -1180,8 +1320,8 @@ mod tests {
             root_metadata: crate::ErrorMetadata::new(),
             source_frames: vec![],
         };
-        let view = ErrorPolicyView::new(
-            ErrorIdentitySnapshot {
+        let view = ErrorPolicyInput::new(
+            ErrorIdentity {
                 code: "test.test_error".to_string(),
                 category: ErrorCategory::Logic,
                 reason: "test error".to_string(),
@@ -1211,7 +1351,7 @@ mod tests {
             root_metadata: crate::ErrorMetadata::new(),
             source_frames: vec![],
         };
-        let identity = ErrorIdentitySnapshot {
+        let identity = ErrorIdentity {
             code: "biz.validation_error".to_string(),
             category: ErrorCategory::Biz,
             reason: "validation error".to_string(),
@@ -1220,11 +1360,11 @@ mod tests {
             want: None,
             path: None,
         };
-        let view = ErrorPolicyView::new(identity.clone(), report.clone());
+        let view = ErrorPolicyInput::new(identity.clone(), report.clone());
 
         assert_eq!(
             view.snapshot(&DefaultErrorPolicy),
-            ErrorPolicySnapshot {
+            ErrorProtocolSnapshot {
                 identity,
                 decision: ErrorPolicyDecision {
                     http_status: 400,
@@ -1562,6 +1702,213 @@ mod tests {
                 retryable: false,
             }
         );
+    }
+
+    #[test]
+    fn test_policy_snapshot_render_debug_summary_prefers_detail_path_context_and_component() {
+        let snapshot = ErrorProtocolSnapshot {
+            identity: ErrorIdentity {
+                code: "biz.order_invalid".to_string(),
+                category: ErrorCategory::Biz,
+                reason: "invalid order".to_string(),
+                detail: Some("order text must not be empty".to_string()),
+                position: None,
+                want: Some("place_order".to_string()),
+                path: Some("place_order / parse order".to_string()),
+            },
+            decision: ErrorPolicyDecision {
+                http_status: 400,
+                visibility: Visibility::Public,
+                default_hints: vec![],
+                retryable: false,
+            },
+            report: ErrorReport {
+                reason: "invalid order".to_string(),
+                detail: Some("order text must not be empty".to_string()),
+                position: None,
+                want: Some("place_order".to_string()),
+                path: Some("place_order / parse order".to_string()),
+                context: vec![{
+                    let mut ctx = OperationContext::doing("place_order");
+                    ctx.record_field("user_id", "42");
+                    ctx.record_field("order.raw", "");
+                    ctx.record_meta("component.name", "order_service");
+                    ctx
+                }],
+                root_metadata: {
+                    let mut metadata = ErrorMetadata::new();
+                    metadata.insert("component.name", "order_service");
+                    metadata.insert("trace.secret", "prod-token");
+                    metadata
+                },
+                source_frames: vec![],
+            },
+        };
+
+        let rendered = snapshot.render_debug_summary();
+
+        assert!(rendered.contains("code          : biz.order_invalid (Biz)"));
+        assert!(rendered.contains("detail        : order text must not be empty"));
+        assert!(rendered.contains("http          : 400 Public retryable=false"));
+        assert!(rendered.contains("path          : place_order / parse order"));
+        assert!(rendered.contains("context       : user_id=\"42\", order.raw=\"\""));
+        assert!(rendered.contains("component     : order_service"));
+        assert!(!rendered.contains("trace.secret"));
+    }
+
+    #[test]
+    fn test_policy_snapshot_render_debug_summary_falls_back_to_reason_and_source() {
+        let snapshot = ErrorProtocolSnapshot {
+            identity: ErrorIdentity {
+                code: "sys.storage_full".to_string(),
+                category: ErrorCategory::Sys,
+                reason: "storage full".to_string(),
+                detail: None,
+                position: None,
+                want: Some("place_order".to_string()),
+                path: Some("place_order / save order".to_string()),
+            },
+            decision: ErrorPolicyDecision {
+                http_status: 500,
+                visibility: Visibility::Internal,
+                default_hints: vec![],
+                retryable: false,
+            },
+            report: ErrorReport {
+                reason: "storage full".to_string(),
+                detail: None,
+                position: None,
+                want: Some("place_order".to_string()),
+                path: Some("place_order / save order".to_string()),
+                context: vec![],
+                root_metadata: ErrorMetadata::new(),
+                source_frames: vec![SourceFrame {
+                    index: 0,
+                    message: "storage full".to_string(),
+                    display: None,
+                    debug: String::new(),
+                    type_name: None,
+                    error_code: None,
+                    reason: None,
+                    want: None,
+                    path: None,
+                    detail: None,
+                    metadata: ErrorMetadata::new(),
+                    is_root_cause: true,
+                }],
+            },
+        };
+
+        let rendered = snapshot.render_debug_summary();
+
+        assert!(rendered.contains("detail        : storage full"));
+        assert!(rendered.contains("source        : storage full"));
+    }
+
+    #[test]
+    fn test_policy_snapshot_render_debug_summary_prefers_root_cause_source_frame() {
+        let snapshot = ErrorProtocolSnapshot {
+            identity: ErrorIdentity {
+                code: "sys.io_error".to_string(),
+                category: ErrorCategory::Sys,
+                reason: "system error".to_string(),
+                detail: Some("save order failed".to_string()),
+                position: None,
+                want: Some("place_order".to_string()),
+                path: Some("place_order / save order".to_string()),
+            },
+            decision: ErrorPolicyDecision {
+                http_status: 500,
+                visibility: Visibility::Internal,
+                default_hints: vec![],
+                retryable: false,
+            },
+            report: ErrorReport {
+                reason: "system error".to_string(),
+                detail: Some("save order failed".to_string()),
+                position: None,
+                want: Some("place_order".to_string()),
+                path: Some("place_order / save order".to_string()),
+                context: vec![],
+                root_metadata: ErrorMetadata::new(),
+                source_frames: vec![
+                    SourceFrame {
+                        index: 0,
+                        message: "storage layer failed".to_string(),
+                        display: None,
+                        debug: String::new(),
+                        type_name: None,
+                        error_code: None,
+                        reason: None,
+                        want: None,
+                        path: None,
+                        detail: None,
+                        metadata: ErrorMetadata::new(),
+                        is_root_cause: false,
+                    },
+                    SourceFrame {
+                        index: 1,
+                        message: "disk offline".to_string(),
+                        display: None,
+                        debug: String::new(),
+                        type_name: None,
+                        error_code: None,
+                        reason: None,
+                        want: None,
+                        path: None,
+                        detail: None,
+                        metadata: ErrorMetadata::new(),
+                        is_root_cause: true,
+                    },
+                ],
+            },
+        };
+
+        let rendered = snapshot.render_debug_summary();
+
+        assert!(rendered.contains("source        : disk offline"));
+        assert!(!rendered.contains("source        : storage layer failed"));
+    }
+
+    #[test]
+    fn test_render_user_debug_aliases_match_existing_debug_summary() {
+        let err = StructError::from(TestReason::Uvs(UvsReason::business_error()))
+            .with_detail("order state invalid")
+            .with_context({
+                let mut ctx = OperationContext::doing("validate order");
+                ctx.record_field("order_id", "A-1001");
+                ctx.record_meta("component.name", "order_service");
+                ctx
+            });
+
+        let via_struct = err.render_user_debug(&DefaultErrorPolicy);
+        let via_struct_compat = err.render_debug_summary(&DefaultErrorPolicy);
+        let via_view = err.policy_report().render_user_debug(&DefaultErrorPolicy);
+        let via_snapshot = err.policy_snapshot(&DefaultErrorPolicy).render_user_debug();
+
+        assert_eq!(via_struct, via_struct_compat);
+        assert_eq!(via_struct, via_view);
+        assert_eq!(via_struct, via_snapshot);
+    }
+
+    #[test]
+    fn test_render_user_debug_redacted_masks_sensitive_fields() {
+        let err = StructError::from(TestReason::TestError)
+            .with_detail("token=abc")
+            .with_context({
+                let mut ctx = OperationContext::doing("load");
+                ctx.record_field("token", "abc");
+                ctx.record_meta("component.name", "order_service");
+                ctx.record_meta("config.secret", "abc");
+                ctx
+            });
+
+        let rendered = err.render_user_debug_redacted(&DefaultErrorPolicy, &TestPolicy);
+
+        assert!(rendered.contains("<redacted>"));
+        assert!(!rendered.contains("token=abc"));
+        assert!(!rendered.contains("token=\"abc\""));
+        assert!(!rendered.contains("config.secret"));
     }
 
     #[test]

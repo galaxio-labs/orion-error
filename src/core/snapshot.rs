@@ -1,8 +1,8 @@
 use crate::{DomainReason, StructError};
 
 use super::{
-    context::OperationResult, report::ErrorReport, ErrorCategory, ErrorMetadata, OperationContext,
-    SourceFrame, StableErrorIdentity,
+    context::OperationResult, report::ErrorReport, ErrorCategory, ErrorIdentityProvider,
+    ErrorMetadata, OperationContext, SourceFrame,
 };
 
 pub const STABLE_SNAPSHOT_SCHEMA_VERSION: &str = "orion-error.snapshot.v2";
@@ -36,9 +36,9 @@ pub const STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS: &[&str] = &[
 pub struct SnapshotContextFrame {
     /// Stable root operation name.
     pub target: Option<String>,
-    /// V2 action/phase captured by `doing(...)`.
+    /// Action/phase captured by `doing(...)`.
     pub action: Option<String>,
-    /// V2 resource/location captured by `at(...)`.
+    /// Resource/location captured by `at(...)`.
     pub locator: Option<String>,
     /// Stable path segments captured from runtime context.
     pub path: Vec<String>,
@@ -99,7 +99,7 @@ pub struct StableSnapshotSourceFrame {
 /// It carries exported diagnostic data, but does not implement `StdError`
 /// or own any runtime source object handles.
 #[derive(Debug, Clone, PartialEq)]
-pub struct StructErrorSnapshot {
+pub struct ErrorSnapshot {
     pub reason: String,
     pub detail: Option<String>,
     pub position: Option<String>,
@@ -112,7 +112,7 @@ pub struct StructErrorSnapshot {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq)]
-pub struct StableStructErrorSnapshot {
+pub struct StableErrorSnapshot {
     pub schema_version: &'static str,
     pub reason: String,
     pub detail: Option<String>,
@@ -124,15 +124,14 @@ pub struct StableStructErrorSnapshot {
     pub source_frames: Vec<StableSnapshotSourceFrame>,
 }
 
-/// V3-oriented identity-first snapshot view.
+/// Identity-first snapshot view.
 ///
-/// This additive view does not change the current V2 stable snapshot schema.
-/// It exists so governance, testing, and future policy/render layers can start
-/// consuming `code` and `category` without forcing a breaking change onto the
-/// existing `orion-error.snapshot.v2` export contract.
+/// This view keeps `code` and `category` available for governance, testing,
+/// policy decisions, and protocol projections without changing the stable
+/// snapshot export contract.
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ErrorIdentitySnapshot {
+pub struct ErrorIdentity {
     pub code: String,
     pub category: ErrorCategory,
     pub reason: String,
@@ -142,18 +141,8 @@ pub struct ErrorIdentitySnapshot {
     pub path: Option<String>,
 }
 
-/// Explicit compatibility serialization view for `StructErrorSnapshot`.
-///
-/// The default `Serialize for StructErrorSnapshot` follows the stable snapshot
-/// schema. Use this wrapper when callers still need the previous compat
-/// projection with `fields`, `result`, `display`, and `type_name`.
-#[cfg_attr(not(feature = "serde"), allow(dead_code))]
-pub struct CompatStructErrorSnapshotRef<'a> {
-    snapshot: &'a StructErrorSnapshot,
-}
-
 #[cfg(feature = "serde")]
-impl serde::Serialize for StructErrorSnapshot {
+impl serde::Serialize for ErrorSnapshot {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -162,29 +151,7 @@ impl serde::Serialize for StructErrorSnapshot {
     }
 }
 
-#[cfg(feature = "serde")]
-impl serde::Serialize for CompatStructErrorSnapshotRef<'_> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-
-        let snapshot = self.snapshot;
-        let mut state = serializer.serialize_struct("StructErrorSnapshot", 8)?;
-        state.serialize_field("reason", &snapshot.reason)?;
-        state.serialize_field("detail", &snapshot.detail)?;
-        state.serialize_field("position", &snapshot.position)?;
-        state.serialize_field("want", &snapshot.want)?;
-        state.serialize_field("path", &snapshot.path)?;
-        state.serialize_field("context", &snapshot.context)?;
-        state.serialize_field("root_metadata", &snapshot.root_metadata)?;
-        state.serialize_field("source_frames", &snapshot.source_frames)?;
-        state.end()
-    }
-}
-
-impl StructErrorSnapshot {
+impl ErrorSnapshot {
     pub fn stable_context(&self) -> &[SnapshotContextFrame] {
         &self.context
     }
@@ -197,12 +164,12 @@ impl StructErrorSnapshot {
         self.source_frames.iter().find(|frame| frame.is_root_cause)
     }
 
-    pub fn stable_export(&self) -> StableStructErrorSnapshot {
+    pub fn stable_export(&self) -> StableErrorSnapshot {
         self.clone().into_stable_export()
     }
 
-    pub fn into_stable_export(self) -> StableStructErrorSnapshot {
-        StableStructErrorSnapshot {
+    pub fn into_stable_export(self) -> StableErrorSnapshot {
+        StableErrorSnapshot {
             schema_version: STABLE_SNAPSHOT_SCHEMA_VERSION,
             reason: self.reason,
             detail: self.detail,
@@ -238,7 +205,7 @@ impl StructErrorSnapshot {
     }
 }
 
-impl StableStructErrorSnapshot {
+impl StableErrorSnapshot {
     pub fn report(&self) -> ErrorReport {
         ErrorReport {
             reason: self.reason.clone(),
@@ -254,86 +221,6 @@ impl StableStructErrorSnapshot {
 
     pub fn into_report(self) -> ErrorReport {
         ErrorReport {
-            reason: self.reason,
-            detail: self.detail,
-            position: self.position,
-            want: self.want,
-            path: self.path,
-            context: self.context.into_iter().map(Into::into).collect(),
-            root_metadata: self.root_metadata,
-            source_frames: self.source_frames.into_iter().map(Into::into).collect(),
-        }
-    }
-}
-
-pub trait SnapshotCompat {
-    #[deprecated(
-        since = "0.7.0",
-        note = "compat snapshot projection is transitional; prefer stable_export() or report()"
-    )]
-    fn compat_export(&self) -> &StructErrorSnapshot;
-
-    #[deprecated(
-        since = "0.7.0",
-        note = "compat snapshot projection is transitional; prefer stable_export() or report()"
-    )]
-    fn compat_serialize(&self) -> CompatStructErrorSnapshotRef<'_>;
-
-    #[cfg(feature = "serde_json")]
-    #[deprecated(
-        since = "0.7.0",
-        note = "compat snapshot projection is transitional; prefer to_stable_snapshot_json()"
-    )]
-    fn to_compat_snapshot_json(&self) -> serde_json::Result<serde_json::Value>;
-}
-
-impl SnapshotCompat for StructErrorSnapshot {
-    fn compat_export(&self) -> &StructErrorSnapshot {
-        self
-    }
-
-    fn compat_serialize(&self) -> CompatStructErrorSnapshotRef<'_> {
-        CompatStructErrorSnapshotRef { snapshot: self }
-    }
-
-    #[cfg(feature = "serde_json")]
-    fn to_compat_snapshot_json(&self) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(CompatStructErrorSnapshotRef { snapshot: self })
-    }
-}
-
-pub trait StableSnapshotCompat {
-    #[deprecated(
-        since = "0.7.0",
-        note = "compat snapshot projection is transitional; prefer report() or stable snapshot consumers"
-    )]
-    fn compat_export(&self) -> StructErrorSnapshot;
-
-    #[deprecated(
-        since = "0.7.0",
-        note = "compat snapshot projection is transitional; prefer into_report() or stable snapshot consumers"
-    )]
-    fn into_compat_export(self) -> StructErrorSnapshot
-    where
-        Self: Sized;
-}
-
-impl StableSnapshotCompat for StableStructErrorSnapshot {
-    fn compat_export(&self) -> StructErrorSnapshot {
-        StructErrorSnapshot {
-            reason: self.reason.clone(),
-            detail: self.detail.clone(),
-            position: self.position.clone(),
-            want: self.want.clone(),
-            path: self.path.clone(),
-            context: self.context.iter().cloned().map(Into::into).collect(),
-            root_metadata: self.root_metadata.clone(),
-            source_frames: self.source_frames.iter().cloned().map(Into::into).collect(),
-        }
-    }
-
-    fn into_compat_export(self) -> StructErrorSnapshot {
-        StructErrorSnapshot {
             reason: self.reason,
             detail: self.detail,
             position: self.position,
@@ -539,45 +426,45 @@ impl From<&StableSnapshotSourceFrame> for SourceFrame {
     }
 }
 
-impl<T: DomainReason> From<&StructError<T>> for StructErrorSnapshot {
+impl<T: DomainReason> From<&StructError<T>> for ErrorSnapshot {
     fn from(value: &StructError<T>) -> Self {
         value.snapshot()
     }
 }
 
-impl<T: DomainReason> From<StructError<T>> for StructErrorSnapshot {
+impl<T: DomainReason> From<StructError<T>> for ErrorSnapshot {
     fn from(value: StructError<T>) -> Self {
         value.into_snapshot()
     }
 }
 
-impl From<&StructErrorSnapshot> for StableStructErrorSnapshot {
-    fn from(value: &StructErrorSnapshot) -> Self {
+impl From<&ErrorSnapshot> for StableErrorSnapshot {
+    fn from(value: &ErrorSnapshot) -> Self {
         value.stable_export()
     }
 }
 
-impl From<StructErrorSnapshot> for StableStructErrorSnapshot {
-    fn from(value: StructErrorSnapshot) -> Self {
+impl From<ErrorSnapshot> for StableErrorSnapshot {
+    fn from(value: ErrorSnapshot) -> Self {
         value.into_stable_export()
     }
 }
 
-impl<T: DomainReason> From<&StructError<T>> for StableStructErrorSnapshot {
+impl<T: DomainReason> From<&StructError<T>> for StableErrorSnapshot {
     fn from(value: &StructError<T>) -> Self {
         value.snapshot().into_stable_export()
     }
 }
 
-impl<T: DomainReason> From<StructError<T>> for StableStructErrorSnapshot {
+impl<T: DomainReason> From<StructError<T>> for StableErrorSnapshot {
     fn from(value: StructError<T>) -> Self {
         value.into_snapshot().into_stable_export()
     }
 }
 
 impl<T: DomainReason> StructError<T> {
-    pub fn snapshot(&self) -> StructErrorSnapshot {
-        StructErrorSnapshot {
+    pub fn snapshot(&self) -> ErrorSnapshot {
+        ErrorSnapshot {
             reason: self.reason().to_string(),
             detail: self.detail().clone(),
             position: self.position().clone(),
@@ -594,17 +481,17 @@ impl<T: DomainReason> StructError<T> {
         }
     }
 
-    pub fn into_snapshot(self) -> StructErrorSnapshot {
+    pub fn into_snapshot(self) -> ErrorSnapshot {
         self.snapshot()
     }
 }
 
 impl<T> StructError<T>
 where
-    T: DomainReason + StableErrorIdentity,
+    T: DomainReason + ErrorIdentityProvider,
 {
-    pub fn identity_snapshot(&self) -> ErrorIdentitySnapshot {
-        ErrorIdentitySnapshot {
+    pub fn identity_snapshot(&self) -> ErrorIdentity {
+        ErrorIdentity {
             code: self.stable_code().to_string(),
             category: self.error_category(),
             reason: self.reason().to_string(),
@@ -619,14 +506,13 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        ContextRecord, ErrorCategory, ErrorCode, OperationContext, StableErrorIdentity,
+        ContextRecord, ErrorCategory, ErrorCode, ErrorIdentityProvider, OperationContext,
         StructError, UvsReason,
     };
 
     use super::{
-        ErrorIdentitySnapshot, SnapshotCompat, SnapshotContextFrame, SnapshotSourceFrame,
-        StableSnapshotCompat, StableSnapshotContextFrame, StableSnapshotSourceFrame,
-        StableStructErrorSnapshot, StructErrorSnapshot, STABLE_SNAPSHOT_SCHEMA_VERSION,
+        ErrorSnapshot, SnapshotContextFrame, SnapshotSourceFrame, StableErrorSnapshot,
+        StableSnapshotContextFrame, StableSnapshotSourceFrame, STABLE_SNAPSHOT_SCHEMA_VERSION,
     };
     #[cfg(feature = "serde_json")]
     use super::{
@@ -657,7 +543,7 @@ mod tests {
         }
     }
 
-    impl StableErrorIdentity for TestReason {
+    impl ErrorIdentityProvider for TestReason {
         fn stable_code(&self) -> &'static str {
             match self {
                 TestReason::TestError => "test.test_error",
@@ -724,7 +610,9 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_identity_snapshot_serialization_includes_code_and_category() {
-        let identity = ErrorIdentitySnapshot {
+        use super::ErrorIdentity;
+
+        let identity = ErrorIdentity {
             code: "sys.io_error".to_string(),
             category: ErrorCategory::Sys,
             reason: "system error".to_string(),
@@ -765,7 +653,7 @@ mod tests {
 
     #[test]
     fn test_snapshot_report_conversion_preserves_payload() {
-        let snapshot = StructErrorSnapshot {
+        let snapshot = ErrorSnapshot {
             reason: "system error".to_string(),
             detail: Some("engine bootstrap failed".to_string()),
             position: Some("src/main.rs:42".to_string()),
@@ -823,7 +711,7 @@ mod tests {
             .with_context(OperationContext::doing("start engine"));
 
         let via_method = err.snapshot();
-        let via_from = StructErrorSnapshot::from(&err);
+        let via_from = ErrorSnapshot::from(&err);
 
         assert_eq!(via_from, via_method);
     }
@@ -835,7 +723,7 @@ mod tests {
             .with_context(OperationContext::doing("start engine"));
 
         let via_method = err.snapshot();
-        let via_from = StructErrorSnapshot::from(err);
+        let via_from = ErrorSnapshot::from(err);
 
         assert_eq!(via_from, via_method);
     }
@@ -854,7 +742,7 @@ mod tests {
 
     #[test]
     fn test_snapshot_into_report_matches_borrowed_report() {
-        let snapshot = StructErrorSnapshot {
+        let snapshot = ErrorSnapshot {
             reason: "system error".to_string(),
             detail: Some("engine bootstrap failed".to_string()),
             position: Some("src/main.rs:42".to_string()),
@@ -961,7 +849,7 @@ mod tests {
 
     #[test]
     fn test_snapshot_into_stable_export_matches_borrowed_stable_export() {
-        let snapshot = StructErrorSnapshot {
+        let snapshot = ErrorSnapshot {
             reason: "system error".to_string(),
             detail: Some("outer detail".to_string()),
             position: Some("src/main.rs:42".to_string()),
@@ -994,8 +882,8 @@ mod tests {
 
         let via_borrowed = snapshot.stable_export();
         let via_owned = snapshot.clone().into_stable_export();
-        let via_from_borrowed = StableStructErrorSnapshot::from(&snapshot);
-        let via_from_owned = StableStructErrorSnapshot::from(snapshot);
+        let via_from_borrowed = StableErrorSnapshot::from(&snapshot);
+        let via_from_owned = StableErrorSnapshot::from(snapshot);
 
         assert_eq!(via_owned, via_borrowed);
         assert_eq!(via_from_borrowed, via_borrowed);
@@ -1016,8 +904,8 @@ mod tests {
             .with_struct_source(source);
 
         let via_method = err.snapshot().stable_export();
-        let via_borrowed = StableStructErrorSnapshot::from(&err);
-        let via_owned = StableStructErrorSnapshot::from(err);
+        let via_borrowed = StableErrorSnapshot::from(&err);
+        let via_owned = StableErrorSnapshot::from(err);
 
         assert_eq!(via_borrowed, via_method);
         assert_eq!(via_owned, via_method);
@@ -1066,104 +954,9 @@ mod tests {
         );
     }
 
-    #[allow(deprecated)]
     #[test]
-    fn test_snapshot_compat_export_keeps_current_projection() {
-        let snapshot = StructErrorSnapshot {
-            reason: "system error".to_string(),
-            detail: Some("outer detail".to_string()),
-            position: None,
-            want: Some("start engine".to_string()),
-            path: Some("start engine".to_string()),
-            context: vec![SnapshotContextFrame {
-                target: Some("start engine".to_string()),
-                action: None,
-                locator: None,
-                path: vec!["start engine".to_string()],
-                metadata: crate::ErrorMetadata::new(),
-                fields: vec![("tenant".to_string(), "alpha".to_string())],
-                result: crate::core::context::OperationResult::Fail,
-            }],
-            root_metadata: crate::ErrorMetadata::new(),
-            source_frames: vec![SnapshotSourceFrame {
-                index: 0,
-                message: "inner".to_string(),
-                display: Some("inner".to_string()),
-                type_name: Some("std::io::Error".to_string()),
-                error_code: None,
-                reason: None,
-                want: None,
-                path: None,
-                detail: None,
-                metadata: crate::ErrorMetadata::new(),
-                is_root_cause: true,
-            }],
-        };
-
-        assert_eq!(SnapshotCompat::compat_export(&snapshot), &snapshot);
-        assert_eq!(
-            SnapshotCompat::compat_export(&snapshot).context[0].fields,
-            vec![("tenant".to_string(), "alpha".to_string())]
-        );
-        assert_eq!(
-            SnapshotCompat::compat_export(&snapshot).source_frames[0]
-                .display
-                .as_deref(),
-            Some("inner")
-        );
-    }
-
-    #[allow(deprecated)]
-    #[test]
-    fn test_stable_snapshot_compat_export_is_lossy_projection() {
-        let stable = StableStructErrorSnapshot {
-            schema_version: STABLE_SNAPSHOT_SCHEMA_VERSION,
-            reason: "system error".to_string(),
-            detail: Some("outer detail".to_string()),
-            position: Some("src/main.rs:42".to_string()),
-            want: Some("start engine".to_string()),
-            path: Some("start engine".to_string()),
-            context: vec![StableSnapshotContextFrame {
-                target: Some("start engine".to_string()),
-                action: None,
-                locator: None,
-                path: vec!["start engine".to_string()],
-                metadata: crate::ErrorMetadata::new(),
-            }],
-            root_metadata: crate::ErrorMetadata::new(),
-            source_frames: vec![StableSnapshotSourceFrame {
-                index: 0,
-                message: "db unavailable".to_string(),
-                error_code: None,
-                reason: None,
-                want: Some("load config".to_string()),
-                path: Some("load config / read".to_string()),
-                detail: Some("inner detail".to_string()),
-                metadata: crate::ErrorMetadata::new(),
-                is_root_cause: true,
-            }],
-        };
-
-        let via_method = StableSnapshotCompat::compat_export(&stable);
-        let via_borrowed_explicit = StableSnapshotCompat::compat_export(&stable);
-        let via_owned_explicit = StableSnapshotCompat::into_compat_export(stable.clone());
-
-        assert_eq!(via_borrowed_explicit, via_method);
-        assert_eq!(via_owned_explicit, via_method);
-        assert_eq!(via_method.reason, stable.reason);
-        assert_eq!(via_method.context[0].fields, Vec::<(String, String)>::new());
-        assert_eq!(
-            via_method.context[0].result,
-            crate::core::context::OperationResult::Fail
-        );
-        assert_eq!(via_method.source_frames[0].display, None);
-        assert_eq!(via_method.source_frames[0].type_name, None);
-    }
-
-    #[allow(deprecated)]
-    #[test]
-    fn test_stable_snapshot_into_report_matches_compat_report() {
-        let stable = StableStructErrorSnapshot {
+    fn test_stable_snapshot_into_report_matches_report() {
+        let stable = StableErrorSnapshot {
             schema_version: STABLE_SNAPSHOT_SCHEMA_VERSION,
             reason: "system error".to_string(),
             detail: Some("outer detail".to_string()),
@@ -1195,10 +988,6 @@ mod tests {
         let via_owned = stable.clone().into_report();
 
         assert_eq!(via_owned, via_method);
-        assert_eq!(
-            via_method,
-            StableSnapshotCompat::compat_export(&stable).report()
-        );
     }
 
     #[test]
@@ -1406,48 +1195,10 @@ mod tests {
         assert!(json_value.get("source_chain").is_none());
     }
 
-    #[cfg(feature = "serde_json")]
-    #[allow(deprecated)]
-    #[test]
-    fn test_to_compat_snapshot_json_preserves_compat_projection_shape() {
-        let source = StructError::from(TestReason::TestError)
-            .with_detail("inner detail")
-            .with_context(
-                OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
-            );
-        let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
-            .with_detail("engine bootstrap failed")
-            .with_position("src/main.rs:42")
-            .with_context(
-                OperationContext::doing("start engine").with_meta("component.name", "engine"),
-            )
-            .with_struct_source(source);
-
-        let json_value = err.snapshot().to_compat_snapshot_json().unwrap();
-
-        assert!(json_value.get("schema_version").is_none());
-        assert_eq!(json_value["reason"], serde_json::json!("system error"));
-        assert_eq!(json_value["context"][0]["fields"], serde_json::json!([]));
-        assert_eq!(
-            json_value["context"][0]["result"],
-            serde_json::json!("Fail")
-        );
-        assert!(json_value["source_frames"][0]["display"]
-            .as_str()
-            .unwrap()
-            .contains("[1001] test error"));
-        assert_eq!(
-            json_value["source_frames"][0]["type_name"],
-            serde_json::json!(
-                "orion_error::core::error::StructError<orion_error::core::snapshot::tests::TestReason>"
-            )
-        );
-    }
-
     #[cfg(feature = "serde")]
     #[test]
     fn test_snapshot_stable_export_serialization_omits_compat_projection_fields() {
-        let snapshot = StructErrorSnapshot {
+        let snapshot = ErrorSnapshot {
             reason: "system error".to_string(),
             detail: Some("outer detail".to_string()),
             position: Some("src/main.rs:42".to_string()),
@@ -1493,7 +1244,7 @@ mod tests {
         let stable = snapshot.stable_export();
         let json_value = serde_json::to_value(&stable).unwrap();
 
-        assert_eq!(StableStructErrorSnapshot::clone(&stable), stable);
+        assert_eq!(StableErrorSnapshot::clone(&stable), stable);
         assert_eq!(
             json_value["schema_version"],
             serde_json::json!(STABLE_SNAPSHOT_SCHEMA_VERSION)
@@ -1540,7 +1291,7 @@ mod tests {
     #[cfg(feature = "serde_json")]
     #[test]
     fn test_to_stable_snapshot_json_uses_stable_export_shape() {
-        let snapshot = StructErrorSnapshot {
+        let snapshot = ErrorSnapshot {
             reason: "system error".to_string(),
             detail: Some("outer detail".to_string()),
             position: None,
@@ -1596,7 +1347,7 @@ mod tests {
     #[cfg(feature = "serde_json")]
     #[test]
     fn test_stable_snapshot_json_fields_match_schema_constants() {
-        let snapshot = StructErrorSnapshot {
+        let snapshot = ErrorSnapshot {
             reason: "system error".to_string(),
             detail: Some("outer detail".to_string()),
             position: Some("src/main.rs:42".to_string()),
@@ -1667,18 +1418,10 @@ mod tests {
 #[cfg(doc)]
 mod stable_snapshot_compile_fail_docs {
     //! ```compile_fail
-    //! use orion_error::{StableStructErrorSnapshot, StructErrorSnapshot};
+    //! use orion_error::{StableErrorSnapshot, ErrorSnapshot};
     //!
-    //! fn must_not_compile(stable: StableStructErrorSnapshot) -> StructErrorSnapshot {
+    //! fn must_not_compile(stable: StableErrorSnapshot) -> ErrorSnapshot {
     //!     stable.into()
-    //! }
-    //! ```
-    //!
-    //! ```compile_fail
-    //! use orion_error::v2::snapshot::StructErrorSnapshot;
-    //!
-    //! fn must_not_compile(snapshot: StructErrorSnapshot) {
-    //!     let _ = snapshot.compat_export();
     //! }
     //! ```
 }

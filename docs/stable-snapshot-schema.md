@@ -1,8 +1,8 @@
-# V2 Stable Snapshot Schema
+# Stable Snapshot Schema
 
 更新时间：2026-04-22
 
-本文档冻结 `orion-error 0.7.x / V2` 当前稳定 snapshot JSON 的第二版协议。
+本文档描述当前稳定 snapshot JSON 协议。
 
 当前稳定协议版本：
 
@@ -31,34 +31,19 @@ err.snapshot().into_stable_export()
 ```rust,ignore
 serde_json::to_value(err.snapshot().stable_export())
 serde_json::to_value(err.into_snapshot().stable_export())
-serde_json::to_value(StableStructErrorSnapshot::from(err.snapshot()))
-serde_json::to_value(StableStructErrorSnapshot::from(&err))
+serde_json::to_value(StableErrorSnapshot::from(err.snapshot()))
+serde_json::to_value(StableErrorSnapshot::from(&err))
 ```
 
-`StructErrorSnapshot` 自身的默认 `serde Serialize` 现在直接输出稳定 schema。
+`ErrorSnapshot` 自身的默认 `serde Serialize` 现在直接输出稳定 schema。
 
-稳定 snapshot 也可以显式降级成兼容投影或 report：
+稳定 snapshot 可以转成 report：
 
 ```rust,ignore
-let compat = stable.compat_export();
 let report = stable.report();
 ```
 
-其中：
-
-- `stable.report()` 仍是当前主路径
-- `stable.compat_export()` 已进入 deprecated migration-only 路径
-
-如果仍需要旧 compat JSON 投影，可显式使用：
-
-```rust,ignore
-snapshot.to_compat_snapshot_json()
-serde_json::to_value(snapshot.compat_serialize())
-```
-
-这些 compat snapshot JSON 入口也都已进入 deprecated migration-only 路径。
-
-这是一种有损投影：
+这是从稳定导出对象到报告对象的有损投影：
 
 - `context.fields` 会为空
 - `context.result` 会使用兼容默认值 `Fail`
@@ -70,7 +55,7 @@ serde_json::to_value(snapshot.compat_serialize())
 
 ## 2. 顶层字段
 
-`StableStructErrorSnapshot` 当前字段：
+`StableErrorSnapshot` 当前字段：
 
 - `schema_version`
 - `reason`
@@ -97,7 +82,7 @@ serde_json::to_value(snapshot.compat_serialize())
 - `fields`
 - `result`
 
-这些字段只保留在 deprecated 的 `compat_export()` / 显式 compat JSON 投影里。
+这些字段不再通过 snapshot 的兼容投影入口导出；如果需要 `0.6.3` runtime JSON 形状，使用 `StructError` 默认 serde 输出。
 
 ## 4. Source Frame 字段
 
@@ -126,8 +111,7 @@ serde_json::to_value(snapshot.compat_serialize())
 当前规则：
 
 - 增加或删除稳定字段，必须评估是否升级 `STABLE_SNAPSHOT_SCHEMA_VERSION`
-- 兼容投影字段变化不自动改变稳定 schema version
-- compat JSON 入口变化不自动改变稳定 schema version
+- 非稳定字段变化不自动改变稳定 schema version
 
 ## 6. 当前非目标
 

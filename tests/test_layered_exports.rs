@@ -1,24 +1,20 @@
 use orion_error::{bridge, compat_prelude, conversion, reason, report, runtime, snapshot};
 
-// This test intentionally exercises compat exports so the layered namespace
-// additions do not silently break the legacy bridge surface.
-#[allow(deprecated)]
 #[test]
-fn test_runtime_snapshot_report_bridge_and_compat_exports_compile_and_interoperate() {
+fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interoperate() {
     let err = conversion::ErrorWith::with_context(
         runtime::StructError::from(reason::UvsReason::system_error())
             .with_detail("engine bootstrap failed"),
         runtime::OperationContext::doing("start engine"),
     );
 
-    let snapshot_value: snapshot::StructErrorSnapshot = err.snapshot();
-    let stable: snapshot::StableStructErrorSnapshot = snapshot_value.stable_export();
+    let snapshot_value: snapshot::ErrorSnapshot = err.snapshot();
+    let stable: snapshot::StableErrorSnapshot = snapshot_value.stable_export();
     let report_value: report::ErrorReport = stable.report();
     let cli_fields: &[&str] = report::CLI_ERROR_RESPONSE_FIELDS;
     let http_fields: &[&str] = report::HTTP_ERROR_RESPONSE_FIELDS;
     let bridge_view: bridge::StdStructRef<'_, reason::UvsReason> = err.as_std();
     let owned_bridge: bridge::OwnedStdStructError<reason::UvsReason> = err.clone().into_std();
-    let _compat_runtime = err.compat_serialize();
 
     assert_eq!(
         reason::ErrorCode::error_code(&err),
@@ -54,7 +50,7 @@ fn test_runtime_snapshot_report_bridge_and_compat_exports_compile_and_interopera
     );
     #[cfg(feature = "serde")]
     assert_eq!(
-        serde_json::to_value(_compat_runtime).unwrap()["reason"],
+        serde_json::to_value(&err).unwrap()["reason"],
         serde_json::json!("SystemError")
     );
     assert!(std::error::Error::source(&bridge_view).is_none());

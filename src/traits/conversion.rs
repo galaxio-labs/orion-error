@@ -9,6 +9,14 @@ pub trait ConvStructError<R: DomainReason>: Sized {
     fn conv(self) -> StructError<R>;
 }
 
+pub trait ErrorWrap<T, R: DomainReason>: Sized {
+    fn err_wrap(self, reason: R) -> Result<T, StructError<R>>;
+}
+
+pub trait WrapStructError<R: DomainReason>: Sized {
+    fn wrap(self, reason: R) -> StructError<R>;
+}
+
 pub trait ErrorWrapAs<T, R: DomainReason>: Sized {
     fn wrap_as(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>>;
 }
@@ -40,6 +48,26 @@ where
     }
 }
 
+impl<T, R1, R2> ErrorWrap<T, R2> for Result<T, StructError<R1>>
+where
+    R1: DomainReason + ErrorCode + Display + std::fmt::Debug + Send + Sync + 'static,
+    R2: DomainReason,
+{
+    fn err_wrap(self, reason: R2) -> Result<T, StructError<R2>> {
+        self.map_err(|e| e.wrap(reason))
+    }
+}
+
+impl<R1, R2> WrapStructError<R2> for StructError<R1>
+where
+    R1: DomainReason + ErrorCode + Display + std::fmt::Debug + Send + Sync + 'static,
+    R2: DomainReason,
+{
+    fn wrap(self, reason: R2) -> StructError<R2> {
+        StructError::from(reason).with_struct_source(self)
+    }
+}
+
 impl<T, R1, R2> ErrorWrapAs<T, R2> for Result<T, StructError<R1>>
 where
     R1: DomainReason + ErrorCode + Display + std::fmt::Debug + Send + Sync + 'static,
@@ -57,9 +85,7 @@ where
     R2: DomainReason,
 {
     fn wrap_as(self, reason: R2, detail: impl Into<String>) -> StructError<R2> {
-        StructError::from(reason)
-            .with_struct_source(self)
-            .with_detail(detail)
+        self.wrap(reason).with_detail(detail)
     }
 }
 

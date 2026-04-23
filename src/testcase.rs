@@ -1,4 +1,4 @@
-use crate::{DomainReason, ErrorCategory, StableErrorIdentity, StructError};
+use crate::{DomainReason, ErrorCategory, ErrorIdentityProvider, StructError};
 
 // 测试专用断言 (无消息)
 pub trait TestAssert {
@@ -44,21 +44,21 @@ impl<T> TestAssert for Option<T> {
 
 pub fn assert_err_code<R>(err: &StructError<R>, code: &str)
 where
-    R: DomainReason + StableErrorIdentity,
+    R: DomainReason + ErrorIdentityProvider,
 {
     assert_eq!(err.reason().stable_code(), code);
 }
 
 pub fn assert_err_category<R>(err: &StructError<R>, category: ErrorCategory)
 where
-    R: DomainReason + StableErrorIdentity,
+    R: DomainReason + ErrorIdentityProvider,
 {
     assert_eq!(err.reason().error_category(), category);
 }
 
 pub fn assert_err_identity<R>(err: &StructError<R>, code: &str, category: ErrorCategory)
 where
-    R: DomainReason + StableErrorIdentity,
+    R: DomainReason + ErrorIdentityProvider,
 {
     assert_err_code(err, code);
     assert_err_category(err, category);

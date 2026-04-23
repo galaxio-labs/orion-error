@@ -18,18 +18,17 @@ pub use error::{
     StructErrorBuilder, StructErrorTrait,
 };
 pub use metadata::{ErrorMetadata, MetadataValue};
-pub use reason::{ErrorCategory, ErrorCode, StableErrorIdentity};
+pub use reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
 pub use report::{
     DefaultErrorPolicy, ErrorCliResponse, ErrorHttpResponse, ErrorLogResponse, ErrorPolicy,
-    ErrorPolicyDecision, ErrorPolicySnapshot, ErrorPolicyView, ErrorRenderer, ErrorReport,
+    ErrorPolicyDecision, ErrorPolicyInput, ErrorProtocolSnapshot, ErrorRenderer, ErrorReport,
     ErrorRpcResponse, RedactPolicy, RenderMode, TextReportRenderer, Visibility,
     CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS, LOG_ERROR_RESPONSE_FIELDS,
     POLICY_DECISION_FIELDS, POLICY_SNAPSHOT_TOP_LEVEL_FIELDS, RPC_ERROR_RESPONSE_FIELDS,
 };
 pub use snapshot::{
-    ErrorIdentitySnapshot, SnapshotCompat, SnapshotContextFrame, SnapshotSourceFrame,
-    StableSnapshotCompat, StableSnapshotContextFrame, StableSnapshotSourceFrame,
-    StableStructErrorSnapshot, StructErrorSnapshot, STABLE_SNAPSHOT_CONTEXT_FIELDS,
+    ErrorIdentity, ErrorSnapshot, SnapshotContextFrame, SnapshotSourceFrame, StableErrorSnapshot,
+    StableSnapshotContextFrame, StableSnapshotSourceFrame, STABLE_SNAPSHOT_CONTEXT_FIELDS,
     STABLE_SNAPSHOT_SCHEMA_VERSION, STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS,
     STABLE_SNAPSHOT_TOP_LEVEL_FIELDS,
 };

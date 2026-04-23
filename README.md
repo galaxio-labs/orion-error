@@ -44,38 +44,28 @@ Default builds should use `source_ref()`, `report()`, `snapshot()`, or the
 bridge APIs instead of calling `std::error::Error::source(&err)` directly on
 `StructError<R>`.
 
-V1 fix and review baseline:
+Current docs:
 
-- [docs/v1-fix-and-review-plan.md](./docs/v1-fix-and-review-plan.md)
-
-V2 first-phase design baseline:
-
-- [docs/v2-development-plan.md](./docs/v2-development-plan.md)
-- [docs/v2-runtime-snapshot-report-layering.md](./docs/v2-runtime-snapshot-report-layering.md)
-- [docs/v2-bridge-source-payload.md](./docs/v2-bridge-source-payload.md)
-- [docs/v2-structerror-stderror-strategy.md](./docs/v2-structerror-stderror-strategy.md)
-- [docs/v2-compat-deprecation-plan.md](./docs/v2-compat-deprecation-plan.md)
+- [docs/tutorial.md](./docs/tutorial.md)
+- [docs/reason-identity-guide.md](./docs/reason-identity-guide.md)
+- [docs/protocol-contract.md](./docs/protocol-contract.md)
+- [docs/stable-snapshot-schema.md](./docs/stable-snapshot-schema.md)
+- [docs/thiserror-comparison.md](./docs/thiserror-comparison.md)
 
 Import guidance:
 
-- `orion_error::v1::*` is the versioned V1 namespace
-- `orion_error::v1::prelude::*` is the V1 primary-path wildcard import
-- `orion_error::v1::compat_prelude::*` is the V1 legacy compatibility import for `owe(...)`
-- `orion_error::v2::*` is the V2 layered root namespace
-- `orion_error::v2::prelude::*` is the V2 convenience wildcard import
-- `orion_error::prelude::*` is the V1 primary-path wildcard import
-- V2 layered imports are now available:
+- `orion_error::prelude::*` is the primary convenience wildcard import
+- Small root imports such as `orion_error::{StructError, UvsReason, ErrorIdentityProvider}` are preferred when you want explicit imports.
+- Layered imports are available when code needs stricter responsibility boundaries:
   - `orion_error::runtime::*`
   - `orion_error::conversion::*`
   - `orion_error::snapshot::*`
   - `orion_error::report::*`
   - `orion_error::bridge::*`
   - `orion_error::reason::*`
-- legacy `owe(...)` helper imports should be taken explicitly from `orion_error::compat_prelude::*` or `orion_error::compat_traits::*`
+- `orion_error::compat_prelude::*` / `orion_error::compat_traits::*` are explicit legacy compatibility imports for `owe(...)`
 
-For new code that wants to keep runtime / snapshot / report concerns separated,
-prefer `orion_error::v2::*` or `orion_error::v2::prelude::*` over a flat crate-root import set.
-For older code that still follows the V1 surface, prefer `orion_error::v1::*` over root-level historical aliases.
+For new code, prefer `orion_error::prelude::*` for examples and small root imports for production modules. Use layered imports only when the module benefits from explicit runtime / snapshot / report boundaries.
 
 ## Quick Start
 
@@ -107,42 +97,40 @@ impl ErrorCode for AppError {
 
 fn load_config() -> Result<String, StructError<AppError>> {
     let mut ctx = OperationContext::doing("load_config");
-    ctx.record("path", "config.toml");
+    ctx.record_field("path", "config.toml");
     ctx.record_meta("config.kind", "app_config");
     ctx.record_meta("config.format", "toml");
 
     std::fs::read_to_string("config.toml")
         .into_as(AppError::from(UvsReason::system_error()), "read config file failed")
         .doing("read config file")
-        .attach_context(&ctx)
+        .with_context(&ctx)
 }
 ```
 
 Notes:
 
 - `DomainReason` is usually implemented automatically when your enum satisfies `From<UvsReason> + Display + PartialEq`.
-- Use `record(...)` on `OperationContext`; `attach_context(...)` is the primary error-side API for full context frames.
+- Use `record_field(...)` / `record_meta(...)` on `OperationContext`; `with_context(...)` is the primary error-side API for full context frames.
 - Default to `into_as(...)` for plain `Result<T, E: Error>` entering the structured system the first time.
 - Use `wrap_as(...)` when the upstream value is already `StructError<_>` and the upper layer wants a new reason boundary.
 - Use `snapshot()` for export-layer work.
 - Use `into_snapshot()` when the runtime error can be consumed into an owned snapshot.
-- Use `snapshot().stable_export()` when you want the V2-stable snapshot field set.
-- Use `snapshot().into_stable_export()` or `StableStructErrorSnapshot::from(snapshot)` when the snapshot can be consumed.
-- Use `StableStructErrorSnapshot::from(&err)` / `ErrorReport::from(&err)` for direct read-only runtime projections.
+- Use `snapshot().stable_export()` when you want the stable snapshot field set.
+- Use `snapshot().into_stable_export()` or `StableErrorSnapshot::from(snapshot)` when the snapshot can be consumed.
+- Use `StableErrorSnapshot::from(&err)` / `ErrorReport::from(&err)` for direct read-only runtime projections.
 - Use `stable.report()` for report-layer rendering from a stable snapshot.
-- `stable.compat_export()` is a deprecated migration-only path for legacy compat projections.
 - With the `serde_json` feature, use `snapshot().to_stable_snapshot_json()` for stable JSON output.
 - Stable snapshot JSON includes `schema_version = "orion-error.snapshot.v2"`.
-- `snapshot().to_compat_snapshot_json()` and `serde_json::to_value(snapshot.compat_serialize())` are deprecated migration-only paths when you still need the previous compat projection.
 - Use `report()` for human-facing rendering/redaction views.
 - Use `into_report()` when the runtime error or snapshot can be consumed into an owned report view.
 - Use `into_std()` / `OwnedStdStructError::from(err)` / `as_std()` / `StdStructRef::from(&err)` when explicitly bridging a `StructError<_>` into the standard error ecosystem.
 - Use `OwnedStdStructError::into_struct()` when you need to come back from the owned bridge to the structured runtime carrier.
 - Use `into_dyn_std()` only when an owned, type-erased official bridge is required, such as an `anyhow::Error` boundary that must later be recognized by `into_as(...)`.
 - Use `into_boxed_std()` when a boundary requires `Box<dyn std::error::Error + Send + Sync>`.
-- Use `source_payload()` / `source_payload_kind()` only for read-only inspection of the V2 source payload branch.
+- Use `source_payload()` / `source_payload_kind()` only for read-only inspection of the source payload branch.
 - Use legacy `owe(...)` only as a compatibility path for `Display`-only values.
-- `with_source(...)` and `builder.source(...)` have been removed in V2; use `with_std_source(...)` / `with_struct_source(...)` and `source_std(...)` / `source_struct(...)`.
+- `with_source(...)` and `builder.source(...)` are still available as `IntoSourcePayload` sugar; if you want source branch semantics to stay explicit at the call site, prefer `with_std_source(...)` / `with_struct_source(...)` and `source_std(...)` / `source_struct(...)`.
 
 ## Core Concepts
 
@@ -213,20 +201,20 @@ use orion_error::{
 };
 
 let mut ctx = OperationContext::doing("process_order");
-ctx.record("order_id", "123");
-ctx.record("user_id", "42");
+ctx.record_field("order_id", "123");
+ctx.record_field("user_id", "42");
 
 let result = do_work()
     .doing("validate order")
-    .attach_context(&ctx);
+    .with_context(&ctx);
 ```
 
 Rules of thumb:
 
-- `OperationContext::doing("process_order")` is the V1 primary naming path for the outermost goal.
+- `OperationContext::doing("process_order")` is the primary naming path for the outermost goal.
 - Chained `.doing("validate order")` on an error appends an inner path segment instead of replacing the outer goal.
-- In `0.7.x / V2`, `doing(...)` writes the structured `action` field and keeps `target/path` as the compat projection; `want(...)` is a deprecated compat alias.
-- Use `action_main()` / `locator_main()` to read the V2 primary semantics; use `target_main()` / `target_path()` when you need the compat projection.
+- `doing(...)` writes the structured `action` field and keeps `target/path` as the compatibility projection; `want(...)` is a compatibility alias.
+- Use `action_main()` / `locator_main()` to read the primary semantics; use `target_main()` / `target_path()` when you need the compatibility projection.
 - Display and `serde` now expose both `Want` and `Path`, for example: `Want=process_order`, `Path=process_order / validate order`.
 
 ### 3.1 Typed Metadata
@@ -241,7 +229,7 @@ let ctx = OperationContext::doing("load sink defaults")
     .with_meta("config.scope", "sink")
     .with_meta("parse.line", 1u32);
 
-let err = StructError::from(UvsReason::config_error()).attach_context(ctx);
+let err = StructError::from(UvsReason::config_error()).with_context(ctx);
 assert_eq!(err.context_metadata().get_str("config.kind"), Some("sink_defaults"));
 ```
 
@@ -293,16 +281,16 @@ third_party_call()
     .into_as(UvsReason::system_error(), "third-party call failed")?;
 ```
 
-`raw_source(...)` is intentionally conservative in V1. It only accepts types that explicitly implement `RawStdError`; it is not a blanket `E: StdError` path, and it must not be used for `StructError<_>`.
+`raw_source(...)` is intentionally conservative. It only accepts types that explicitly implement `RawStdError`; it is not a blanket `E: StdError` path, and it must not be used for `StructError<_>`.
 
-This is the intended V1 design:
+This is the intended design:
 
 - `IntoAs` stays behind a sealed `UnstructuredSource` entry
 - built-in allowlisted raw errors implement `UnstructuredSource` directly
 - unknown downstream raw `StdError` types may opt in explicitly through `RawStdError`
 - `StructError<_>` cannot enter `raw_source(...)`, because downstream crates cannot implement `RawStdError` for external types
 
-In other words, V1 keeps the explicit escape hatch without reopening a blanket `E: StdError` path.
+In other words, the explicit escape hatch is kept without reopening a blanket `E: StdError` path.
 
 With the `anyhow` feature, `anyhow::Error` is still treated as an aggregated but unstructured error by default. The only structured exception is a top-level official `OwnedDynStdStructError` created from `StructError<_>::into_dyn_std()`. `orion-error` does not scan arbitrary `anyhow` source chains and does not guess third-party wrappers.
 
@@ -334,7 +322,7 @@ In other words:
 - `into_as(...)` is for `Result<T, E>` where `E` is a real non-structured error type
 - `err_conv()` is for `Result<T, StructError<R1>>` to `Result<T, StructError<R2>>`
 - `wrap_as(...)` is for `Result<T, StructError<R1>>` when the upper layer wants a new reason boundary
-- `err_wrap(...)` / `wrap(...)` have been removed in V2; migrate them to `wrap_as(...)`
+- `err_wrap(...)` / `wrap(...)` are compatibility helpers; prefer `wrap_as(...)` in new code
 
 If you want to attach a lower `StructError` directly and preserve its structured source frames, use `with_struct_source(...)`:
 
@@ -345,13 +333,13 @@ use orion_error::{
     runtime::{OperationContext, StructError},
 };
 
-let source = StructError::from(UvsReason::config_error()).attach_context(
+let source = StructError::from(UvsReason::config_error()).with_context(
     OperationContext::doing("load sink defaults")
         .with_meta("config.kind", "sink_defaults")
 );
 
 let err = StructError::from(UvsReason::system_error())
-    .attach_context(
+    .with_context(
         OperationContext::doing("start engine").with_meta("component.name", "engine"),
     )
     .with_struct_source(source);
@@ -390,7 +378,7 @@ impl RedactPolicy for SimplePolicy {
 
 let err = StructError::from(UvsReason::config_error())
     .with_detail("load config failed")
-    .attach_context(
+    .with_context(
         orion_error::OperationContext::doing("load config")
             .with_meta("config.kind", "sink_defaults")
             .with_meta("config.secret", "/prod/secrets/api-key"),
@@ -422,7 +410,7 @@ use orion_error::op_context;
 use orion_error::runtime::ContextRecord;
 
 let mut ctx = op_context!("sync-user").with_auto_log();
-ctx.record("user_id", "42");
+ctx.record_field("user_id", "42");
 ctx.info("starting sync");
 
 do_sync()?;
@@ -479,9 +467,7 @@ With the `serde` feature, the default `Serialize for StructError` remains a comp
 
 For `StructError` sources, `message` is the stable reason text and `display` carries the full formatted error. `debug` remains available on `SourceFrame` at runtime, but it is not serialized by default because `Debug` output may contain sensitive internal fields. `source_chain` is kept as a compatibility summary; new observability pipelines should prefer `source_frames`. `type_name` is best-effort and should not be treated as a complete or stable classification key.
 
-The underlying trait object itself is still not serialized.
-
-If you need this historical runtime JSON shape explicitly, use `err.compat_serialize()` or `serde_json::to_value(err.compat_serialize())`. For new export paths, prefer `err.snapshot()`, `err.report()`, or the stable snapshot JSON helpers.
+The underlying trait object itself is still not serialized. For new export paths, prefer `err.snapshot()`, `err.report()`, or the stable snapshot JSON helpers.
 
 If you use legacy `owe(...)` helpers, only the display string is copied into `detail`, so they are not the preferred path for normal Rust errors.
 

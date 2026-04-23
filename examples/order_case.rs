@@ -1,12 +1,7 @@
 use derive_more::From;
 use orion_error::{
-    v2::{
-        conversion::{ErrorConv, ErrorWith},
-        reason::{ErrorCategory, ErrorCode, StableErrorIdentity, UvsReason},
-        report::{DefaultErrorPolicy, RedactPolicy, RenderMode},
-        runtime::{OperationContext, StructError},
-    },
-    ToStructError,
+    DefaultErrorPolicy, ErrorCategory, ErrorCode, ErrorConv, ErrorIdentityProvider, ErrorWith,
+    OperationContext, StructError, ToStructError, UvsReason,
 };
 use thiserror::Error;
 
@@ -30,7 +25,7 @@ impl ErrorCode for ParseReason {
     }
 }
 
-impl StableErrorIdentity for ParseReason {
+impl ErrorIdentityProvider for ParseReason {
     fn stable_code(&self) -> &'static str {
         match self {
             Self::InvalidText => "biz.order_invalid_text",
@@ -64,7 +59,7 @@ impl ErrorCode for UserReason {
     }
 }
 
-impl StableErrorIdentity for UserReason {
+impl ErrorIdentityProvider for UserReason {
     fn stable_code(&self) -> &'static str {
         match self {
             Self::NotFound => "biz.user_not_found",
@@ -97,7 +92,7 @@ impl ErrorCode for StoreReason {
     }
 }
 
-impl StableErrorIdentity for StoreReason {
+impl ErrorIdentityProvider for StoreReason {
     fn stable_code(&self) -> &'static str {
         match self {
             Self::StorageFull => "sys.storage_full",
@@ -139,7 +134,7 @@ impl ErrorCode for OrderReason {
     }
 }
 
-impl StableErrorIdentity for OrderReason {
+impl ErrorIdentityProvider for OrderReason {
     fn stable_code(&self) -> &'static str {
         match self {
             Self::InvalidOrder => "biz.order_invalid",
@@ -196,18 +191,6 @@ struct OrderDraft {
     user_id: u32,
     amount: u64,
     item: String,
-}
-
-struct ExampleRedactPolicy;
-
-impl RedactPolicy for ExampleRedactPolicy {
-    fn redact_key(&self, key: &str) -> bool {
-        matches!(key, "order.raw" | "trace.secret")
-    }
-
-    fn redact_value(&self, _key: Option<&str>, _value: &str) -> Option<String> {
-        Some("<redacted>".to_string())
-    }
 }
 
 struct OrderService;
@@ -313,21 +296,7 @@ fn write_impl(item: &str) -> Result<(), std::io::Error> {
 
 fn print_v3_views(err: &OrderError) {
     let policy = DefaultErrorPolicy;
-
-    println!("identity      : {:?}", err.identity_snapshot());
-    println!(
-        "policy        : {:?}",
-        err.policy_snapshot(&policy).decision
-    );
-    println!("http response : {:?}", err.http_response(&policy));
-    println!("cli response  : {:?}", err.cli_response(&policy));
-    println!("log response  : {:?}", err.log_response(&policy));
-    println!("rpc response  : {:?}", err.rpc_response(&policy));
-    println!("verbose report:\n{}", err.render(RenderMode::Verbose));
-    println!(
-        "redacted report:\n{}",
-        err.render_redacted(RenderMode::Verbose, &ExampleRedactPolicy)
-    );
+    println!("{}", err.render_user_debug(&policy));
 }
 
 fn run_case(name: &str, user_id: u32, amount: u64, raw_order: &str) {

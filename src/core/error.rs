@@ -24,9 +24,9 @@ impl<T: DomainReason + ErrorCode> ErrorCode for StructError<T> {
     }
 }
 
-impl<T> crate::StableErrorIdentity for StructError<T>
+impl<T> crate::ErrorIdentityProvider for StructError<T>
 where
-    T: DomainReason + crate::StableErrorIdentity,
+    T: DomainReason + crate::ErrorIdentityProvider,
 {
     fn stable_code(&self) -> &'static str {
         self.reason.stable_code()
@@ -53,7 +53,7 @@ struct InternalSourceState {
     frames: Vec<SourceFrame>,
 }
 
-/// Owned V2 source payload.
+/// Owned source payload.
 ///
 /// This is the public write-side counterpart of [`SourcePayloadRef`].  It keeps
 /// ordinary standard errors and already-structured errors in separate payload
@@ -321,11 +321,6 @@ where
         self.inner
     }
 
-    #[deprecated(since = "0.7.0", note = "use into_struct()")]
-    pub fn into_inner(self) -> StructError<R> {
-        self.into_struct()
-    }
-
     pub fn inner(&self) -> &StructError<R> {
         &self.inner
     }
@@ -552,17 +547,6 @@ pub struct StructError<T: DomainReason> {
     imp: Box<StructErrorImpl<T>>,
 }
 
-/// Explicit compatibility serialization view for `StructError`.
-///
-/// This preserves the historical runtime JSON projection with `want`, `path`,
-/// `source_frames`, `source_message`, and `source_chain`. New export code
-/// should prefer `snapshot()` / `report()` instead of relying on runtime
-/// carrier serialization.
-#[cfg_attr(not(feature = "serde"), allow(dead_code))]
-pub struct CompatStructErrorRef<'a, T: DomainReason> {
-    err: &'a StructError<T>,
-}
-
 #[cfg(feature = "serde")]
 impl<T: DomainReason> serde::Serialize for StructError<T>
 where
@@ -572,33 +556,19 @@ where
     where
         S: serde::Serializer,
     {
-        self.compat_serialize().serialize(serializer)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<T: DomainReason> serde::Serialize for CompatStructErrorRef<'_, T>
-where
-    T: serde::Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
         use serde::ser::SerializeStruct;
 
-        let err = self.err;
-        let source_frames = err.source_frames();
-        let source_chain = err.source_chain();
+        let source_frames = self.source_frames();
+        let source_chain = self.source_chain();
         let source_message = source_chain.first().cloned();
-        let want = err.target_main();
-        let path = err.target_path();
+        let want = self.target_main();
+        let path = self.target_path();
 
         let mut state = serializer.serialize_struct("StructError", 9)?;
-        state.serialize_field("reason", &err.imp.reason)?;
-        state.serialize_field("detail", &err.imp.detail)?;
-        state.serialize_field("position", &err.imp.position)?;
-        state.serialize_field("context", err.imp.context.as_ref())?;
+        state.serialize_field("reason", &self.imp.reason)?;
+        state.serialize_field("detail", &self.imp.detail)?;
+        state.serialize_field("position", &self.imp.position)?;
+        state.serialize_field("context", self.imp.context.as_ref())?;
         state.serialize_field("want", &want)?;
         state.serialize_field("path", &path)?;
         state.serialize_field("source_frames", &source_frames)?;
@@ -611,10 +581,6 @@ where
 impl<T: DomainReason> StructError<T> {
     pub fn imp(&self) -> &StructErrorImpl<T> {
         &self.imp
-    }
-
-    pub fn compat_serialize(&self) -> CompatStructErrorRef<'_, T> {
-        CompatStructErrorRef { err: self }
     }
 }
 
@@ -747,7 +713,7 @@ impl<T: DomainReason> StructError<T> {
     }
 
     #[must_use]
-    /// Attach any source that can be converted into the V2 dual-channel source
+    /// Attach any source that can be converted into the dual-channel source
     /// payload model.
     ///
     /// Ordinary `StdError` values attach as `SourcePayloadKind::Std`, while
@@ -773,7 +739,7 @@ impl<T: DomainReason> StructError<T> {
 
     #[must_use]
     /// Convenience sugar that auto-routes either a standard source error or an
-    /// existing `StructError<_>` through the V2 dual-channel source model.
+    /// existing `StructError<_>` through the dual-channel source model.
     ///
     /// Prefer `with_std_source(...)` / `with_struct_source(...)` when you want
     /// the call site to make the source kind explicit.
@@ -1154,7 +1120,7 @@ impl<T: DomainReason> StructErrorBuilder<T> {
     }
 
     /// Convenience sugar that auto-routes either a standard source error or an
-    /// existing `StructError<_>` through the V2 dual-channel source model.
+    /// existing `StructError<_>` through the dual-channel source model.
     ///
     /// Prefer `source_std(...)` / `source_struct(...)` when you want the call
     /// site to make the source kind explicit.
@@ -1284,7 +1250,7 @@ mod tests {
         );
 
         // Serialize to JSON
-        let json_value = serde_json::to_value(error.compat_serialize()).unwrap();
+        let json_value = serde_json::to_value(&error).unwrap();
         println!("{json_value:#}");
         assert!(json_value.get("reason").is_some());
         assert!(json_value.get("detail").is_some());
@@ -1445,7 +1411,7 @@ mod tests {
             .source_std(OuterError { source: InnerError })
             .finish();
 
-        let json_value = serde_json::to_value(error.compat_serialize()).unwrap();
+        let json_value = serde_json::to_value(&error).unwrap();
         assert_eq!(
             json_value.get("source_message"),
             Some(&serde_json::Value::String("outer source".to_string()))
@@ -1484,7 +1450,7 @@ mod tests {
 
         let error = StructError::from(TestDomainReason::TestError).with_context(outer);
 
-        let json_value = serde_json::to_value(error.compat_serialize()).unwrap();
+        let json_value = serde_json::to_value(&error).unwrap();
         assert_eq!(
             json_value.get("want"),
             Some(&serde_json::Value::String("place_order".to_string()))
@@ -1495,19 +1461,6 @@ mod tests {
                 "place_order / read_order_payload".to_string()
             ))
         );
-    }
-
-    #[test]
-    fn test_struct_error_default_serialize_matches_explicit_compat_wrapper() {
-        let error = StructError::builder(TestDomainReason::TestError)
-            .detail("high-level detail")
-            .source_std(OuterError { source: InnerError })
-            .finish();
-
-        let via_default = serde_json::to_value(&error).unwrap();
-        let via_compat = serde_json::to_value(error.compat_serialize()).unwrap();
-
-        assert_eq!(via_default, via_compat);
     }
 
     #[test]

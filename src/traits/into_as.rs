@@ -11,7 +11,7 @@ mod private {
 
 /// Marker trait for explicitly opt-in raw `std::error::Error` sources.
 ///
-/// This is the V1 escape hatch for downstream crates that have their own raw
+/// This is the explicit escape hatch for downstream crates that have their own raw
 /// `StdError` types and want to route them through `raw_source(...)` before
 /// calling `into_as(...)`.
 ///
@@ -35,7 +35,7 @@ pub struct RawSource<E>(E);
 
 /// Explicitly mark an opt-in raw `std::error::Error` as an unstructured source.
 ///
-/// This is a narrow V1 escape hatch. It does **not** provide a blanket
+/// This is a narrow explicit escape hatch. It does **not** provide a blanket
 /// `E: StdError` path, and it must not be used for `StructError<_>`.
 ///
 /// Downstream crates may opt in their own raw `StdError` types by implementing

@@ -24,7 +24,7 @@ impl ErrorCategory {
     }
 }
 
-pub trait StableErrorIdentity {
+pub trait ErrorIdentityProvider {
     fn stable_code(&self) -> &'static str;
 
     fn error_category(&self) -> ErrorCategory;

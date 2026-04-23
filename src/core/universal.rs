@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use super::{ErrorCategory, ErrorCode, StableErrorIdentity};
+use super::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
 
 /// Configuration error sub-classification
 /// 配置错误子分类
@@ -233,7 +233,7 @@ impl ErrorCode for UvsReason {
     }
 }
 
-impl StableErrorIdentity for UvsReason {
+impl ErrorIdentityProvider for UvsReason {
     fn stable_code(&self) -> &'static str {
         match self {
             UvsReason::ValidationError => "biz.validation_error",
