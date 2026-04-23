@@ -5,7 +5,7 @@ use orion_error::{
 };
 
 #[test]
-fn test_root_exports_support_v3_identity_and_policy_flow() {
+fn test_root_exports_support_identity_and_policy_flow() {
     let err = std::fs::read_to_string("missing-config.toml")
         .into_as(UvsReason::system_error(), "read config failed")
         .doing("read config")

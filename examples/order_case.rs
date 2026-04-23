@@ -1,157 +1,47 @@
 use derive_more::From;
 use orion_error::{
-    DefaultErrorPolicy, ErrorCategory, ErrorCode, ErrorConv, ErrorIdentityProvider, ErrorWith,
-    OperationContext, StructError, ToStructError, UvsReason,
+    DefaultErrorPolicy, ErrorConv, ErrorWith, OperationContext, OrionError, StructError,
+    ToStructError, UvsReason,
 };
-use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, Error, From)]
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum ParseReason {
-    #[error("invalid order text")]
+    #[orion_error(identity = "biz.order_invalid_text")]
     InvalidText,
-    #[error("invalid amount")]
+    #[orion_error(identity = "biz.order_invalid_amount")]
     InvalidAmount,
-    #[error("{0}")]
+    #[orion_error(transparent)]
     Uvs(UvsReason),
 }
 
-impl ErrorCode for ParseReason {
-    fn error_code(&self) -> i32 {
-        match self {
-            Self::InvalidText => 1001,
-            Self::InvalidAmount => 1002,
-            Self::Uvs(reason) => reason.error_code(),
-        }
-    }
-}
-
-impl ErrorIdentityProvider for ParseReason {
-    fn stable_code(&self) -> &'static str {
-        match self {
-            Self::InvalidText => "biz.order_invalid_text",
-            Self::InvalidAmount => "biz.order_invalid_amount",
-            Self::Uvs(reason) => reason.stable_code(),
-        }
-    }
-
-    fn error_category(&self) -> ErrorCategory {
-        match self {
-            Self::InvalidText | Self::InvalidAmount => ErrorCategory::Biz,
-            Self::Uvs(reason) => reason.error_category(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Error, From)]
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum UserReason {
-    #[error("user not found")]
+    #[orion_error(identity = "biz.user_not_found")]
     NotFound,
-    #[error("{0}")]
+    #[orion_error(transparent)]
     Uvs(UvsReason),
 }
 
-impl ErrorCode for UserReason {
-    fn error_code(&self) -> i32 {
-        match self {
-            Self::NotFound => 1101,
-            Self::Uvs(reason) => reason.error_code(),
-        }
-    }
-}
-
-impl ErrorIdentityProvider for UserReason {
-    fn stable_code(&self) -> &'static str {
-        match self {
-            Self::NotFound => "biz.user_not_found",
-            Self::Uvs(reason) => reason.stable_code(),
-        }
-    }
-
-    fn error_category(&self) -> ErrorCategory {
-        match self {
-            Self::NotFound => ErrorCategory::Biz,
-            Self::Uvs(reason) => reason.error_category(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Error, From)]
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum StoreReason {
-    #[error("storage full")]
+    #[orion_error(identity = "sys.storage_full")]
     StorageFull,
-    #[error("{0}")]
+    #[orion_error(transparent)]
     Uvs(UvsReason),
 }
 
-impl ErrorCode for StoreReason {
-    fn error_code(&self) -> i32 {
-        match self {
-            Self::StorageFull => 2101,
-            Self::Uvs(reason) => reason.error_code(),
-        }
-    }
-}
-
-impl ErrorIdentityProvider for StoreReason {
-    fn stable_code(&self) -> &'static str {
-        match self {
-            Self::StorageFull => "sys.storage_full",
-            Self::Uvs(reason) => reason.stable_code(),
-        }
-    }
-
-    fn error_category(&self) -> ErrorCategory {
-        match self {
-            Self::StorageFull => ErrorCategory::Sys,
-            Self::Uvs(reason) => reason.error_category(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Error, From)]
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum OrderReason {
-    #[error("invalid order")]
+    #[orion_error(identity = "biz.order_invalid")]
     InvalidOrder,
-    #[error("user not found")]
+    #[orion_error(identity = "biz.user_not_found")]
     UserNotFound,
-    #[error("insufficient funds")]
+    #[orion_error(identity = "biz.insufficient_funds")]
     InsufficientFunds,
-    #[error("storage full")]
+    #[orion_error(identity = "sys.storage_full")]
     StorageFull,
-    #[error("{0}")]
+    #[orion_error(transparent)]
     Uvs(UvsReason),
-}
-
-impl ErrorCode for OrderReason {
-    fn error_code(&self) -> i32 {
-        match self {
-            Self::InvalidOrder => 3001,
-            Self::UserNotFound => 3002,
-            Self::InsufficientFunds => 3003,
-            Self::StorageFull => 3004,
-            Self::Uvs(reason) => reason.error_code(),
-        }
-    }
-}
-
-impl ErrorIdentityProvider for OrderReason {
-    fn stable_code(&self) -> &'static str {
-        match self {
-            Self::InvalidOrder => "biz.order_invalid",
-            Self::UserNotFound => "biz.user_not_found",
-            Self::InsufficientFunds => "biz.insufficient_funds",
-            Self::StorageFull => "sys.storage_full",
-            Self::Uvs(reason) => reason.stable_code(),
-        }
-    }
-
-    fn error_category(&self) -> ErrorCategory {
-        match self {
-            Self::InvalidOrder | Self::UserNotFound | Self::InsufficientFunds => ErrorCategory::Biz,
-            Self::StorageFull => ErrorCategory::Sys,
-            Self::Uvs(reason) => reason.error_category(),
-        }
-    }
 }
 
 impl From<ParseReason> for OrderReason {
@@ -294,7 +184,7 @@ fn write_impl(item: &str) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn print_v3_views(err: &OrderError) {
+fn print_protocol_views(err: &OrderError) {
     let policy = DefaultErrorPolicy;
     println!("{}", err.render_user_debug(&policy));
 }
@@ -306,7 +196,7 @@ fn run_case(name: &str, user_id: u32, amount: u64, raw_order: &str) {
             "created order: user={} amount={}",
             order.user_id, order.amount
         ),
-        Err(err) => print_v3_views(&err),
+        Err(err) => print_protocol_views(&err),
     }
 }
 

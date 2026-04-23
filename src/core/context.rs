@@ -980,7 +980,7 @@ mod tests {
     }
 
     #[test]
-    fn test_doing_records_v2_action_with_compat_target_projection() {
+    fn test_doing_records_action_with_compat_target_projection() {
         let mut ctx = OperationContext::doing("load_config");
         ctx.with_at("config.toml");
 

@@ -2,59 +2,54 @@
 
 ## 定位
 
-- `thiserror`：负责定义错误类型，自动生成 `Display` 和 `Error`
-- `orion-error`：负责错误治理，提供分类、错误码、上下文、转换和可观测辅助
+新代码默认不需要 `thiserror`。推荐直接用 `OrionError` 定义领域 reason：
 
-导入约定：
+```rust
+use derive_more::From;
+use orion_error::{prelude::*, reason::UvsReason};
 
-- 新代码优先 `use orion_error::prelude::*;` 或 crate root 小集合导入
-- 需要明确职责边界时，再使用 `runtime` / `conversion` / `reason` / `report` 等分层模块
-- 只按 trait 分组导入时可用 `use orion_error::traits_ext::*;`
-- 旧的 `owe(...)` / `err_wrap(...)` 兼容导入请显式从 compat prelude / compat traits 模块进入
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
+enum AppError {
+    #[orion_error(identity = "biz.parse_failed")]
+    Parse,
+    #[orion_error(transparent)]
+    Uvs(UvsReason),
+}
+```
 
-推荐组合方式是：
+`OrionError` 会同时生成：
 
-- 用 `thiserror` 定义领域错误枚举
-- 用 `orion-error` 负责 `UvsReason`、`StructError`、上下文和转换
+- `Display`
+- `ErrorCode`
+- `ErrorIdentityProvider`
+
+因此使用者不需要再为了文案展示去 derive `thiserror::Error`，也不需要手写 `ErrorCode` / `ErrorIdentityProvider` 的重复 `match`。
 
 ## 能力对比
 
 | 能力 | thiserror | orion-error |
-|---|---|---|
-| 定义领域错误 | 强 | 一般 |
-| 统一错误分类 | 无 | `UvsReason` |
-| 错误码 | 无 | `ErrorCode` |
-| 上下文堆栈 | 无 | `OperationContext` |
+| --- | --- | --- |
+| 定义标准错误类型 | 强 | 不是主要目标 |
+| 定义领域 reason | 可用但需要额外实现身份 | `OrionError` 是推荐入口 |
+| 统一错误分类 | 无 | `UvsReason` / `ErrorCategory` |
+| 稳定协议身份 | 无 | `ErrorIdentityProvider` |
+| 兼容数值码 | 无 | `ErrorCode` |
+| 上下文堆栈 | 无 | `OperationContext` / `ErrorWith` |
 | 非结构错误转结构错误 | 无 | `IntoAs` |
-| 结构错误跨层转换 | 无 | `ErrorConv` / `ErrorWrapAs` |
-| 重试/严重级别判断 | 无 | `is_retryable()` / `is_high_severity()` |
+| 结构错误跨层包装 | 无 | `ErrorWrapAs` |
 
 ## 推荐模式
 
 ```rust
 use derive_more::From;
-use orion_error::{
-    conversion::IntoAs,
-    reason::{ErrorCode, UvsReason},
-    runtime::StructError,
-};
-use thiserror::Error;
+use orion_error::{prelude::*, reason::UvsReason};
 
-#[derive(Debug, Error, Clone, PartialEq, From)]
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum AppError {
-    #[error("parse failed")]
-    Parse,
-    #[error("{0}")]
+    #[orion_error(identity = "biz.invalid_request")]
+    InvalidRequest,
+    #[orion_error(transparent)]
     Uvs(UvsReason),
-}
-
-impl ErrorCode for AppError {
-    fn error_code(&self) -> i32 {
-        match self {
-            Self::Parse => 1000,
-            Self::Uvs(reason) => reason.error_code(),
-        }
-    }
 }
 
 fn handle() -> Result<(), StructError<AppError>> {
@@ -65,12 +60,27 @@ fn handle() -> Result<(), StructError<AppError>> {
 }
 ```
 
-这里不需要再写空的 `impl DomainReason for AppError {}`。
+这里不需要：
+
+- `#[derive(thiserror::Error)]`
+- 空的 `impl DomainReason for AppError {}`
+- 手写 `impl ErrorCode`
+- 手写 `impl ErrorIdentityProvider`
+
+## 什么时候仍然用 thiserror
+
+只有这些场景需要考虑 `thiserror`：
+
+- 现有错误类型已经作为 `std::error::Error` 暴露给外部 crate。
+- 外部 API 要求传入或返回标准错误类型。
+- 你需要 `#[source]`、`#[from]` 等 `thiserror` 的标准错误生态能力。
+
+这种情况下，可以把 `thiserror` 类型当作普通 source，通过 `into_as(...)` 或 `with_source(...)` 进入 `StructError<R>`。
 
 ## 什么时候用 `into_as(...)`，什么时候保留 `owe(...)`
 
-- `into_as(...)`：当前默认推荐，适合 `E: std::error::Error` 第一次进入结构化体系
-- `owe(...)`：兼容路径，只保留字符串 detail，适合 `E: Display`
+- `into_as(...)`：当前默认推荐，适合 `E: std::error::Error` 第一次进入结构化体系。
+- `owe(...)`：兼容路径，只保留字符串 detail，适合维护旧的 `E: Display` 场景。
 
 如果你关心：
 
@@ -83,20 +93,34 @@ fn handle() -> Result<(), StructError<AppError>> {
 
 如果上游已经是 `StructError<_>`，则不要再走 `.into_as(...)` 或兼容态的 `.owe(...)`：
 
-- 做 reason 类型转换时，优先 `err_conv()`
-- 做上层语义包装时，优先 `wrap_as(...)`
+- 做 reason 类型转换时，优先 `err_conv()`。
+- 做上层语义包装时，优先 `wrap_as(...)`。
+
+## source 建议
+
+`with_source(...)` 是推荐的自动 source 分流入口：
+
+```rust
+let err = StructError::from(UvsReason::system_error())
+    .with_detail("write file failed")
+    .with_source(std::io::Error::other("disk offline"));
+```
+
+如果调用点需要强制表达 source 分支，再使用显式 API：
+
+- `with_std_source(...)`：普通 `std::error::Error` source。
+- `with_struct_source(...)`：下层 `StructError<_>` source。
 
 兼容说明：
 
-- `owe_*_source()` 仍保留用于 `0.6.3` 已公开语义的兼容维护；新代码优先使用 `into_as(reason, detail)`
-- `err_wrap(...)` 仍然保留，但已进入 `0.7.0` deprecated path，属于 compat/bridge 层
-- `with_source(...)` 建议改成 `with_std_source(...)` 或 `with_struct_source(...)`
-- 如果旧代码必须继续导入这些 compat helper，请和 `prelude::*` 分开写，避免把当前主路径和兼容层混成一个默认接口
+- `owe_*_source()` 只用于维护已经公开过的旧语义；新代码优先使用 `into_as(reason, detail)`。
+- `err_wrap(...)` / `wrap(...)` 属于 compat 层；新代码优先使用 `wrap_as(...)`。
+- 如果旧代码必须继续导入这些 compat helper，请和 `prelude::*` 分开写，避免把当前主路径和兼容层混成一个默认接口。
 
 ## 实践建议
 
-- 服务边界对外暴露 `error_code()` 和受控错误信息
-- 领域错误枚举保留少量稳定变体，底层通用错误走 `Uvs(UvsReason)`
-- 在关键链路使用 `doing(...)` 和 `record(...)`
-- 在普通 `StdError` 第一次进入结构化体系时优先使用 `into_as(...)`
-- 在需要主动包装现有错误对象时优先使用 `with_std_source(...)`
+- 新领域 reason 默认 derive `OrionError`。
+- 对外协议依赖 `identity`，不要默认依赖兼容数值码。
+- 领域错误枚举保留少量稳定变体，底层通用错误走 `Uvs(UvsReason)`。
+- 在关键链路使用 `doing(...)`、`record_field(...)` 和 `with_context(...)`。
+- 在普通 `StdError` 第一次进入结构化体系时优先使用 `into_as(...)`。

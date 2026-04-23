@@ -590,7 +590,7 @@ mod tests {
     }
 
     #[test]
-    fn test_identity_snapshot_captures_v3_stable_identity_fields() {
+    fn test_identity_snapshot_captures_stable_identity_fields() {
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("engine bootstrap failed")
             .with_position("src/main.rs:42")
@@ -630,7 +630,7 @@ mod tests {
     }
 
     #[test]
-    fn test_snapshot_preserves_v2_action_and_locator_context_fields() {
+    fn test_snapshot_preserves_action_and_locator_context_fields() {
         let mut ctx = OperationContext::at("config.toml");
         ctx.with_doing("parse config");
 

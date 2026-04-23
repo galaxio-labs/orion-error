@@ -18,17 +18,17 @@ orion-error = { version = "0.7.0", features = ["serde"] }
 orion-error = { version = "0.7.0", features = ["tracing"] }
 ```
 
-默认启用 `log`。
+默认启用 `log` 和 `derive`。
 
 ## 导入约定
 
-- `orion_error::prelude::*`：当前主路径通配导入，适合示例、教程和小型业务模块
-- crate root 小集合导入：例如 `use orion_error::{StructError, UvsReason, ErrorIdentityProvider};`，适合生产代码显式控制依赖
+- `orion_error::prelude::*`：当前主路径通配导入，只包含 `OrionError`、`StructError`、`IntoAs`、`ErrorWith`、`ErrorWrapAs`、`DefaultErrorPolicy`
+- crate root 小集合导入：例如 `use orion_error::{StructError, OrionError};`，适合生产代码显式控制依赖
 - `orion_error::runtime::*` / `conversion::*` / `reason::*` / `snapshot::*` / `report::*` / `bridge::*`：按职责分层导入入口，适合需要明确 runtime / snapshot / report 边界的模块
-- `orion_error::traits_ext::*`：如果你只想按 trait 分组导入当前主路径扩展 trait，可以用这一层
+- `orion_error::full_prelude::*`：只用于高级协议/schema 检查和迁移测试，不作为业务默认入口
 - crate root 下的 compat prelude / compat traits 模块：只用于兼容旧的 `owe(...)` 调用路径
 
-如果是新代码，优先使用 `orion_error::prelude::*` 或 crate root 小集合导入；不要把业务代码的 import 结构绑定到版本阶段命名上。
+如果是新代码，优先使用 `orion_error::prelude::*` 加少量分层导入，或使用 crate root 小集合导入；不要把业务代码的 import 结构绑定到版本阶段命名上。
 如果是维护旧代码，兼容 helper 请显式从 `orion_error::compat_prelude::*` 或 `orion_error::compat_traits::*` 导入。
 
 ## 一分钟上手
@@ -36,27 +36,17 @@ orion-error = { version = "0.7.0", features = ["tracing"] }
 ```rust
 use derive_more::From;
 use orion_error::{
-    conversion::{ErrorWith, IntoAs},
-    reason::{ErrorCode, UvsReason},
-    runtime::{ContextRecord, OperationContext, StructError},
+    prelude::*,
+    reason::UvsReason,
+    runtime::OperationContext,
 };
-use thiserror::Error;
 
-#[derive(Debug, Error, Clone, PartialEq, From)]
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum UserError {
-    #[error("user not found")]
+    #[orion_error(identity = "biz.user_not_found")]
     UserNotFound,
-    #[error("{0}")]
+    #[orion_error(transparent)]
     Uvs(UvsReason),
-}
-
-impl ErrorCode for UserError {
-    fn error_code(&self) -> i32 {
-        match self {
-            Self::UserNotFound => 1001,
-            Self::Uvs(reason) => reason.error_code(),
-        }
-    }
 }
 
 fn load_user(user_id: u64) -> Result<String, StructError<UserError>> {
@@ -73,6 +63,7 @@ fn load_user(user_id: u64) -> Result<String, StructError<UserError>> {
 说明：
 
 - 领域错误一般不必手写 `impl DomainReason`；满足 `From<UvsReason> + Display + PartialEq` 即自动实现。
+- 领域错误推荐 derive `OrionError`，并用 `#[orion_error(...)]` 在变体上声明稳定身份。
 - `record_field(...)` / `record_meta(...)` 是当前推荐的上下文字段写法。
 - `into_as(...)` 是普通错误进入结构化体系的主路径。
 - `doing(...)` 会写入 `action` 语义字段；与 `with_context(&ctx)` 组合时，最外层上下文仍决定主语义边界。
@@ -144,27 +135,16 @@ assert!(user_debug.contains("detail        : read config failed"));
 
 ```rust
 use derive_more::From;
-use orion_error::reason::{ErrorCode, UvsReason};
-use thiserror::Error;
+use orion_error::{OrionError, UvsReason};
 
-#[derive(Debug, Error, Clone, PartialEq, From)]
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum OrderError {
-    #[error("insufficient funds")]
+    #[orion_error(identity = "biz.insufficient_funds")]
     InsufficientFunds,
-    #[error("order not found")]
+    #[orion_error(identity = "biz.order_not_found")]
     OrderNotFound,
-    #[error("{0}")]
+    #[orion_error(transparent)]
     Uvs(UvsReason),
-}
-
-impl ErrorCode for OrderError {
-    fn error_code(&self) -> i32 {
-        match self {
-            Self::InsufficientFunds => 2001,
-            Self::OrderNotFound => 2002,
-            Self::Uvs(reason) => reason.error_code(),
-        }
-    }
 }
 ```
 
@@ -211,7 +191,7 @@ let err = StructError::builder(UvsReason::system_error())
 ```rust
 use orion_error::{
     conversion::ErrorWith,
-    runtime::{ContextRecord, OperationContext},
+    runtime::OperationContext,
 };
 
 let mut ctx = OperationContext::doing("place_order");
@@ -263,9 +243,11 @@ call_http_service()
 
 ### 兼容路径：只保留 detail
 
-当上游值只实现 `Display`，或者它本身不是一个真正的 error type 时，再使用 `owe(...)`：
+当上游值只实现 `Display`，或者它本身不是一个真正的 error type 时，维护旧代码可以继续使用 `owe(...)`。新代码如果能拿到真实 `std::error::Error`，不要为了省事退回这个路径。
 
 ```rust
+use orion_error::{compat_prelude::ErrorOweBase, reason::UvsReason};
+
 parse_input().owe(UvsReason::validation_error())?;
 run_business_rule().owe(UvsReason::business_error())?;
 ```
@@ -343,7 +325,6 @@ fn service_call() -> Result<(), StructError<UvsReason>> {
 
 ```rust
 use orion_error::op_context;
-use orion_error::runtime::ContextRecord;
 
 fn process_order(order_id: &str) -> Result<(), MyError> {
     let mut ctx = op_context!("process_order").with_auto_log();
@@ -368,12 +349,12 @@ fn process_order(order_id: &str) -> Result<(), MyError> {
 
 ## 7. 与 `thiserror` 的配合
 
-推荐：
+推荐新代码默认使用 `OrionError`，不再需要额外 derive `thiserror::Error`：
 
-1. 用 `thiserror` 定义领域错误枚举
+1. 用 `OrionError` 定义领域错误枚举的展示文案、稳定身份、分类和兼容数值码
 2. 用 `derive_more::From` 接入 `UvsReason`
-3. 实现 `ErrorCode`
-4. 在业务里优先使用 `IntoAs` / `wrap_as(...)` / `err_conv()`
+3. 在业务里优先使用 `IntoAs` / `wrap_as(...)` / `err_conv()`
+4. 只有已有类型必须实现 `std::error::Error` 或外部 API 要求时，再考虑和 `thiserror` 互操作
 
 导入建议：
 
@@ -394,7 +375,7 @@ fn process_order(order_id: &str) -> Result<(), MyError> {
 
 优先使用：
 
-- `with_std_source(...)`
+- `with_source(...)`
 - `builder.source_std(...)`
 - `into_as(...)`
 - `with_struct_source(...)`
@@ -433,7 +414,7 @@ fn process_order(order_id: &str) -> Result<(), MyError> {
 底层 trait object 本体仍然不会直接序列化。
 
 旧的 `owe_*_source()` 属于 `0.6.3` 已公开的兼容语义，仅用于维护旧代码；
-`with_source(...)` 当前作为便捷糖衣存在，但新代码如果要明确 source 通道，仍优先使用 `with_std_source(...)` / `with_struct_source(...)`；
+`with_source(...)` 当前是推荐的自动 source 分流入口；如果调用点需要强制表达 source 分支，再使用 `with_std_source(...)` / `with_struct_source(...)`；
 `owe(...)` / `want(...)` 仍保留为兼容路径，但新代码不建议新增使用。
 
 ## 9. 当前版本的兼容提示
@@ -443,13 +424,14 @@ fn process_order(order_id: &str) -> Result<(), MyError> {
 - `OperationContext::with(...)`
 - `OperationContext::with_path(...)`
 - `with_exit_log()`
-- `with_source(...)`
 - `want(...)`
 - `owe_*_source()`
 - `owe_*()`
 - `owe(...)`，除非正在维护 legacy `Display`-only 场景
 - `impl DomainReason for MyError {}` 这种空实现
 - `UvsReason::validation_error("msg")` 这种带参数构造
+
+`with_source(...)` 不是兼容路径；它是自动 source 分流入口。只在需要显式 source 分支时改用 `with_std_source(...)` / `with_struct_source(...)`。
 
 当前正确写法：
 

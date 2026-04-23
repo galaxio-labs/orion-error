@@ -1,12 +1,15 @@
 # DomainReason 与 ErrorIdentityProvider 使用指南
 
-本文面向 `orion-error 0.7.0`，说明两个容易混淆的概念：
+本文面向 `orion-error 0.7.0`，说明几个容易混淆的概念：
 
+- `OrionError`：领域 reason 的推荐 derive 入口
 - `DomainReason`：错误的运行时语义载体
 - `ErrorIdentityProvider`：错误对外暴露时的稳定机器身份
 
 如果你只是在 Rust 函数内部传播 `StructError<R>`，通常先满足 `DomainReason` 就够了。
-如果你要把错误导出成 HTTP / RPC / CLI / log 响应，或者要做稳定断言、策略路由、指标聚合，就应该实现 `ErrorIdentityProvider`。
+如果你要把错误导出成 HTTP / RPC / CLI / log 响应，或者要做稳定断言、策略路由、指标聚合，就应该提供 `ErrorIdentityProvider`。
+
+新代码推荐用 `OrionError` derive 注解同时提供 `Display`、`ErrorCode` 和 `ErrorIdentityProvider`，不要手写重复的 `match`。
 
 ## 1. 先看当前源码里的实际约束
 
@@ -52,32 +55,23 @@ pub trait ErrorIdentityProvider {
 
 ## 3. 最小例子：只有 DomainReason
 
-下面这个例子里，`AppError` 没有实现 `ErrorIdentityProvider`，但它仍然可以作为 `StructError<AppError>` 的 reason 使用。
+下面这个例子里，`AppError` 没有实现 `ErrorIdentityProvider`，但它仍然可以作为 `StructError<AppError>` 的 reason 使用。这个模式主要用于内部传播或非常早期的本地 reason；正常业务代码优先看下一节的 `OrionError` 写法。
 
 ```rust
 use derive_more::From;
 use orion_error::{
     conversion::IntoAs,
-    reason::{ErrorCode, UvsReason},
+    reason::UvsReason,
+    ErrorCode,
     runtime::StructError,
 };
-use thiserror::Error;
 
-#[derive(Debug, Error, Clone, PartialEq, From)]
+#[derive(Debug, Clone, PartialEq, From, ErrorCode)]
 enum AppError {
-    #[error("invalid request")]
+    #[orion_error(code = 1000)]
     InvalidRequest,
-    #[error("{0}")]
+    #[orion_error(transparent)]
     Uvs(UvsReason),
-}
-
-impl ErrorCode for AppError {
-    fn error_code(&self) -> i32 {
-        match self {
-            Self::InvalidRequest => 1000,
-            Self::Uvs(reason) => reason.error_code(),
-        }
-    }
 }
 
 fn parse_config() -> Result<String, StructError<AppError>> {
@@ -141,51 +135,25 @@ read config failed
 
 这就是 `ErrorIdentityProvider` 的价值。
 
-## 6. 再补上 ErrorIdentityProvider
+## 6. 推荐入口：OrionError 一次补齐身份
 
-下面是同一个 `AppError` 再补稳定身份后的写法：
+下面是同一个 `AppError` 再补稳定身份后的推荐写法：
 
 ```rust
 use derive_more::From;
 use orion_error::{
     conversion::IntoAs,
-    reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider, UvsReason},
+    OrionError, UvsReason,
     report::DefaultErrorPolicy,
     runtime::StructError,
 };
-use thiserror::Error;
 
-#[derive(Debug, Error, Clone, PartialEq, From)]
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum AppError {
-    #[error("invalid request")]
+    #[orion_error(identity = "biz.invalid_request")]
     InvalidRequest,
-    #[error("{0}")]
+    #[orion_error(transparent)]
     Uvs(UvsReason),
-}
-
-impl ErrorCode for AppError {
-    fn error_code(&self) -> i32 {
-        match self {
-            Self::InvalidRequest => 1000,
-            Self::Uvs(reason) => reason.error_code(),
-        }
-    }
-}
-
-impl ErrorIdentityProvider for AppError {
-    fn stable_code(&self) -> &'static str {
-        match self {
-            Self::InvalidRequest => "biz.invalid_request",
-            Self::Uvs(reason) => reason.stable_code(),
-        }
-    }
-
-    fn error_category(&self) -> ErrorCategory {
-        match self {
-            Self::InvalidRequest => ErrorCategory::Biz,
-            Self::Uvs(reason) => reason.error_category(),
-        }
-    }
 }
 
 fn load_config() -> Result<String, StructError<AppError>> {
@@ -206,6 +174,16 @@ assert_eq!(rpc.code, "sys.io_error");
 ```
 
 此时，错误就可以进入统一出口协议了。
+
+注解规则：
+
+- `code = 1000` 生成 `ErrorCode::error_code()` 的数值码。
+- `identity = "biz.invalid_request"` 生成协议稳定身份码。
+- `code` 默认是兼容用数值码 `500`；只有需要兼容旧数值码时才显式写 `code = ...`。
+- `category` 默认从 `identity` 前缀推导，支持 `biz` / `conf` / `logic` / `sys`。
+- `message` 默认从 `identity` 的最后一段推导，例如 `biz.invalid_request` 会生成 `invalid request`。
+- 如果需要更自然的人类文案，可以显式写 `message = "..."` 覆盖默认推导。
+- `#[orion_error(transparent)]` 用于单字段包装变体，直接委托给内部 reason，例如 `Uvs(UvsReason)`。
 
 ## 7. “要进 HTTP / RPC / CLI / log 契约”到底是什么意思
 
@@ -250,7 +228,7 @@ assert_eq!(rpc.code, "sys.io_error");
 
 做好，让 `StructError<R>` 的运行时流转先稳定下来。
 
-## 9. 什么时候应该尽快实现 ErrorIdentityProvider
+## 9. 什么时候应该尽快提供 ErrorIdentityProvider
 
 下面这些情况，建议尽快实现：
 
@@ -295,13 +273,13 @@ assert_eq!(rpc.code, "sys.io_error");
 例如：
 
 ```rust
-#[derive(Debug, Error, Clone, PartialEq, From)]
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum OrderError {
-    #[error("insufficient funds")]
+    #[orion_error(identity = "biz.insufficient_funds")]
     InsufficientFunds,
-    #[error("order not found")]
+    #[orion_error(identity = "biz.order_not_found")]
     OrderNotFound,
-    #[error("{0}")]
+    #[orion_error(transparent)]
     Uvs(UvsReason),
 }
 ```
@@ -319,7 +297,7 @@ enum OrderError {
 
 1. 先让你的 reason 满足 `From<UvsReason> + Display + PartialEq`
 2. 如果错误只在内部传播，到这里可以先停
-3. 如果错误要进入测试断言、策略系统、导出协议、日志聚合或跨服务边界，再实现 `ErrorIdentityProvider`
+3. 如果错误要进入测试断言、策略系统、导出协议、日志聚合或跨服务边界，再提供 `ErrorIdentityProvider`
 
 换句话说：
 
@@ -564,14 +542,12 @@ trait ErrorIdentityProvider {
 
 | 概念 | 所属层 | 主要作用 |
 | --- | --- | --- |
+| `OrionError` | derive | 推荐的领域 reason 入口，一次生成展示文案、稳定身份、分类和兼容数值码 |
 | `StructError<R>` | runtime | 运行时错误载体，负责 reason、detail、context、source 的传播 |
-| `ErrorIdentityProvider` | stable identity | 给错误提供稳定 `code` 和 `category` |
-| `ErrorPolicy` | policy | 根据稳定身份决定 `http_status`、`visibility`、`hints`、`retryable` |
-| `ErrorHttpResponse` | projection | HTTP 出口投影 |
-| `ErrorCliResponse` | projection | CLI 出口投影 |
-| `ErrorLogResponse` | projection | log 出口投影 |
-| `ErrorRpcResponse` | projection | RPC 出口投影 |
-| `assert_err_code(...)` / `assert_err_category(...)` / `assert_err_identity(...)` | test helper | 用稳定字段做测试断言 |
+| `IntoAs` | conversion | 普通 `std::error::Error` 第一次进入结构化体系 |
+| `ErrorWith` | context | 给错误追加 `doing(...)` / `at(...)` / `with_context(...)` |
+| `ErrorWrapAs` | conversion | 上层为下层 `StructError<_>` 建立新的语义边界 |
+| `DefaultErrorPolicy` | policy | 默认出口策略，决定 HTTP status、visibility、hints、retryable |
 
 如果你只是业务侧接入，一般优先理解这张表即可。
 
@@ -579,6 +555,10 @@ trait ErrorIdentityProvider {
 
 | 概念 | 所属层 | 主要作用 |
 | --- | --- | --- |
+| `ErrorIdentityProvider` | stable identity | 给错误提供稳定 `code` 和 `category`；通常由 `OrionError` 自动生成 |
+| `ErrorPolicy` | policy | 根据稳定身份决定 `http_status`、`visibility`、`hints`、`retryable` |
+| `ErrorHttpResponse` / `ErrorCliResponse` / `ErrorLogResponse` / `ErrorRpcResponse` | projection | HTTP / CLI / log / RPC 出口投影 |
+| `assert_err_code(...)` / `assert_err_category(...)` / `assert_err_identity(...)` | test helper | 用稳定字段做测试断言 |
 | `SourcePayload` / `IntoSourcePayload` | bridge | 承接普通 `StdError` 和结构化 source 的桥接 |
 | `OwnedStdStructError` / `StdStructRef` / `into_std()` / `as_std()` | bridge | 显式进入标准错误生态 |
 | `ErrorSnapshot` | snapshot | 机器可读快照，中间导出对象 |

@@ -3,10 +3,10 @@
 Structured error handling for Rust services with:
 
 - layered universal error categories via `UvsReason`
-- domain-specific error enums with stable `ErrorCode`
+- domain-specific error enums with stable `OrionError` identities
 - contextual propagation via `OperationContext` and `ErrorWith`
 - first-entry conversion via `IntoAs`
-- structured cross-layer propagation via `ErrorConv` and `ErrorWrapAs`
+- structured cross-layer wrapping via `ErrorWrapAs`
 - optional source-chain preservation for real underlying errors
 
 [![CI](https://github.com/galaxio-labs/orion-error/workflows/CI/badge.svg)](https://github.com/galaxio-labs/orion-error/actions)
@@ -29,7 +29,7 @@ orion-error = { version = "0.7.0", features = ["serde"] }
 orion-error = { version = "0.7.0", features = ["tracing"] }
 ```
 
-Default features include `log`.
+Default features include `log` and `derive`.
 
 `StructError<R>` no longer implements `std::error::Error`. Standard-error
 ecosystem boundaries should use the explicit bridge APIs instead:
@@ -54,8 +54,9 @@ Current docs:
 
 Import guidance:
 
-- `orion_error::prelude::*` is the primary convenience wildcard import
-- Small root imports such as `orion_error::{StructError, UvsReason, ErrorIdentityProvider}` are preferred when you want explicit imports.
+- `orion_error::prelude::*` is the primary convenience wildcard import and intentionally exports only the main path: `OrionError`, `StructError`, `IntoAs`, `ErrorWith`, `ErrorWrapAs`, and `DefaultErrorPolicy`.
+- Small root imports such as `orion_error::{StructError, OrionError}` are preferred when you want explicit imports.
+- `orion_error::full_prelude::*` is only for advanced protocol/schema checks and migration tests.
 - Layered imports are available when code needs stricter responsibility boundaries:
   - `orion_error::runtime::*`
   - `orion_error::conversion::*`
@@ -65,34 +66,24 @@ Import guidance:
   - `orion_error::reason::*`
 - `orion_error::compat_prelude::*` / `orion_error::compat_traits::*` are explicit legacy compatibility imports for `owe(...)`
 
-For new code, prefer `orion_error::prelude::*` for examples and small root imports for production modules. Use layered imports only when the module benefits from explicit runtime / snapshot / report boundaries.
+For new code, prefer `orion_error::prelude::*` plus small layered imports for examples, and small root imports for production modules. Use layered imports when the module benefits from explicit runtime / snapshot / report boundaries.
 
 ## Quick Start
 
 ```rust
 use derive_more::From;
 use orion_error::{
-    conversion::{ErrorWith, IntoAs},
-    reason::{ErrorCode, UvsReason},
-    runtime::{ContextRecord, OperationContext, StructError},
+    prelude::*,
+    reason::UvsReason,
+    runtime::OperationContext,
 };
-use thiserror::Error;
 
-#[derive(Debug, Error, Clone, PartialEq, From)]
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum AppError {
-    #[error("invalid request")]
+    #[orion_error(identity = "biz.invalid_request")]
     InvalidRequest,
-    #[error("{0}")]
+    #[orion_error(transparent)]
     Uvs(UvsReason),
-}
-
-impl ErrorCode for AppError {
-    fn error_code(&self) -> i32 {
-        match self {
-            Self::InvalidRequest => 1000,
-            Self::Uvs(reason) => reason.error_code(),
-        }
-    }
 }
 
 fn load_config() -> Result<String, StructError<AppError>> {
@@ -111,6 +102,7 @@ fn load_config() -> Result<String, StructError<AppError>> {
 Notes:
 
 - `DomainReason` is usually implemented automatically when your enum satisfies `From<UvsReason> + Display + PartialEq`.
+- Derive `OrionError` on domain enums and declare stable `identity` with `#[orion_error(...)]`.
 - Use `record_field(...)` / `record_meta(...)` on `OperationContext`; `with_context(...)` is the primary error-side API for full context frames.
 - Default to `into_as(...)` for plain `Result<T, E: Error>` entering the structured system the first time.
 - Use `wrap_as(...)` when the upstream value is already `StructError<_>` and the upper layer wants a new reason boundary.
@@ -130,7 +122,7 @@ Notes:
 - Use `into_boxed_std()` when a boundary requires `Box<dyn std::error::Error + Send + Sync>`.
 - Use `source_payload()` / `source_payload_kind()` only for read-only inspection of the source payload branch.
 - Use legacy `owe(...)` only as a compatibility path for `Display`-only values.
-- `with_source(...)` and `builder.source(...)` are still available as `IntoSourcePayload` sugar; if you want source branch semantics to stay explicit at the call site, prefer `with_std_source(...)` / `with_struct_source(...)` and `source_std(...)` / `source_struct(...)`.
+- Prefer `with_source(...)` and `builder.source(...)` for automatic source routing. Use `with_std_source(...)` / `with_struct_source(...)` and `source_std(...)` / `source_struct(...)` when the call site should make the source branch explicit.
 
 ## Core Concepts
 
@@ -197,7 +189,7 @@ let err = StructError::from(UvsReason::system_error())
 ```rust
 use orion_error::{
     conversion::ErrorWith,
-    runtime::{ContextRecord, OperationContext},
+    runtime::OperationContext,
 };
 
 let mut ctx = OperationContext::doing("process_order");
@@ -294,9 +286,11 @@ In other words, the explicit escape hatch is kept without reopening a blanket `E
 
 With the `anyhow` feature, `anyhow::Error` is still treated as an aggregated but unstructured error by default. The only structured exception is a top-level official `OwnedDynStdStructError` created from `StructError<_>::into_dyn_std()`. `orion-error` does not scan arbitrary `anyhow` source chains and does not guess third-party wrappers.
 
-Use legacy `owe(...)` only for values that are not real error types and only implement `Display`:
+Use legacy `owe(...)` only when maintaining values that are not real error types and only implement `Display`. Import it from the explicit compat module:
 
 ```rust
+use orion_error::{compat_prelude::ErrorOweBase, reason::UvsReason};
+
 message_only_result.owe(UvsReason::validation_error())?;
 other_message_only_result.owe(UvsReason::business_error())?;
 ```
@@ -407,7 +401,7 @@ Recommended usage:
 
 ```rust
 use orion_error::op_context;
-use orion_error::runtime::ContextRecord;
+use orion_error::op_context;
 
 let mut ctx = op_context!("sync-user").with_auto_log();
 ctx.record_field("user_id", "42");
@@ -421,7 +415,7 @@ Use `scoped_success()` if you want RAII-style success marking.
 
 ## Source Chain
 
-If you use `with_std_source(...)`, `raw_source(...)`, or `into_as(...)`, the original error remains available:
+If you use `with_source(...)`, `raw_source(...)`, or `into_as(...)`, the original error remains available:
 
 ```rust
 use orion_error::{conversion::IntoAs, reason::UvsReason, StructError};
@@ -471,14 +465,11 @@ The underlying trait object itself is still not serialized. For new export paths
 
 If you use legacy `owe(...)` helpers, only the display string is copied into `detail`, so they are not the preferred path for normal Rust errors.
 
-## `thiserror` Integration
+## `thiserror` Interop
 
-Recommended pattern:
+`thiserror` is no longer required for the recommended path. Prefer `OrionError` for domain reasons because it generates `Display`, `ErrorCode`, and `ErrorIdentityProvider` from one annotation.
 
-- use `thiserror` for domain enum definition
-- include `Uvs(UvsReason)` as the bridge variant
-- implement `ErrorCode`
-- use `orion-error` for conversion, context, and classification
+Use `thiserror` only when an existing enum already depends on `std::error::Error` behavior or external APIs require a standard error type.
 
 See [docs/thiserror-comparison.md](docs/thiserror-comparison.md).
 
@@ -487,7 +478,7 @@ See [docs/thiserror-comparison.md](docs/thiserror-comparison.md).
 Prefer these current names:
 
 - `CwdGuard`-style example does not apply here; ignore older cross-project docs
-- `OperationContext::record(...)` instead of deprecated `with(...)`
+- `OperationContext::record_field(...)` instead of deprecated `with(...)`
 - `with_auto_log()` instead of deprecated `with_exit_log()`
 - prefer `into_as(reason, detail)` for real `StdError` sources
 - keep `owe(...)` only for legacy `Display`-only cases

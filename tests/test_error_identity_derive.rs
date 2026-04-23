@@ -1,0 +1,132 @@
+#![cfg(feature = "derive")]
+
+use derive_more::From;
+use orion_error::{ErrorCategory, ErrorCode, ErrorIdentityProvider, OrionError, UvsReason};
+
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
+enum DerivedReason {
+    #[orion_error(identity = "biz.invalid_request")]
+    InvalidRequest,
+
+    #[orion_error(identity = "logic.internal_invariant_broken")]
+    InvariantBroken,
+
+    #[orion_error(
+        message = "storage temporarily unavailable",
+        code = 2000,
+        identity = "sys.storage_unavailable",
+        category = Sys
+    )]
+    StorageUnavailable,
+
+    #[orion_error(transparent)]
+    Uvs(UvsReason),
+}
+
+#[derive(Debug, Clone, PartialEq, OrionError)]
+#[orion_error(
+    message = "single struct reason",
+    code = 3000,
+    identity = "conf.single_struct"
+)]
+struct SingleStructReason;
+
+#[derive(Debug, Clone, PartialEq, OrionError)]
+#[orion_error(transparent)]
+struct TransparentStructReason(UvsReason);
+
+#[test]
+fn derive_error_identity_for_enum_variants() {
+    let invalid = DerivedReason::InvalidRequest;
+    assert_eq!(invalid.error_code(), 500);
+    assert_eq!(invalid.stable_code(), "biz.invalid_request");
+    assert_eq!(invalid.error_category(), ErrorCategory::Biz);
+
+    let storage = DerivedReason::StorageUnavailable;
+    assert_eq!(storage.error_code(), 2000);
+    assert_eq!(storage.stable_code(), "sys.storage_unavailable");
+    assert_eq!(storage.error_category(), ErrorCategory::Sys);
+}
+
+#[test]
+fn derive_error_identity_delegates_transparent_variant() {
+    let reason = DerivedReason::from(UvsReason::system_error());
+    assert_eq!(reason.error_code(), 201);
+    assert_eq!(reason.stable_code(), "sys.io_error");
+    assert_eq!(reason.error_category(), ErrorCategory::Sys);
+}
+
+#[test]
+fn derive_error_identity_for_structs() {
+    let single = SingleStructReason;
+    assert_eq!(single.error_code(), 3000);
+    assert_eq!(single.stable_code(), "conf.single_struct");
+    assert_eq!(single.error_category(), ErrorCategory::Conf);
+
+    let transparent = TransparentStructReason(UvsReason::timeout_error());
+    assert_eq!(transparent.error_code(), 204);
+    assert_eq!(transparent.stable_code(), "sys.timeout");
+    assert_eq!(transparent.error_category(), ErrorCategory::Sys);
+}
+
+mod prelude_import {
+    use orion_error::prelude::*;
+    use orion_error::reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
+
+    #[derive(Debug, Clone, PartialEq, OrionError)]
+    enum PreludeReason {
+        #[orion_error(identity = "logic.prelude_reason")]
+        Reason,
+    }
+
+    #[test]
+    fn prelude_import_exposes_derive_macro() {
+        let reason = PreludeReason::Reason;
+        assert_eq!(reason.error_code(), 500);
+        assert_eq!(reason.stable_code(), "logic.prelude_reason");
+        assert_eq!(reason.error_category(), ErrorCategory::Logic);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, ErrorCode)]
+enum CodeOnlyReason {
+    #[orion_error(code = 4100)]
+    CodeOnly,
+}
+
+#[derive(Debug, Clone, PartialEq, ErrorIdentityProvider)]
+enum IdentityOnlyReason {
+    #[orion_error(identity = "logic.identity_only", category = "logic")]
+    IdentityOnly,
+}
+
+#[test]
+fn individual_derives_remain_available() {
+    assert_eq!(CodeOnlyReason::CodeOnly.error_code(), 4100);
+
+    let reason = IdentityOnlyReason::IdentityOnly;
+    assert_eq!(reason.stable_code(), "logic.identity_only");
+    assert_eq!(reason.error_category(), ErrorCategory::Logic);
+}
+
+#[test]
+fn orion_error_derive_implements_display() {
+    assert_eq!(DerivedReason::InvalidRequest.to_string(), "invalid request");
+    assert_eq!(
+        DerivedReason::InvariantBroken.to_string(),
+        "internal invariant broken"
+    );
+    assert_eq!(
+        DerivedReason::StorageUnavailable.to_string(),
+        "storage temporarily unavailable"
+    );
+    assert_eq!(
+        DerivedReason::from(UvsReason::timeout_error()).to_string(),
+        "timeout error"
+    );
+    assert_eq!(SingleStructReason.to_string(), "single struct reason");
+    assert_eq!(
+        TransparentStructReason(UvsReason::logic_error()).to_string(),
+        "BUG :logic error"
+    );
+}

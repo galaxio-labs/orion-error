@@ -38,9 +38,11 @@ fn test_layered_modules_and_root_prelude_compile() {
 
     fn build_with_root_prelude() -> Result<(), runtime::StructError<UvsReason>> {
         use orion_error::prelude::*;
+        use orion_error::reason::UvsReason;
+        use orion_error::runtime::OperationContext;
 
         let mut ctx = OperationContext::doing("load config");
-        ctx.record("path", "config.toml");
+        ctx.record_field("path", "config.toml");
 
         std::fs::read_to_string("missing-config.toml")
             .into_as(UvsReason::system_error(), "read config failed")
@@ -67,8 +69,8 @@ fn test_layered_modules_and_root_prelude_compile() {
 }
 
 #[test]
-fn test_root_prelude_exports_cli_projection_types_and_constants() {
-    use orion_error::prelude::*;
+fn test_full_prelude_exports_cli_projection_types_and_constants() {
+    use orion_error::full_prelude::*;
 
     let cli = ErrorCliResponse {
         code: "sys.io_error".to_string(),
@@ -129,9 +131,11 @@ fn test_root_prelude_exports_cli_projection_types_and_constants() {
 fn test_root_prelude_and_compat_imports_compile() {
     fn build_with_prelude() -> Result<(), orion_error::StructError<UvsReason>> {
         use orion_error::prelude::*;
+        use orion_error::reason::UvsReason;
+        use orion_error::runtime::OperationContext;
 
         let mut ctx = OperationContext::doing("load config");
-        ctx.record("path", "config.toml");
+        ctx.record_field("path", "config.toml");
 
         std::fs::read_to_string("missing-config.toml")
             .into_as(UvsReason::system_error(), "read config failed")

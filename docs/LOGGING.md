@@ -6,9 +6,9 @@
 
 ```toml
 [dependencies]
-orion-error = { version = "0.6", features = ["log"] }
+orion-error = { version = "0.7", features = ["log"] }
 # 或
-orion-error = { version = "0.6", features = ["tracing"] }
+orion-error = { version = "0.7", features = ["tracing"] }
 ```
 
 默认 feature 已包含 `log`。
@@ -16,11 +16,11 @@ orion-error = { version = "0.6", features = ["tracing"] }
 ## 基本用法
 
 ```rust
-use orion_error::{ContextRecord, OperationContext};
+use orion_error::OperationContext;
 
 let mut ctx = OperationContext::doing("order_processing");
-ctx.record("order_id", "123");
-ctx.record("amount", "100.0");
+ctx.record_field("order_id", "123");
+ctx.record_field("amount", "100.0");
 
 ctx.info("start");
 ctx.debug("payload prepared");
@@ -40,10 +40,10 @@ ctx.trace("verbose trace");
 ## 自动结果日志
 
 ```rust
-use orion_error::{ContextRecord, OperationContext};
+use orion_error::OperationContext;
 
 let mut ctx = OperationContext::doing("sync_user").with_auto_log();
-ctx.record("user_id", "42");
+ctx.record_field("user_id", "42");
 
 do_sync()?;
 ctx.mark_suc();
@@ -54,13 +54,13 @@ ctx.mark_suc();
 ## 使用 `OperationScope`
 
 ```rust
-use orion_error::{ContextRecord, OperationContext};
+use orion_error::OperationContext;
 
 let mut ctx = OperationContext::doing("sync_user").with_auto_log();
 
 {
     let mut scope = ctx.scoped_success();
-    scope.record("user_id", "42");
+    scope.record_field("user_id", "42");
     validate()?;
 }
 ```
@@ -74,10 +74,10 @@ let mut ctx = OperationContext::doing("sync_user").with_auto_log();
 ## `op_context!` 宏
 
 ```rust
-use orion_error::{op_context, ContextRecord};
+use orion_error::op_context;
 
 let mut ctx = op_context!("load_config").with_auto_log();
-ctx.record("path", "config.toml");
+ctx.record_field("path", "config.toml");
 ```
 
 这个宏会在调用处展开 `module_path!()`，方便日志系统显示正确模块路径。
@@ -91,7 +91,7 @@ ctx.record("path", "config.toml");
 ## 推荐实践
 
 - 用 `doing(...)` 描述操作目标
-- 用 `record(...)` 记录关键诊断字段
+- 用 `record_field(...)` 记录关键诊断字段
 - 用 `with_auto_log()` 只包裹真正需要结果日志的作用域
 - 对成功路径使用 `mark_suc()` 或 `scoped_success()`
 - 不要继续新增 `with_exit_log()`；它已废弃

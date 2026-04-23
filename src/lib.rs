@@ -2,6 +2,11 @@ mod core;
 mod testcase;
 mod traits;
 
+extern crate self as orion_error;
+
+#[cfg(feature = "derive")]
+pub use orion_error_derive::{ErrorCode, ErrorIdentityProvider, OrionError};
+
 pub use core::ErrStrategy;
 pub use core::{
     print_error, print_error_zh, ConfErrReason, DefaultErrorPolicy, DomainReason, ErrorCategory,
@@ -36,24 +41,34 @@ pub use traits::{ErrorOwe, ErrorOweBase, ErrorOweSource, ErrorOweSourceBase};
 /// use orion_error::prelude::*;
 /// ```
 pub mod prelude {
+    #[cfg(feature = "derive")]
+    pub use crate::OrionError;
+    pub use crate::{DefaultErrorPolicy, ErrorWith, ErrorWrapAs, IntoAs, StructError};
+}
+
+/// Full wildcard imports for advanced examples and migration work.
+///
+/// Prefer [`prelude`] for new application code. Use this module when working on
+/// protocol projections, snapshot/schema checks, bridge internals, or broad
+/// migration tests.
+pub mod full_prelude {
+    #[cfg(feature = "derive")]
+    pub use crate::OrionError;
     pub use crate::{
-        raw_source, DefaultErrorPolicy, ErrorCategory, ErrorCliResponse, ErrorHttpResponse,
-        ErrorIdentity, ErrorIdentityProvider, ErrorLogResponse, ErrorMetadata, ErrorPolicy,
-        ErrorPolicyDecision, ErrorPolicyInput, ErrorProtocolSnapshot, ErrorRenderer, ErrorReport,
-        ErrorRpcResponse, ErrorSnapshot, IntoSourcePayload, MetadataValue, OperationContext,
-        OperationScope, OwnedDynStdStructError, OwnedStdStructError, RawSource, RawStdError,
-        RedactPolicy, RenderMode, SnapshotContextFrame, SnapshotSourceFrame, SourceFrame,
-        SourcePayload, SourcePayloadKind, SourcePayloadRef, StableErrorSnapshot,
+        raw_source, ContextRecord, ConvStructError, DefaultErrorPolicy, ErrorCategory,
+        ErrorCliResponse, ErrorCode, ErrorConv, ErrorHttpResponse, ErrorIdentity,
+        ErrorIdentityProvider, ErrorLogResponse, ErrorMetadata, ErrorPolicy, ErrorPolicyDecision,
+        ErrorPolicyInput, ErrorProtocolSnapshot, ErrorRenderer, ErrorReport, ErrorRpcResponse,
+        ErrorSnapshot, ErrorWith, ErrorWrapAs, IntoAs, IntoSourcePayload, MetadataValue,
+        OperationContext, OperationScope, OwnedDynStdStructError, OwnedStdStructError, RawSource,
+        RawStdError, RedactPolicy, RenderMode, SnapshotContextFrame, SnapshotSourceFrame,
+        SourceFrame, SourcePayload, SourcePayloadKind, SourcePayloadRef, StableErrorSnapshot,
         StableSnapshotContextFrame, StableSnapshotSourceFrame, StdStructRef, StructError,
-        StructErrorBuilder, TextReportRenderer, UvsReason, Visibility, CLI_ERROR_RESPONSE_FIELDS,
-        HTTP_ERROR_RESPONSE_FIELDS, LOG_ERROR_RESPONSE_FIELDS, POLICY_DECISION_FIELDS,
-        POLICY_SNAPSHOT_TOP_LEVEL_FIELDS, RPC_ERROR_RESPONSE_FIELDS,
-        STABLE_SNAPSHOT_CONTEXT_FIELDS, STABLE_SNAPSHOT_SCHEMA_VERSION,
+        StructErrorBuilder, TextReportRenderer, ToStructError, UvsFrom, UvsReason, Visibility,
+        WrapStructErrorAs, CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS,
+        LOG_ERROR_RESPONSE_FIELDS, POLICY_DECISION_FIELDS, POLICY_SNAPSHOT_TOP_LEVEL_FIELDS,
+        RPC_ERROR_RESPONSE_FIELDS, STABLE_SNAPSHOT_CONTEXT_FIELDS, STABLE_SNAPSHOT_SCHEMA_VERSION,
         STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS, STABLE_SNAPSHOT_TOP_LEVEL_FIELDS,
-    };
-    pub use crate::{
-        ContextRecord, ErrorCode, ErrorConv, ErrorWith, ErrorWrapAs, IntoAs, ToStructError,
-        UvsFrom, WrapStructErrorAs,
     };
 }
 

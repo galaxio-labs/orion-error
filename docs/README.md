@@ -16,8 +16,9 @@
 
 ## 当前导入约定
 
-- 新代码优先使用 `orion_error::prelude::*` 或 crate root 小集合导入。
+- 新代码优先使用瘦身后的 `orion_error::prelude::*` 或 crate root 小集合导入；`prelude` 只包含 `OrionError`、`StructError`、`IntoAs`、`ErrorWith`、`ErrorWrapAs`、`DefaultErrorPolicy`。
 - 需要明确职责边界时，使用 `runtime` / `conversion` / `reason` / `snapshot` / `report` / `bridge`。
+- `full_prelude` 只用于高级协议/schema 检查和迁移测试，不作为业务默认入口。
 - 旧 `owe(...)` / `err_wrap(...)` 等兼容 helper 必须显式使用 `orion_error::compat_prelude::*` 或 `orion_error::compat_traits::*`。
 - 公开命名空间不使用版本阶段作为导入层级。
 
@@ -25,7 +26,8 @@
 
 - 普通错误第一次进入结构化体系：`into_as(...)`
 - 已结构化错误向上层建立新边界：`wrap_as(...)`
-- 普通 source：`with_std_source(...)`
+- 自动 source 分流：`with_source(...)`
+- 普通 source 显式分支：`with_std_source(...)`
 - 结构化 source：`with_struct_source(...)`
 - 完整上下文帧：`with_context(...)`
 - 上下文语义糖衣：`at(...)` / `doing(...)`

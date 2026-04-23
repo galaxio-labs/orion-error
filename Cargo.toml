@@ -10,7 +10,9 @@ keywords = ["error", "utilities"]
 categories = ["rust-patterns"]
 
 [features]
-default = ["log"]
+default = ["log", "derive"]
+# Derive macros for `ErrorCode` and `ErrorIdentityProvider`.
+derive = ["dep:orion-error-derive"]
 # 启用 log 日志集成（与 `OperationContext` 的日志方法和 Drop 输出相关）
 log = ["dep:log"]
 # tracing 日志集成
@@ -21,6 +23,7 @@ serde_json = ["dep:serde_json"]
 toml = ["dep:toml"]
 
 [dependencies]
+orion-error-derive = { version = "0.7.0", path = "orion-error-derive", optional = true }
 thiserror = "2.0"
 serde = { version = "1.0", features = ["derive", "rc"], optional = true }
 derive_more = { version = "2.1", features = ["from"] }
@@ -35,3 +38,7 @@ toml = { version = "0.8", optional = true }
 parse-display-derive = "0.10"
 serde_json = "1.0"
 env_logger = "0.11"
+
+[[example]]
+name = "order_case"
+required-features = ["derive"]

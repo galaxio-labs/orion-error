@@ -1,8 +1,7 @@
 //! 展示 OperationContext 日志记录功能的示例。
-//! 此示例使用当前更推荐的 `op_context!` + `record(...)` + `scoped_success()` 组合。
+//! 此示例使用当前更推荐的 `op_context!` + `record_field(...)` + `scoped_success()` 组合。
 
 use orion_error::op_context;
-use orion_error::runtime::ContextRecord;
 
 fn main() {
     // 初始化日志系统（实际项目中需要在main函数开始处初始化）
@@ -21,18 +20,18 @@ fn main() {
 
 fn process_order(order_id: &str, amount: f64, customer_id: &str) {
     let mut ctx = op_context!("process_order").with_auto_log();
-    ctx.record("order_id", order_id);
+    ctx.record_field("order_id", order_id);
     {
         let mut scope = ctx.scoped_success();
-        scope.record("order_id", order_id);
-        scope.record("amount", amount.to_string());
-        scope.record("customer_id", customer_id);
+        scope.record_field("order_id", order_id);
+        scope.record_field("amount", amount.to_string());
+        scope.record_field("customer_id", customer_id);
 
         scope.info("开始处理订单");
 
         let validation_result = validate_order(amount);
 
-        scope.record("validation_result", validation_result.to_string());
+        scope.record_field("validation_result", validation_result.to_string());
         scope.debug("订单验证完成");
 
         if validation_result {
@@ -56,20 +55,20 @@ fn successful_operation() {
     let mut ctx = op_context!("data_processing");
     {
         let mut scope = ctx.scoped_success();
-        scope.record("batch_size", "1000");
-        scope.record("processor", "worker_1");
-        scope.record("start_time", "2024-01-01T10:00:00Z");
+        scope.record_field("batch_size", "1000");
+        scope.record_field("processor", "worker_1");
+        scope.record_field("start_time", "2024-01-01T10:00:00Z");
 
         scope.info("开始数据处理");
 
         for i in 0..5 {
-            scope.record("current_item", i.to_string());
+            scope.record_field("current_item", i.to_string());
             scope.debug("处理数据项");
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
 
-        scope.record("end_time", "2024-01-01T10:05:00Z");
-        scope.record("items_processed", "5");
+        scope.record_field("end_time", "2024-01-01T10:05:00Z");
+        scope.record_field("items_processed", "5");
 
         scope.info("数据处理完成");
     }

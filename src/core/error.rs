@@ -738,11 +738,11 @@ impl<T: DomainReason> StructError<T> {
     }
 
     #[must_use]
-    /// Convenience sugar that auto-routes either a standard source error or an
+    /// Recommended helper that auto-routes either a standard source error or an
     /// existing `StructError<_>` through the dual-channel source model.
     ///
-    /// Prefer `with_std_source(...)` / `with_struct_source(...)` when you want
-    /// the call site to make the source kind explicit.
+    /// Use `with_std_source(...)` / `with_struct_source(...)` instead when the
+    /// call site should make the source kind explicit.
     pub fn with_source<S>(self, source: S) -> Self
     where
         S: IntoSourcePayload,
@@ -1318,7 +1318,7 @@ mod tests {
     }
 
     #[test]
-    fn test_errorwith_doing_and_at_write_v2_context_semantics() {
+    fn test_errorwith_doing_and_at_write_structured_context_semantics() {
         let error = StructError::from(TestDomainReason::TestError)
             .doing("parse config")
             .at("config.toml");

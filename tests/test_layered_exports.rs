@@ -76,8 +76,8 @@ fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interopera
 }
 
 #[test]
-fn test_root_prelude_types_and_report_exports_include_cli_projection() {
-    let cli_fields: &[&str] = orion_error::prelude::CLI_ERROR_RESPONSE_FIELDS;
+fn test_full_prelude_types_and_report_exports_include_cli_projection() {
+    let cli_fields: &[&str] = orion_error::full_prelude::CLI_ERROR_RESPONSE_FIELDS;
     let http_fields: &[&str] = orion_error::types::HTTP_ERROR_RESPONSE_FIELDS;
     let log_fields: &[&str] = orion_error::report::LOG_ERROR_RESPONSE_FIELDS;
     let rpc_fields: &[&str] = orion_error::report::RPC_ERROR_RESPONSE_FIELDS;
