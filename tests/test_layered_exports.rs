@@ -10,7 +10,7 @@ fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interopera
 
     let snapshot_value: snapshot::ErrorSnapshot = err.snapshot();
     let stable: snapshot::StableErrorSnapshot = snapshot_value.stable_export();
-    let report_value: report::ErrorReport = stable.report();
+    let report_value: report::DiagnosticReport = stable.report();
     let cli_fields: &[&str] = report::CLI_ERROR_RESPONSE_FIELDS;
     let http_fields: &[&str] = report::HTTP_ERROR_RESPONSE_FIELDS;
     let bridge_view: bridge::StdStructRef<'_, reason::UvsReason> = err.as_std();

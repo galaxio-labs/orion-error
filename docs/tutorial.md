@@ -182,7 +182,7 @@ use orion_error::{reason::UvsReason, runtime::StructError};
 
 let err = StructError::builder(UvsReason::system_error())
     .detail("failed to read config")
-    .source_std(std::io::Error::other("disk offline"))
+    .source(std::io::Error::other("disk offline"))
     .finish();
 ```
 
@@ -295,8 +295,8 @@ fn service_call() -> Result<(), StructError<UvsReason>> {
 
 兼容说明：
 
-- `err_wrap(...)` 仍然保留
-- 但它属于兼容入口，不属于当前推荐主路径
+- `err_wrap(...)` / `wrap(...)` 仍然保留
+- 但它们只属于 compat 入口，不属于当前推荐主路径
 
 ### 推荐决策顺序
 
@@ -376,7 +376,7 @@ fn process_order(order_id: &str) -> Result<(), MyError> {
 优先使用：
 
 - `with_source(...)`
-- `builder.source_std(...)`
+- `builder.source(...)`
 - `into_as(...)`
 - `with_struct_source(...)`
 - `wrap_as(...)`

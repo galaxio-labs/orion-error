@@ -50,7 +50,7 @@ pub const RPC_ERROR_RESPONSE_FIELDS: &[&str] = &[
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq)]
-pub struct ErrorReport {
+pub struct DiagnosticReport {
     pub reason: String,
     pub detail: Option<String>,
     pub position: Option<String>,
@@ -60,6 +60,9 @@ pub struct ErrorReport {
     pub root_metadata: ErrorMetadata,
     pub source_frames: Vec<SourceFrame>,
 }
+
+#[doc(hidden)]
+pub type ErrorReport = DiagnosticReport;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderMode {
@@ -88,7 +91,7 @@ pub struct ErrorPolicyDecision {
 pub struct ErrorProtocolSnapshot {
     pub identity: ErrorIdentity,
     pub decision: ErrorPolicyDecision,
-    pub report: ErrorReport,
+    pub report: DiagnosticReport,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -172,17 +175,17 @@ pub trait ErrorPolicy {
 pub trait ErrorRenderer {
     type Output;
 
-    fn render(&self, report: &ErrorReport) -> Self::Output;
+    fn render(&self, report: &DiagnosticReport) -> Self::Output;
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ErrorPolicyInput {
     identity: ErrorIdentity,
-    report: ErrorReport,
+    report: DiagnosticReport,
 }
 
 impl ErrorPolicyInput {
-    pub fn new(identity: ErrorIdentity, report: ErrorReport) -> Self {
+    pub fn new(identity: ErrorIdentity, report: DiagnosticReport) -> Self {
         Self { identity, report }
     }
 
@@ -190,11 +193,11 @@ impl ErrorPolicyInput {
         &self.identity
     }
 
-    pub fn report(&self) -> &ErrorReport {
+    pub fn report(&self) -> &DiagnosticReport {
         &self.report
     }
 
-    pub fn into_parts(self) -> (ErrorIdentity, ErrorReport) {
+    pub fn into_parts(self) -> (ErrorIdentity, DiagnosticReport) {
         (self.identity, self.report)
     }
 
@@ -277,7 +280,7 @@ impl TextReportRenderer {
 impl ErrorRenderer for TextReportRenderer {
     type Output = String;
 
-    fn render(&self, report: &ErrorReport) -> Self::Output {
+    fn render(&self, report: &DiagnosticReport) -> Self::Output {
         match self.mode {
             RenderMode::Compact => report.render_compact(),
             RenderMode::Verbose => report.render_verbose(),
@@ -331,15 +334,15 @@ pub trait RedactPolicy {
 }
 
 impl<T: DomainReason> StructError<T> {
-    pub fn report(&self) -> ErrorReport {
+    pub fn report(&self) -> DiagnosticReport {
         self.snapshot().report()
     }
 
-    pub fn into_report(self) -> ErrorReport {
+    pub fn into_report(self) -> DiagnosticReport {
         self.into_snapshot().into_report()
     }
 
-    pub fn report_redacted(&self, policy: &impl RedactPolicy) -> ErrorReport {
+    pub fn report_redacted(&self, policy: &impl RedactPolicy) -> DiagnosticReport {
         self.report().redacted(policy)
     }
 }
@@ -400,43 +403,43 @@ where
     }
 }
 
-impl From<&ErrorSnapshot> for ErrorReport {
+impl From<&ErrorSnapshot> for DiagnosticReport {
     fn from(value: &ErrorSnapshot) -> Self {
         value.report()
     }
 }
 
-impl From<ErrorSnapshot> for ErrorReport {
+impl From<ErrorSnapshot> for DiagnosticReport {
     fn from(value: ErrorSnapshot) -> Self {
         value.into_report()
     }
 }
 
-impl<T: DomainReason> From<&StructError<T>> for ErrorReport {
+impl<T: DomainReason> From<&StructError<T>> for DiagnosticReport {
     fn from(value: &StructError<T>) -> Self {
         value.report()
     }
 }
 
-impl<T: DomainReason> From<StructError<T>> for ErrorReport {
+impl<T: DomainReason> From<StructError<T>> for DiagnosticReport {
     fn from(value: StructError<T>) -> Self {
         value.into_report()
     }
 }
 
-impl From<&StableErrorSnapshot> for ErrorReport {
+impl From<&StableErrorSnapshot> for DiagnosticReport {
     fn from(value: &StableErrorSnapshot) -> Self {
         value.report()
     }
 }
 
-impl From<StableErrorSnapshot> for ErrorReport {
+impl From<StableErrorSnapshot> for DiagnosticReport {
     fn from(value: StableErrorSnapshot) -> Self {
         value.into_report()
     }
 }
 
-impl ErrorReport {
+impl DiagnosticReport {
     pub fn render(&self, mode: RenderMode) -> String {
         self.render_with(TextReportRenderer::new(mode))
     }
@@ -538,7 +541,7 @@ impl ErrorReport {
     }
 }
 
-impl ErrorReport {
+impl DiagnosticReport {
     pub fn policy_identity(&self) -> ErrorIdentity {
         let category = if self.reason.contains("configuration error") {
             ErrorCategory::Conf
@@ -962,11 +965,12 @@ mod tests {
     };
 
     use super::{
-        DefaultErrorPolicy, ErrorCliResponse, ErrorHttpResponse, ErrorLogResponse, ErrorPolicy,
-        ErrorPolicyDecision, ErrorPolicyInput, ErrorProtocolSnapshot, ErrorRenderer, ErrorReport,
-        ErrorRpcResponse, RedactPolicy, RenderMode, TextReportRenderer, Visibility,
-        CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS, LOG_ERROR_RESPONSE_FIELDS,
-        POLICY_DECISION_FIELDS, POLICY_SNAPSHOT_TOP_LEVEL_FIELDS, RPC_ERROR_RESPONSE_FIELDS,
+        DefaultErrorPolicy, DiagnosticReport, ErrorCliResponse, ErrorHttpResponse,
+        ErrorLogResponse, ErrorPolicy, ErrorPolicyDecision, ErrorPolicyInput,
+        ErrorProtocolSnapshot, ErrorRenderer, ErrorRpcResponse, RedactPolicy, RenderMode,
+        TextReportRenderer, Visibility, CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS,
+        LOG_ERROR_RESPONSE_FIELDS, POLICY_DECISION_FIELDS, POLICY_SNAPSHOT_TOP_LEVEL_FIELDS,
+        RPC_ERROR_RESPONSE_FIELDS,
     };
     use crate::{
         StableErrorSnapshot, StableSnapshotContextFrame, StableSnapshotSourceFrame,
@@ -1078,8 +1082,8 @@ mod tests {
             .with_struct_source(source);
 
         let via_method = err.report();
-        let via_borrowed = ErrorReport::from(&err);
-        let via_owned = ErrorReport::from(err);
+        let via_borrowed = DiagnosticReport::from(&err);
+        let via_owned = DiagnosticReport::from(err);
 
         assert_eq!(via_borrowed, via_method);
         assert_eq!(via_owned, via_method);
@@ -1116,8 +1120,8 @@ mod tests {
         };
 
         let via_method = stable.report();
-        let via_borrowed = ErrorReport::from(&stable);
-        let via_owned = ErrorReport::from(stable);
+        let via_borrowed = DiagnosticReport::from(&stable);
+        let via_owned = DiagnosticReport::from(stable);
 
         assert_eq!(via_borrowed, via_method);
         assert_eq!(via_owned, via_method);
@@ -1125,7 +1129,7 @@ mod tests {
 
     #[test]
     fn test_report_verbose_render_includes_metadata() {
-        let report = ErrorReport {
+        let report = DiagnosticReport {
             reason: "test error".to_string(),
             detail: Some("failed".to_string()),
             position: None,
@@ -1165,7 +1169,7 @@ mod tests {
 
     #[test]
     fn test_text_report_renderer_matches_existing_render_output() {
-        let report = ErrorReport {
+        let report = DiagnosticReport {
             reason: "test error".to_string(),
             detail: Some("failed".to_string()),
             position: None,
@@ -1190,12 +1194,12 @@ mod tests {
         impl ErrorRenderer for ReasonOnlyRenderer {
             type Output = String;
 
-            fn render(&self, report: &ErrorReport) -> Self::Output {
+            fn render(&self, report: &DiagnosticReport) -> Self::Output {
                 format!("only:{}", report.reason)
             }
         }
 
-        let report = ErrorReport {
+        let report = DiagnosticReport {
             reason: "test error".to_string(),
             detail: Some("failed".to_string()),
             position: None,
@@ -1252,7 +1256,7 @@ mod tests {
 
     #[test]
     fn test_policy_view_uses_explicit_identity_without_report_side_guessing() {
-        let report = ErrorReport {
+        let report = DiagnosticReport {
             reason: "system error".to_string(),
             detail: Some("disk offline".to_string()),
             position: None,
@@ -1310,7 +1314,7 @@ mod tests {
 
     #[test]
     fn test_policy_view_render_with_uses_underlying_report() {
-        let report = ErrorReport {
+        let report = DiagnosticReport {
             reason: "test error".to_string(),
             detail: Some("failed".to_string()),
             position: None,
@@ -1341,7 +1345,7 @@ mod tests {
 
     #[test]
     fn test_policy_view_snapshot_contains_identity_decision_and_report() {
-        let report = ErrorReport {
+        let report = DiagnosticReport {
             reason: "test error".to_string(),
             detail: Some("failed".to_string()),
             position: None,
@@ -1379,7 +1383,7 @@ mod tests {
 
     #[test]
     fn test_report_decision_uses_policy_identity_fallback() {
-        let report = ErrorReport {
+        let report = DiagnosticReport {
             reason: "configuration error".to_string(),
             detail: Some("invalid config".to_string()),
             position: None,
@@ -1722,7 +1726,7 @@ mod tests {
                 default_hints: vec![],
                 retryable: false,
             },
-            report: ErrorReport {
+            report: DiagnosticReport {
                 reason: "invalid order".to_string(),
                 detail: Some("order text must not be empty".to_string()),
                 position: None,
@@ -1774,7 +1778,7 @@ mod tests {
                 default_hints: vec![],
                 retryable: false,
             },
-            report: ErrorReport {
+            report: DiagnosticReport {
                 reason: "storage full".to_string(),
                 detail: None,
                 position: None,
@@ -1823,7 +1827,7 @@ mod tests {
                 default_hints: vec![],
                 retryable: false,
             },
-            report: ErrorReport {
+            report: DiagnosticReport {
                 reason: "system error".to_string(),
                 detail: Some("save order failed".to_string()),
                 position: None,
@@ -2050,7 +2054,7 @@ mod tests {
 
     #[test]
     fn test_report_redaction_masks_source_frame_display() {
-        let report = ErrorReport {
+        let report = DiagnosticReport {
             reason: "test error".to_string(),
             detail: None,
             position: None,
@@ -2088,7 +2092,7 @@ mod tests {
 
     #[test]
     fn test_report_redaction_masks_source_frame_debug() {
-        let report = ErrorReport {
+        let report = DiagnosticReport {
             reason: "test error".to_string(),
             detail: None,
             position: None,
@@ -2119,7 +2123,7 @@ mod tests {
 
     #[test]
     fn test_report_redaction_masks_root_and_frame_paths() {
-        let report = ErrorReport {
+        let report = DiagnosticReport {
             reason: "test error".to_string(),
             detail: None,
             position: Some("/srv/app/config.toml:10".to_string()),
@@ -2164,7 +2168,7 @@ mod tests {
 
     #[test]
     fn test_report_redaction_masks_reason_fields() {
-        let report = ErrorReport {
+        let report = DiagnosticReport {
             reason: "tenant secret error".to_string(),
             detail: None,
             position: None,

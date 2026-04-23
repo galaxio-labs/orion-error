@@ -110,7 +110,7 @@ Notes:
 - Use `into_snapshot()` when the runtime error can be consumed into an owned snapshot.
 - Use `snapshot().stable_export()` when you want the stable snapshot field set.
 - Use `snapshot().into_stable_export()` or `StableErrorSnapshot::from(snapshot)` when the snapshot can be consumed.
-- Use `StableErrorSnapshot::from(&err)` / `ErrorReport::from(&err)` for direct read-only runtime projections.
+- Use `StableErrorSnapshot::from(&err)` / `DiagnosticReport::from(&err)` for direct read-only runtime projections.
 - Use `stable.report()` for report-layer rendering from a stable snapshot.
 - With the `serde_json` feature, use `snapshot().to_stable_snapshot_json()` for stable JSON output.
 - Stable snapshot JSON includes `schema_version = "orion-error.snapshot.v2"`.
@@ -172,7 +172,7 @@ With preserved source:
 ```rust
 let err = StructError::builder(UvsReason::system_error())
     .detail("failed to read config")
-    .source_std(std::io::Error::other("disk offline"))
+    .source(std::io::Error::other("disk offline"))
     .finish();
 ```
 
@@ -181,7 +181,7 @@ For non-structured sources on an existing `StructError`, prefer:
 ```rust
 let err = StructError::from(UvsReason::system_error())
     .with_detail("failed to read config")
-    .with_std_source(std::io::Error::other("disk offline"));
+    .with_source(std::io::Error::other("disk offline"));
 ```
 
 ### 3. Context Propagation
@@ -349,7 +349,7 @@ The same rule applies to the builder API: use `.source_struct(lower_err)` for `S
 
 ## Reports and Redaction
 
-Default `Display` should stay concise. For diagnostics, logs, or structured export, use `ErrorReport` and the explicit render APIs:
+Default `Display` should stay concise. For diagnostics, logs, or structured export, use `DiagnosticReport` and the explicit render APIs:
 
 ```rust
 use orion_error::{
@@ -467,7 +467,7 @@ If you use legacy `owe(...)` helpers, only the display string is copied into `de
 
 ## `thiserror` Interop
 
-`thiserror` is no longer required for the recommended path. Prefer `OrionError` for domain reasons because it generates `Display`, `ErrorCode`, and `ErrorIdentityProvider` from one annotation.
+`thiserror` is no longer required for the recommended path. Prefer `OrionError` for domain reasons because it generates display text, stable identity, category, and the legacy numeric code from one annotation.
 
 Use `thiserror` only when an existing enum already depends on `std::error::Error` behavior or external APIs require a standard error type.
 

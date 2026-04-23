@@ -20,9 +20,9 @@ pub use error::{
 pub use metadata::{ErrorMetadata, MetadataValue};
 pub use reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
 pub use report::{
-    DefaultErrorPolicy, ErrorCliResponse, ErrorHttpResponse, ErrorLogResponse, ErrorPolicy,
-    ErrorPolicyDecision, ErrorPolicyInput, ErrorProtocolSnapshot, ErrorRenderer, ErrorReport,
-    ErrorRpcResponse, RedactPolicy, RenderMode, TextReportRenderer, Visibility,
+    DefaultErrorPolicy, DiagnosticReport, ErrorCliResponse, ErrorHttpResponse, ErrorLogResponse,
+    ErrorPolicy, ErrorPolicyDecision, ErrorPolicyInput, ErrorProtocolSnapshot, ErrorRenderer,
+    ErrorReport, ErrorRpcResponse, RedactPolicy, RenderMode, TextReportRenderer, Visibility,
     CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS, LOG_ERROR_RESPONSE_FIELDS,
     POLICY_DECISION_FIELDS, POLICY_SNAPSHOT_TOP_LEVEL_FIELDS, RPC_ERROR_RESPONSE_FIELDS,
 };

@@ -1,7 +1,7 @@
 use crate::{DomainReason, StructError};
 
 use super::{
-    context::OperationResult, report::ErrorReport, ErrorCategory, ErrorIdentityProvider,
+    context::OperationResult, report::DiagnosticReport, ErrorCategory, ErrorIdentityProvider,
     ErrorMetadata, OperationContext, SourceFrame,
 };
 
@@ -187,12 +187,12 @@ impl ErrorSnapshot {
         serde_json::to_value(self.stable_export())
     }
 
-    pub fn report(&self) -> ErrorReport {
+    pub fn report(&self) -> DiagnosticReport {
         self.clone().into_report()
     }
 
-    pub fn into_report(self) -> ErrorReport {
-        ErrorReport {
+    pub fn into_report(self) -> DiagnosticReport {
+        DiagnosticReport {
             reason: self.reason,
             detail: self.detail,
             position: self.position,
@@ -206,8 +206,8 @@ impl ErrorSnapshot {
 }
 
 impl StableErrorSnapshot {
-    pub fn report(&self) -> ErrorReport {
-        ErrorReport {
+    pub fn report(&self) -> DiagnosticReport {
+        DiagnosticReport {
             reason: self.reason.clone(),
             detail: self.detail.clone(),
             position: self.position.clone(),
@@ -219,8 +219,8 @@ impl StableErrorSnapshot {
         }
     }
 
-    pub fn into_report(self) -> ErrorReport {
-        ErrorReport {
+    pub fn into_report(self) -> DiagnosticReport {
+        DiagnosticReport {
             reason: self.reason,
             detail: self.detail,
             position: self.position,
@@ -775,7 +775,7 @@ mod tests {
 
         let via_borrowed = snapshot.report();
         let via_owned = snapshot.clone().into_report();
-        let via_from = crate::ErrorReport::from(snapshot);
+        let via_from = crate::DiagnosticReport::from(snapshot);
 
         assert_eq!(via_owned, via_borrowed);
         assert_eq!(via_from, via_borrowed);

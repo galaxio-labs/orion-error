@@ -1,15 +1,12 @@
-# DomainReason 与 ErrorIdentityProvider 使用指南
+# OrionError 与稳定身份使用指南
 
 本文面向 `orion-error 0.7.0`，说明几个容易混淆的概念：
 
 - `OrionError`：领域 reason 的推荐 derive 入口
 - `DomainReason`：错误的运行时语义载体
-- `ErrorIdentityProvider`：错误对外暴露时的稳定机器身份
+- 稳定身份：错误对外暴露时的机器主键
 
-如果你只是在 Rust 函数内部传播 `StructError<R>`，通常先满足 `DomainReason` 就够了。
-如果你要把错误导出成 HTTP / RPC / CLI / log 响应，或者要做稳定断言、策略路由、指标聚合，就应该提供 `ErrorIdentityProvider`。
-
-新代码推荐用 `OrionError` derive 注解同时提供 `Display`、`ErrorCode` 和 `ErrorIdentityProvider`，不要手写重复的 `match`。
+新代码推荐用 `OrionError` derive 注解同时提供 `Display`、兼容数值码和稳定身份，不要手写重复的 `match`。
 
 ## 1. 先看当前源码里的实际约束
 
@@ -21,16 +18,7 @@ pub trait DomainReason: PartialEq + Display {}
 
 并且只要你的类型满足 `From<UvsReason> + Display + PartialEq`，就会自动获得实现。
 
-`ErrorIdentityProvider` 单独提供两件事：
-
-```rust
-pub trait ErrorIdentityProvider {
-    fn stable_code(&self) -> &'static str;
-    fn error_category(&self) -> ErrorCategory;
-}
-```
-
-这意味着当前实现并没有把“错误文案”和“稳定身份”绑死在一个 trait 里。
+`ErrorIdentityProvider` 是 `OrionError` 生成的底层能力 trait。正常业务代码不需要手写它；只有高级集成、宏实现或迁移旧类型时才需要直接接触。
 
 ## 2. 这两个东西分别负责什么
 
@@ -40,7 +28,7 @@ pub trait ErrorIdentityProvider {
 - 支撑 `reason().to_string()` 这样的可读文本
 - 支撑普通错误传播、上下文挂载、source 挂载、基础 report/snapshot
 
-`ErrorIdentityProvider` 负责：
+稳定身份负责：
 
 - 给错误一个稳定的 `code`，例如 `sys.io_error`
 - 给错误一个稳定的 `category`，例如 `Sys`
@@ -51,50 +39,42 @@ pub trait ErrorIdentityProvider {
 一句话区分：
 
 - `Display` / `reason text` 是给人看的
-- `stable_code` / `category` 是给机器和边界协议看的
+- `identity` / `category` 是给机器和边界协议看的
 
-## 3. 最小例子：只有 DomainReason
+## 3. 推荐入口：OrionError 一次补齐身份
 
-下面这个例子里，`AppError` 没有实现 `ErrorIdentityProvider`，但它仍然可以作为 `StructError<AppError>` 的 reason 使用。这个模式主要用于内部传播或非常早期的本地 reason；正常业务代码优先看下一节的 `OrionError` 写法。
+推荐写法：
 
 ```rust
 use derive_more::From;
 use orion_error::{
-    conversion::IntoAs,
+    prelude::*,
     reason::UvsReason,
-    ErrorCode,
-    runtime::StructError,
+    report::DefaultErrorPolicy,
 };
 
-#[derive(Debug, Clone, PartialEq, From, ErrorCode)]
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum AppError {
-    #[orion_error(code = 1000)]
+    #[orion_error(identity = "biz.invalid_request")]
     InvalidRequest,
     #[orion_error(transparent)]
     Uvs(UvsReason),
 }
 
-fn parse_config() -> Result<String, StructError<AppError>> {
+fn load_config() -> Result<String, StructError<AppError>> {
     std::fs::read_to_string("config.toml")
         .into_as(AppError::from(UvsReason::system_error()), "read config failed")
 }
+
+let err = load_config().unwrap_err();
+let http = err.http_response(&DefaultErrorPolicy);
+
+assert_eq!(http.code, "sys.io_error");
 ```
 
-这里能做的事情包括：
+此时，错误就可以进入统一出口协议了。
 
-- 返回 `Result<T, StructError<AppError>>`
-- 调用 `reason()`
-- 挂 `detail`
-- 挂 `context`
-- 挂 `source`
-- 调用 `snapshot()`
-- 调用 `report()`
-
-也就是说，库内部传播完全没问题。
-
-## 4. 只有 DomainReason 时，哪些 API 不能用
-
-下面这些协议消费接口要求 `R: DomainReason + ErrorIdentityProvider`：
+`OrionError` 会生成协议消费接口需要的稳定身份能力。下面这些 API 因此可以直接使用：
 
 - `assert_err_code(...)`
 - `assert_err_category(...)`
@@ -110,9 +90,7 @@ fn parse_config() -> Result<String, StructError<AppError>> {
 - `StructError::render_user_debug(...)`
 - `StructError::render_user_debug_redacted(...)`
 
-原因很直接：这些接口要向外输出稳定的 `code` 和 `category`，只靠 `Display` 文本不够。
-
-## 5. 为什么只靠 Display 不够
+## 4. 为什么只靠 Display 不够
 
 假设你的错误文本是：
 
@@ -133,59 +111,17 @@ read config failed
 - `code = "sys.io_error"`
 - `category = Sys`
 
-这就是 `ErrorIdentityProvider` 的价值。
-
-## 6. 推荐入口：OrionError 一次补齐身份
-
-下面是同一个 `AppError` 再补稳定身份后的推荐写法：
-
-```rust
-use derive_more::From;
-use orion_error::{
-    conversion::IntoAs,
-    OrionError, UvsReason,
-    report::DefaultErrorPolicy,
-    runtime::StructError,
-};
-
-#[derive(Debug, Clone, PartialEq, From, OrionError)]
-enum AppError {
-    #[orion_error(identity = "biz.invalid_request")]
-    InvalidRequest,
-    #[orion_error(transparent)]
-    Uvs(UvsReason),
-}
-
-fn load_config() -> Result<String, StructError<AppError>> {
-    std::fs::read_to_string("config.toml")
-        .into_as(AppError::from(UvsReason::system_error()), "read config failed")
-}
-
-let err = load_config().unwrap_err();
-let http = err.http_response(&DefaultErrorPolicy);
-let cli = err.cli_response(&DefaultErrorPolicy);
-let log = err.log_response(&DefaultErrorPolicy);
-let rpc = err.rpc_response(&DefaultErrorPolicy);
-
-assert_eq!(http.code, "sys.io_error");
-assert_eq!(cli.code, "sys.io_error");
-assert_eq!(log.code, "sys.io_error");
-assert_eq!(rpc.code, "sys.io_error");
-```
-
-此时，错误就可以进入统一出口协议了。
-
 注解规则：
 
-- `code = 1000` 生成 `ErrorCode::error_code()` 的数值码。
 - `identity = "biz.invalid_request"` 生成协议稳定身份码。
-- `code` 默认是兼容用数值码 `500`；只有需要兼容旧数值码时才显式写 `code = ...`。
 - `category` 默认从 `identity` 前缀推导，支持 `biz` / `conf` / `logic` / `sys`。
 - `message` 默认从 `identity` 的最后一段推导，例如 `biz.invalid_request` 会生成 `invalid request`。
+- `code = 1000` 只生成 legacy numeric code；新业务默认不需要写。
+- `code` 未写时默认是兼容用数值码 `500`。
 - 如果需要更自然的人类文案，可以显式写 `message = "..."` 覆盖默认推导。
 - `#[orion_error(transparent)]` 用于单字段包装变体，直接委托给内部 reason，例如 `Uvs(UvsReason)`。
 
-## 7. “要进 HTTP / RPC / CLI / log 契约”到底是什么意思
+## 5. “要进 HTTP / RPC / CLI / log 契约”到底是什么意思
 
 这里的“契约”指的是：错误不再只在 Rust 内部流转，而是会被投影为对外稳定的响应结构。
 
@@ -209,26 +145,20 @@ assert_eq!(rpc.code, "sys.io_error");
 - 日志平台按 `code` 聚合异常
 - RPC 调用方按 `code` 和 `retryable` 做重试或降级
 
-如果没有 `ErrorIdentityProvider`，这些外部系统就只能依赖错误文本，成本高且不稳定。
+如果没有稳定身份，这些外部系统就只能依赖错误文本，成本高且不稳定。
 
-## 8. 什么时候可以先不实现 ErrorIdentityProvider
+## 6. 什么时候可以先不用 OrionError
 
-下面这些情况，可以先不实现：
+下面这些情况，可以先不接入稳定身份：
 
 - 错误只在模块内部传播
 - 只是为了少量业务逻辑分支而定义本地 reason
 - 当前阶段还没有对外协议、稳定测试或统一治理需求
 - 你还在快速重构错误分类，不想过早冻结 code
 
-这时建议先把：
+这种情况属于高级/临时场景。主路径仍建议从 `OrionError` 开始，因为它的注解成本已经足够低。
 
-- `Display`
-- `PartialEq`
-- `From<UvsReason>`
-
-做好，让 `StructError<R>` 的运行时流转先稳定下来。
-
-## 9. 什么时候应该尽快提供 ErrorIdentityProvider
+## 7. 什么时候应该尽快提供稳定身份
 
 下面这些情况，建议尽快实现：
 
@@ -238,11 +168,11 @@ assert_eq!(rpc.code, "sys.io_error");
 - 要把错误接入指标、告警、聚合分析
 - 要形成跨 crate、跨服务的稳定错误协议
 
-这时 `stable_code` 应该被视为公开契约的一部分，而不是随手命名的内部文案。
+这时 `identity` 应该被视为公开契约的一部分，而不是随手命名的内部文案。
 
-## 10. 设计建议
+## 8. 设计建议
 
-为自定义 reason 设计 `stable_code` 时，建议遵守这些约束：
+为自定义 reason 设计 `identity` 时，建议遵守这些约束：
 
 - code 要稳定，不要把动态信息编码进去
 - code 要表达语义，而不是实现细节
@@ -263,7 +193,7 @@ assert_eq!(rpc.code, "sys.io_error");
 - `error_1`
 - `db_timeout_in_us_east_1_primary`
 
-## 11. 推荐做法
+## 9. 推荐做法
 
 推荐把领域错误分成两类：
 
@@ -286,25 +216,26 @@ enum OrderError {
 
 然后：
 
-- 业务特有错误自己定义 `stable_code`
+- 业务特有错误自己定义 `identity`
 - 通用系统类错误直接复用 `UvsReason` 的稳定身份
 
 这样通常是最省成本、也最容易长期维护的方案。
 
-## 12. 使用者的决策规则
+## 10. 使用者的决策规则
 
 可以直接用下面这条规则：
 
-1. 先让你的 reason 满足 `From<UvsReason> + Display + PartialEq`
-2. 如果错误只在内部传播，到这里可以先停
-3. 如果错误要进入测试断言、策略系统、导出协议、日志聚合或跨服务边界，再提供 `ErrorIdentityProvider`
+1. 新 reason 默认 derive `OrionError`
+2. 用 `identity = "biz.xxx"` 作为协议主键
+3. 只有需要兼容旧数值码时才写 `code = ...`
+4. 如果错误要进入测试断言、策略系统、导出协议、日志聚合或跨服务边界，必须保证 identity 稳定
 
 换句话说：
 
 - `DomainReason` 解决“这个错误能不能在运行时结构化传播”
-- `ErrorIdentityProvider` 解决“这个错误能不能被系统稳定识别和消费”
+- `OrionError` 解决“这个错误能不能被系统稳定识别和消费”
 
-## 13. 为什么需要 snapshot
+## 11. 为什么需要 snapshot
 
 引入 `snapshot` 的核心原因是：
 
@@ -320,21 +251,21 @@ enum OrderError {
 
 这会让运行时对象被导出需求反向牵制，后续内部字段、source 存储模型和导出 schema 更难演进。
 
-### 13.1 `StructError`、`snapshot`、`report` 各自解决什么问题
+### 11.1 `StructError`、`snapshot`、`report` 各自解决什么问题
 
 可以先用一句话区分：
 
 - `StructError<R>` 解决“程序里怎么传”
 - `ErrorSnapshot` 解决“导出时保存什么结构”
-- `ErrorReport` 解决“给人怎么展示”
+- `DiagnosticReport` 解决“给人怎么展示”
 
 也可以把它类比成：
 
 - `StructError<R>`：进程内运行时对象
 - `ErrorSnapshot`：机器可读 DTO / export record
-- `ErrorReport`：面向人类的 view model
+- `DiagnosticReport`：面向人类的 view model
 
-### 13.2 为什么不能直接拿 `StructError` 做导出对象
+### 11.2 为什么不能直接拿 `StructError` 做导出对象
 
 `StructError<R>` 的目标是：
 
@@ -360,7 +291,7 @@ enum OrderError {
 - render / report / snapshot 职责会继续缠在一起
 - `StructError` 会不断膨胀
 
-### 13.3 snapshot 的具体价值
+### 11.3 snapshot 的具体价值
 
 当前 `StructError::snapshot()` 会把运行时错误冻结成只读结构，包含：
 
@@ -387,7 +318,7 @@ enum OrderError {
 - snapshot 负责冻结
 - report 负责展示
 
-### 13.4 snapshot 为什么不是 report
+### 11.4 snapshot 为什么不是 report
 
 `report` 的核心职责是：
 
@@ -408,9 +339,9 @@ enum OrderError {
 - `snapshot` 不该被渲染需求反向定义
 - `report` 也不该成为稳定导出真身
 
-当前实现里，`ErrorSnapshot` 可以继续转成 `ErrorReport`，正是因为它被设计成 runtime 和 report 之间的中间层。
+当前实现里，`ErrorSnapshot` 可以继续转成 `DiagnosticReport`，正是因为它被设计成 runtime 和 report 之间的中间层。
 
-### 13.5 为什么 snapshot 对测试和协议更重要
+### 11.5 为什么 snapshot 对测试和协议更重要
 
 如果直接对 `Display` 文本或最终渲染结果做断言，会很脆弱：
 
@@ -429,15 +360,15 @@ enum OrderError {
 
 所以从工程上看，snapshot 是把“运行时错误对象”变成“稳定消费输入”的第一步。
 
-### 13.6 一句话总结
+### 11.6 一句话总结
 
 如果只记一句，可以记这个：
 
 - `StructError` 是活的运行时 carrier
 - `ErrorSnapshot` 是静态的只读快照
-- `ErrorReport` 是给人看的展示视图
+- `DiagnosticReport` 是给人看的展示视图
 
-## 14. 当前概念关系对照
+## 12. 当前概念关系对照
 
 当前模型分成两条主线：
 
@@ -449,7 +380,7 @@ enum OrderError {
 - runtime / snapshot / report / bridge 回答“错误对象怎么建模和传播”
 - identity / policy / projection 回答“错误对象怎么被稳定消费”
 
-### 14.1 命名约定
+### 12.1 命名约定
 
 后续如果继续收敛公开 API 命名，建议遵守以下规则：
 
@@ -459,7 +390,7 @@ enum OrderError {
 - policy 的计算结果继续使用 `*Decision`
 - 中间输入对象优先使用 `*Input`，少用语义模糊的 `View`
 
-按这个规则，当前公开主路径已经使用 `ErrorIdentityProvider`：
+按这个规则，当前底层能力 trait 仍使用 `ErrorIdentityProvider`：
 
 ```rust
 trait ErrorIdentityProvider {
@@ -470,7 +401,7 @@ trait ErrorIdentityProvider {
 
 这组命名的目标是让角色更清楚：
 
-- `ErrorIdentityProvider`：类型提供稳定错误身份的能力 trait
+- `ErrorIdentityProvider`：类型提供稳定错误身份的底层能力 trait，通常由 `OrionError` 生成
 - `ErrorIdentity`：稳定错误身份数据对象
 - `ErrorPolicy`：根据稳定身份做出口行为决策
 - `ErrorPolicyDecision`：policy 的计算结果
@@ -480,7 +411,6 @@ trait ErrorIdentityProvider {
 
 | 当前命名 | 可选推荐命名 | 理由 |
 | --- | --- | --- |
-| `ErrorReport` | `DiagnosticReport` | 更明确表示这是面向人类和诊断展示的 report，不是协议主对象 |
 | `TextReportRenderer` | `TextDiagnosticRenderer` | 与 `DiagnosticReport` 配套，表达文本诊断渲染 |
 | `SnapshotContextFrame` | `ContextSnapshotFrame` | 词序更自然，表达 context 的 snapshot frame |
 | `SnapshotSourceFrame` | `SourceSnapshotFrame` | 词序更自然，表达 source 的 snapshot frame |
@@ -497,9 +427,9 @@ trait ErrorIdentityProvider {
 | `ErrorPolicyDecision` | 表达 policy 的计算结果，当前已经清楚 |
 | `ErrorHttpResponse` / `ErrorCliResponse` / `ErrorLogResponse` / `ErrorRpcResponse` | 最终出口对象，`*Response` 后缀清楚 |
 
-其他 frame / renderer / report 命名可以作为后续清理项。
+其他 frame / renderer 命名可以作为后续清理项。
 
-### 14.2 它们各自关心什么
+### 12.2 它们各自关心什么
 
 内部结构分层关心的是：
 
@@ -529,7 +459,7 @@ trait ErrorIdentityProvider {
 - HTTP / CLI / log / RPC 应该导出成什么结构
 - 测试应该断言哪些稳定字段
 
-### 14.3 概念对照表
+### 12.3 概念对照表
 
 这张对照表不应该被理解成“所有使用者都必须掌握这些概念”。
 
@@ -563,8 +493,8 @@ trait ErrorIdentityProvider {
 | `OwnedStdStructError` / `StdStructRef` / `into_std()` / `as_std()` | bridge | 显式进入标准错误生态 |
 | `ErrorSnapshot` | snapshot | 机器可读快照，中间导出对象 |
 | `SnapshotContextFrame` / `SnapshotSourceFrame` | snapshot | snapshot 层只读 frame |
-| `ErrorReport` | report | 人类可读展示、渲染、redaction 的输入模型 |
-| `TextReportRenderer` | renderer | 把 `ErrorReport` 渲染成文本 |
+| `DiagnosticReport` | report | 人类可读展示、渲染、redaction 的输入模型 |
+| `TextReportRenderer` | renderer | 把 `DiagnosticReport` 渲染成文本 |
 | `ErrorIdentity` | stable identity | 当前错误的稳定身份快照 |
 | `ErrorPolicyDecision` | policy | policy 的计算结果 |
 | `ErrorPolicyInput` | policy input | 把 `identity + report` 绑定成统一消费输入 |
@@ -577,7 +507,7 @@ trait ErrorIdentityProvider {
 - 高级导出/调试
 - 自定义扩展
 
-### 14.4 最短流转图
+### 12.4 最短流转图
 
 用当前实现的主调用路径来理解，最顺的心智模型是：
 
@@ -595,7 +525,7 @@ StructError<R>
 ```text
 StructError<R>
   -> ErrorSnapshot
-  -> ErrorReport
+  -> DiagnosticReport
   -> ErrorIdentity
   -> ErrorPolicyDecision
   -> HTTP / CLI / log / RPC projection
@@ -607,7 +537,7 @@ StructError<R>
 - `ErrorPolicyInput` 实际上把 `identity + report` 组合成统一消费输入
 - `policy snapshot` 才是当前最完整的统一协议输入
 
-### 14.5 一句话总结
+### 12.5 一句话总结
 
 如果只记最后一句，可以记这个：
 

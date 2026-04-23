@@ -6,7 +6,7 @@
 
 1. [顶层 README](../README.md)
 2. [使用教程](./tutorial.md)
-3. [DomainReason 与 ErrorIdentityProvider 使用指南](./reason-identity-guide.md)
+3. [OrionError 与稳定身份使用指南](./reason-identity-guide.md)
 4. [协议契约](./protocol-contract.md)
 5. [Stable Snapshot Schema](./stable-snapshot-schema.md)
 6. [与 thiserror 的配合](./thiserror-comparison.md)

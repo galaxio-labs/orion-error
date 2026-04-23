@@ -20,10 +20,11 @@ enum AppError {
 `OrionError` 会同时生成：
 
 - `Display`
-- `ErrorCode`
-- `ErrorIdentityProvider`
+- 稳定协议身份
+- 错误分类
+- legacy numeric code
 
-因此使用者不需要再为了文案展示去 derive `thiserror::Error`，也不需要手写 `ErrorCode` / `ErrorIdentityProvider` 的重复 `match`。
+因此使用者不需要再为了文案展示去 derive `thiserror::Error`，也不需要手写稳定身份和兼容数值码的重复 `match`。
 
 ## 能力对比
 
@@ -32,8 +33,8 @@ enum AppError {
 | 定义标准错误类型 | 强 | 不是主要目标 |
 | 定义领域 reason | 可用但需要额外实现身份 | `OrionError` 是推荐入口 |
 | 统一错误分类 | 无 | `UvsReason` / `ErrorCategory` |
-| 稳定协议身份 | 无 | `ErrorIdentityProvider` |
-| 兼容数值码 | 无 | `ErrorCode` |
+| 稳定协议身份 | 无 | `OrionError` 注解里的 `identity` |
+| 兼容数值码 | 无 | `OrionError` 注解里的可选 `code` |
 | 上下文堆栈 | 无 | `OperationContext` / `ErrorWith` |
 | 非结构错误转结构错误 | 无 | `IntoAs` |
 | 结构错误跨层包装 | 无 | `ErrorWrapAs` |
@@ -64,8 +65,8 @@ fn handle() -> Result<(), StructError<AppError>> {
 
 - `#[derive(thiserror::Error)]`
 - 空的 `impl DomainReason for AppError {}`
-- 手写 `impl ErrorCode`
-- 手写 `impl ErrorIdentityProvider`
+- 手写稳定身份映射
+- 手写兼容数值码映射
 
 ## 什么时候仍然用 thiserror
 

@@ -78,7 +78,7 @@ policy decision 由 [src/core/report.rs](/Users/zuowenjian/devspace/wp-labs/dev/
 - `ErrorPolicy::decide(...)`
 - `ErrorPolicyInput::decision(...)`
 - `StructError::policy_snapshot(...)`
-- `ErrorReport::policy_snapshot(...)`
+- `DiagnosticReport::policy_snapshot(...)`
 
 ## 4. Policy Snapshot
 
@@ -97,9 +97,9 @@ policy decision 由 [src/core/report.rs](/Users/zuowenjian/devspace/wp-labs/dev/
 
 - `StructError::policy_snapshot(...)`
 - `StructError::into_policy_snapshot(...)`
-- `ErrorReport::policy_snapshot(...)`
-- `ErrorReport::to_policy_snapshot_json(...)`
-- `ErrorReport::to_policy_report_json(...)`
+- `DiagnosticReport::policy_snapshot(...)`
+- `DiagnosticReport::to_policy_snapshot_json(...)`
+- `DiagnosticReport::to_policy_report_json(...)`
 - `StructError::render_user_debug(...)`
 - `StructError::render_user_debug_redacted(...)`
 
@@ -138,7 +138,7 @@ HTTP projection 结构：
 主调用入口：
 
 - `StructError::http_response(...)`
-- `ErrorReport::http_response(...)`
+- `DiagnosticReport::http_response(...)`
 - `ErrorProtocolSnapshot::http_response()`
 - `to_http_error_json(...)`
 
@@ -166,7 +166,7 @@ CLI projection 结构：
 主调用入口：
 
 - `StructError::cli_response(...)`
-- `ErrorReport::cli_response(...)`
+- `DiagnosticReport::cli_response(...)`
 - `ErrorProtocolSnapshot::cli_response()`
 - `to_cli_error_json(...)`
 
@@ -201,7 +201,7 @@ log projection 结构：
 主调用入口：
 
 - `StructError::log_response(...)`
-- `ErrorReport::log_response(...)`
+- `DiagnosticReport::log_response(...)`
 - `ErrorProtocolSnapshot::log_response()`
 - `to_log_error_json(...)`
 
@@ -232,7 +232,7 @@ RPC projection 结构：
 主调用入口：
 
 - `StructError::rpc_response(...)`
-- `ErrorReport::rpc_response(...)`
+- `DiagnosticReport::rpc_response(...)`
 - `ErrorProtocolSnapshot::rpc_response()`
 - `to_rpc_error_json(...)`
 
@@ -269,7 +269,7 @@ RPC projection 结构：
 
 当前仍有这些限制：
 
-- `ErrorReport::policy_identity()` 仍是启发式兜底，不等于稳定身份主路径
+- `DiagnosticReport::policy_identity()` 仍是启发式兜底，不等于稳定身份主路径
 - `report().to_*_json(...)` 在没有显式 identity 时，仍可能退化成 `report.unclassified`
 - `retryable` 目前还是最小规则，不是完整重试策略系统
 - 还没有单独的 protocol version 字段；当前依赖各结构字段集和测试锁定行为
@@ -277,4 +277,4 @@ RPC projection 结构：
 因此：
 
 - 新代码优先从 `StructError<_>` 直接走 `policy_report()` / `policy_snapshot(...)`
-- 不要把 `ErrorReport` 的兜底 identity 当成稳定协议主路径
+- 不要把 `DiagnosticReport` 的兜底 identity 当成稳定协议主路径
