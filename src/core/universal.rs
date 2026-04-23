@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use super::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
+use super::{DomainReason, ErrorCategory, ErrorCode, ErrorIdentityProvider};
 
 /// Configuration error sub-classification
 /// 配置错误子分类
@@ -80,6 +80,8 @@ pub enum UvsReason {
     #[error("BUG :logic error")]
     LogicError,
 }
+
+impl DomainReason for UvsReason {}
 
 impl UvsReason {
     // === Configuration Error Constructors ===

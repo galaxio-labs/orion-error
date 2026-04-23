@@ -506,8 +506,8 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        ContextRecord, ErrorCategory, ErrorCode, ErrorIdentityProvider, OperationContext,
-        StructError, UvsReason,
+        ContextRecord, DomainReason, ErrorCategory, ErrorCode, ErrorIdentityProvider,
+        OperationContext, StructError, UvsReason,
     };
 
     use super::{
@@ -533,6 +533,8 @@ mod tests {
             Self::Uvs(value)
         }
     }
+
+    impl DomainReason for TestReason {}
 
     impl ErrorCode for TestReason {
         fn error_code(&self) -> i32 {

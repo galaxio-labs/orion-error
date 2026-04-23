@@ -16,7 +16,7 @@
 pub trait DomainReason: PartialEq + Display {}
 ```
 
-并且只要你的类型满足 `From<UvsReason> + Display + PartialEq`，就会自动获得实现。
+`DomainReason` 现在是显式 marker。新代码通过 derive `OrionError` 自动获得实现，不再依赖“满足若干 trait 即自动成为 reason”的 blanket impl。
 
 `ErrorIdentityProvider` 是 `OrionError` 生成的底层能力 trait。正常业务代码不需要手写它；只有高级集成、宏实现或迁移旧类型时才需要直接接触。
 
@@ -411,7 +411,6 @@ trait ErrorIdentityProvider {
 
 | 当前命名 | 可选推荐命名 | 理由 |
 | --- | --- | --- |
-| `TextReportRenderer` | `TextDiagnosticRenderer` | 与 `DiagnosticReport` 配套，表达文本诊断渲染 |
 | `SnapshotContextFrame` | `ContextSnapshotFrame` | 词序更自然，表达 context 的 snapshot frame |
 | `SnapshotSourceFrame` | `SourceSnapshotFrame` | 词序更自然，表达 source 的 snapshot frame |
 | `StableSnapshotContextFrame` | `StableContextSnapshotFrame` | 与 `ContextSnapshotFrame` 配套 |
@@ -494,7 +493,7 @@ trait ErrorIdentityProvider {
 | `ErrorSnapshot` | snapshot | 机器可读快照，中间导出对象 |
 | `SnapshotContextFrame` / `SnapshotSourceFrame` | snapshot | snapshot 层只读 frame |
 | `DiagnosticReport` | report | 人类可读展示、渲染、redaction 的输入模型 |
-| `TextReportRenderer` | renderer | 把 `DiagnosticReport` 渲染成文本 |
+| `TextDiagnosticRenderer` | renderer | 把 `DiagnosticReport` 渲染成文本 |
 | `ErrorIdentity` | stable identity | 当前错误的稳定身份快照 |
 | `ErrorPolicyDecision` | policy | policy 的计算结果 |
 | `ErrorPolicyInput` | policy input | 把 `identity + report` 绑定成统一消费输入 |

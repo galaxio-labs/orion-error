@@ -7,8 +7,6 @@ use super::UvsReason;
 
 pub trait DomainReason: PartialEq + Display {}
 
-impl<T> DomainReason for T where T: From<UvsReason> + Display + PartialEq {}
-
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, Error, From)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -19,3 +17,5 @@ pub enum NullReason {
     #[error("{0}")]
     Uvs(UvsReason),
 }
+
+impl DomainReason for NullReason {}

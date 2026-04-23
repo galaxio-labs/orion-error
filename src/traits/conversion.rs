@@ -111,7 +111,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ErrorCode, OperationContext, StructError, UvsReason};
+    use crate::{DomainReason, ErrorCode, OperationContext, StructError, UvsReason};
 
     // 定义测试用的 DomainReason
     #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -130,6 +130,8 @@ mod tests {
             }
         }
     }
+
+    impl DomainReason for TestReason {}
 
     impl From<UvsReason> for TestReason {
         fn from(uvs: UvsReason) -> Self {
@@ -154,6 +156,8 @@ mod tests {
             }
         }
     }
+
+    impl DomainReason for AnotherReason {}
 
     impl From<UvsReason> for AnotherReason {
         fn from(uvs: UvsReason) -> Self {

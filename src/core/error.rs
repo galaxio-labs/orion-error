@@ -1177,7 +1177,7 @@ impl<T: DomainReason> ErrorWith for StructError<T> {
 mod tests {
     use std::{error::Error as StdError, fmt};
 
-    use crate::{core::context::CallContext, ContextRecord, UvsReason};
+    use crate::{core::context::CallContext, ContextRecord, DomainReason, UvsReason};
 
     use super::*;
     use derive_more::From;
@@ -1201,6 +1201,8 @@ mod tests {
             }
         }
     }
+
+    impl DomainReason for TestDomainReason {}
 
     #[derive(Debug)]
     struct InnerError;

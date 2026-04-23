@@ -62,7 +62,7 @@ fn load_user(user_id: u64) -> Result<String, StructError<UserError>> {
 
 说明：
 
-- 领域错误一般不必手写 `impl DomainReason`；满足 `From<UvsReason> + Display + PartialEq` 即自动实现。
+- 领域错误一般不必手写 `impl DomainReason`；derive `OrionError` 会自动实现。
 - 领域错误推荐 derive `OrionError`，并用 `#[orion_error(...)]` 在变体上声明稳定身份。
 - `record_field(...)` / `record_meta(...)` 是当前推荐的上下文字段写法。
 - `into_as(...)` 是普通错误进入结构化体系的主路径。
@@ -428,7 +428,7 @@ fn process_order(order_id: &str) -> Result<(), MyError> {
 - `owe_*_source()`
 - `owe_*()`
 - `owe(...)`，除非正在维护 legacy `Display`-only 场景
-- `impl DomainReason for MyError {}` 这种空实现
+- 手写空的 `impl DomainReason for MyError {}`；新代码应 derive `OrionError`
 - `UvsReason::validation_error("msg")` 这种带参数构造
 
 `with_source(...)` 不是兼容路径；它是自动 source 分流入口。只在需要显式 source 分支时改用 `with_std_source(...)` / `with_struct_source(...)`。

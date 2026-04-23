@@ -1,7 +1,7 @@
 use orion_error::{
     assert_err_identity, assert_err_operation, assert_err_path, DefaultErrorPolicy, ErrorCategory,
     ErrorRenderer, ErrorWith, IntoAs, OperationContext, RenderMode, StructError,
-    TextReportRenderer, UvsReason, Visibility,
+    TextDiagnosticRenderer, TextReportRenderer, UvsReason, Visibility,
 };
 
 #[test]
@@ -22,7 +22,7 @@ fn test_root_exports_support_identity_and_policy_flow() {
     let cli = err.cli_response(&policy);
     let log = err.log_response(&policy);
     let rpc = err.rpc_response(&policy);
-    let rendered = TextReportRenderer::new(RenderMode::Compact).render(view.report());
+    let rendered = TextDiagnosticRenderer::new(RenderMode::Compact).render(view.report());
 
     assert_eq!(identity.code, "sys.io_error");
     assert_eq!(identity.category, ErrorCategory::Sys);
@@ -70,7 +70,7 @@ fn test_root_exports_support_business_identity_and_policy_flow() {
     let cli = err.cli_response(&DefaultErrorPolicy);
     let log = err.log_response(&DefaultErrorPolicy);
     let rpc = err.rpc_response(&DefaultErrorPolicy);
-    let renderer = TextReportRenderer::new(RenderMode::Verbose);
+    let renderer = TextDiagnosticRenderer::new(RenderMode::Verbose);
     let rendered = view.render_with(renderer);
 
     assert_eq!(identity.code, "biz.business_error");
@@ -99,4 +99,13 @@ fn test_root_exports_support_business_identity_and_policy_flow() {
     assert!(rendered.contains("reason: business logic error"));
     assert!(rendered.contains("detail: order state invalid"));
     assert!(rendered.contains("validate order"));
+}
+
+#[test]
+fn test_root_exports_keep_legacy_text_report_renderer_alias() {
+    let err = StructError::from(UvsReason::system_error()).with_detail("legacy renderer");
+    let view = err.policy_report();
+    let rendered = TextReportRenderer::new(RenderMode::Compact).render(view.report());
+
+    assert!(rendered.contains("legacy renderer"));
 }

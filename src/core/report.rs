@@ -267,17 +267,17 @@ impl ErrorPolicyInput {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TextReportRenderer {
+pub struct TextDiagnosticRenderer {
     mode: RenderMode,
 }
 
-impl TextReportRenderer {
+impl TextDiagnosticRenderer {
     pub fn new(mode: RenderMode) -> Self {
         Self { mode }
     }
 }
 
-impl ErrorRenderer for TextReportRenderer {
+impl ErrorRenderer for TextDiagnosticRenderer {
     type Output = String;
 
     fn render(&self, report: &DiagnosticReport) -> Self::Output {
@@ -287,6 +287,10 @@ impl ErrorRenderer for TextReportRenderer {
         }
     }
 }
+
+#[doc(hidden)]
+#[allow(dead_code)]
+pub type TextReportRenderer = TextDiagnosticRenderer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DefaultErrorPolicy;
@@ -441,7 +445,7 @@ impl From<StableErrorSnapshot> for DiagnosticReport {
 
 impl DiagnosticReport {
     pub fn render(&self, mode: RenderMode) -> String {
-        self.render_with(TextReportRenderer::new(mode))
+        self.render_with(TextDiagnosticRenderer::new(mode))
     }
 
     pub fn render_with<R>(&self, renderer: R) -> R::Output
@@ -960,15 +964,16 @@ fn redact_required_text(key: Option<&str>, value: &str, policy: &impl RedactPoli
 #[cfg(test)]
 mod tests {
     use crate::{
-        ContextRecord, ErrorCategory, ErrorCode, ErrorIdentity, ErrorIdentityProvider,
-        ErrorMetadata, OperationContext, SourceFrame, StructError, UvsReason,
+        ContextRecord, DomainReason, ErrorCategory, ErrorCode, ErrorIdentity,
+        ErrorIdentityProvider, ErrorMetadata, OperationContext, SourceFrame, StructError,
+        UvsReason,
     };
 
     use super::{
         DefaultErrorPolicy, DiagnosticReport, ErrorCliResponse, ErrorHttpResponse,
         ErrorLogResponse, ErrorPolicy, ErrorPolicyDecision, ErrorPolicyInput,
         ErrorProtocolSnapshot, ErrorRenderer, ErrorRpcResponse, RedactPolicy, RenderMode,
-        TextReportRenderer, Visibility, CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS,
+        TextDiagnosticRenderer, Visibility, CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS,
         LOG_ERROR_RESPONSE_FIELDS, POLICY_DECISION_FIELDS, POLICY_SNAPSHOT_TOP_LEVEL_FIELDS,
         RPC_ERROR_RESPONSE_FIELDS,
     };
@@ -1003,6 +1008,8 @@ mod tests {
             Self::Uvs(value)
         }
     }
+
+    impl DomainReason for TestReason {}
 
     impl ErrorCode for TestReason {
         fn error_code(&self) -> i32 {
@@ -1180,7 +1187,7 @@ mod tests {
             source_frames: vec![],
         };
 
-        let renderer = TextReportRenderer::new(RenderMode::Verbose);
+        let renderer = TextDiagnosticRenderer::new(RenderMode::Verbose);
         let via_renderer = renderer.render(&report);
         let via_method = report.render(RenderMode::Verbose);
 
@@ -1338,7 +1345,7 @@ mod tests {
         );
 
         assert_eq!(
-            view.render_with(TextReportRenderer::new(RenderMode::Compact)),
+            view.render_with(TextDiagnosticRenderer::new(RenderMode::Compact)),
             report.render(RenderMode::Compact)
         );
     }

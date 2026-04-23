@@ -22,9 +22,10 @@ pub use reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
 pub use report::{
     DefaultErrorPolicy, DiagnosticReport, ErrorCliResponse, ErrorHttpResponse, ErrorLogResponse,
     ErrorPolicy, ErrorPolicyDecision, ErrorPolicyInput, ErrorProtocolSnapshot, ErrorRenderer,
-    ErrorReport, ErrorRpcResponse, RedactPolicy, RenderMode, TextReportRenderer, Visibility,
-    CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS, LOG_ERROR_RESPONSE_FIELDS,
-    POLICY_DECISION_FIELDS, POLICY_SNAPSHOT_TOP_LEVEL_FIELDS, RPC_ERROR_RESPONSE_FIELDS,
+    ErrorReport, ErrorRpcResponse, RedactPolicy, RenderMode, TextDiagnosticRenderer,
+    TextReportRenderer, Visibility, CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS,
+    LOG_ERROR_RESPONSE_FIELDS, POLICY_DECISION_FIELDS, POLICY_SNAPSHOT_TOP_LEVEL_FIELDS,
+    RPC_ERROR_RESPONSE_FIELDS,
 };
 pub use snapshot::{
     ErrorIdentity, ErrorSnapshot, SnapshotContextFrame, SnapshotSourceFrame, StableErrorSnapshot,

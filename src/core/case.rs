@@ -5,8 +5,8 @@ mod tests {
     use thiserror::Error;
 
     use crate::{
-        core::convert_error, ContextRecord, ErrorCode, ErrorWith, OperationContext, StructError,
-        TestAssertWithMsg, UvsReason,
+        core::convert_error, ContextRecord, DomainReason, ErrorCode, ErrorWith, OperationContext,
+        StructError, TestAssertWithMsg, UvsReason,
     };
 
     // 测试用领域原因类型
@@ -27,6 +27,8 @@ mod tests {
         }
     }
 
+    impl DomainReason for TestDomainReason {}
+
     // 另一个领域原因类型用于转换测试
     #[derive(Debug, PartialEq, Clone, Error, From)]
     enum OtherDomainReason {
@@ -35,6 +37,8 @@ mod tests {
         #[error("{0}")]
         Uvs(UvsReason),
     }
+
+    impl DomainReason for OtherDomainReason {}
 
     impl From<TestDomainReason> for OtherDomainReason {
         fn from(value: TestDomainReason) -> Self {

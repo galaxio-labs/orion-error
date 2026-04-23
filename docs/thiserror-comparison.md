@@ -64,7 +64,7 @@ fn handle() -> Result<(), StructError<AppError>> {
 这里不需要：
 
 - `#[derive(thiserror::Error)]`
-- 空的 `impl DomainReason for AppError {}`
+- 空的 `impl DomainReason for AppError {}`；新代码应 derive `OrionError`
 - 手写稳定身份映射
 - 手写兼容数值码映射
 

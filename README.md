@@ -101,7 +101,7 @@ fn load_config() -> Result<String, StructError<AppError>> {
 
 Notes:
 
-- `DomainReason` is usually implemented automatically when your enum satisfies `From<UvsReason> + Display + PartialEq`.
+- `DomainReason` is implemented by `OrionError`; reason enums should derive `OrionError` instead of relying on structural blanket impls.
 - Derive `OrionError` on domain enums and declare stable `identity` with `#[orion_error(...)]`.
 - Use `record_field(...)` / `record_meta(...)` on `OperationContext`; `with_context(...)` is the primary error-side API for full context frames.
 - Default to `into_as(...)` for plain `Result<T, E: Error>` entering the structured system the first time.
