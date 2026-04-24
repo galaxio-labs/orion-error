@@ -1402,6 +1402,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "serde_json")]
     #[test]
     fn test_exposure_snapshot_json_keys_match_expected_shape() {
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
@@ -1484,6 +1485,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "serde_json")]
     #[test]
     fn test_http_error_json_keys_match_expected_shape() {
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
@@ -1826,6 +1828,7 @@ mod tests {
         assert!(!rendered.contains("config.secret"));
     }
 
+    #[cfg(feature = "serde_json")]
     #[test]
     fn test_cli_error_json_keys_match_expected_shape() {
         let err = StructError::from(TestReason::Uvs(UvsReason::business_error()))
