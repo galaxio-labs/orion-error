@@ -1,6 +1,6 @@
 use std::{error::Error as StdError, fmt};
 
-use crate::{core::{DomainReason, OwnedDynStdStructError}, StructError};
+use crate::{core::DomainReason, StructError};
 
 mod private {
     pub trait Sealed {}
@@ -179,6 +179,8 @@ impl UnstructuredSource for anyhow::Error {
     where
         R: DomainReason,
     {
+        use crate::core::OwnedDynStdStructError;
+
         match self.downcast::<OwnedDynStdStructError>() {
             Ok(source) => StructError::from(reason)
                 .with_detail(detail)
