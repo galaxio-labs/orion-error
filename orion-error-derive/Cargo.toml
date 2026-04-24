@@ -6,6 +6,10 @@ authors = ["wukong <sec-wukong@outlook.com>"]
 description = "Derive macros for orion-error"
 license = "MIT"
 repository = "https://github.com/galaxy-sec/orion-error"
+readme = "README.md"
+documentation = "https://docs.rs/orion-error-derive"
+keywords = ["error", "derive", "proc-macro"]
+categories = ["rust-patterns"]
 
 [lib]
 proc-macro = true

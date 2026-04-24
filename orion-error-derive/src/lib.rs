@@ -1,3 +1,8 @@
+//! Derive macros for `orion-error`.
+//!
+//! Most downstream crates should depend on `orion-error` and use its default
+//! `derive` feature instead of depending on this crate directly.
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};

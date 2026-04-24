@@ -1,5 +1,6 @@
-use orion_error::{conversion, reason, report, runtime, snapshot};
-use orion_error::{ErrorCode, ErrorWith, IntoAs, UvsReason};
+use orion_error::reason::ErrorCode;
+use orion_error::{conversion, reason, runtime, snapshot};
+use orion_error::{ErrorWith, IntoAs, UvsReason};
 
 #[test]
 fn test_layered_modules_and_root_prelude_compile() {
@@ -13,8 +14,6 @@ fn test_layered_modules_and_root_prelude_compile() {
     let stable = snapshot.stable_export();
     let report = stable.report();
     let bridge = err.as_std();
-    let cli_fields = report::CLI_ERROR_RESPONSE_FIELDS;
-    let http_fields = report::HTTP_ERROR_RESPONSE_FIELDS;
 
     assert_eq!(reason::ErrorCode::error_code(&err), 201);
     assert_eq!(snapshot.reason, "system error");
@@ -23,8 +22,6 @@ fn test_layered_modules_and_root_prelude_compile() {
         snapshot::STABLE_SNAPSHOT_SCHEMA_VERSION
     );
     assert_eq!(report.reason, "system error");
-    assert_eq!(cli_fields, orion_error::CLI_ERROR_RESPONSE_FIELDS);
-    assert_eq!(http_fields, orion_error::HTTP_ERROR_RESPONSE_FIELDS);
     assert!(std::error::Error::source(&bridge).is_none());
 
     let io_result: Result<(), std::io::Error> = Err(std::io::Error::other("disk offline"));
@@ -69,7 +66,7 @@ fn test_layered_modules_and_root_prelude_compile() {
 }
 
 #[test]
-fn test_advanced_prelude_exports_cli_projection_types_and_constants() {
+fn test_advanced_prelude_exports_cli_projection_types() {
     use orion_error::advanced_prelude::*;
 
     let cli = ErrorCliResponse {
@@ -89,7 +86,7 @@ fn test_advanced_prelude_exports_cli_projection_types_and_constants() {
         path: Some("load config".to_string()),
         visibility: Visibility::Internal,
         hints: vec!["check filesystem state".to_string()],
-        root_metadata: orion_error::ErrorMetadata::new(),
+        root_metadata: orion_error::runtime::ErrorMetadata::new(),
         context: vec![],
         source_frames: vec![],
     };
@@ -104,22 +101,6 @@ fn test_advanced_prelude_exports_cli_projection_types_and_constants() {
         retryable: false,
     };
 
-    assert_eq!(
-        CLI_ERROR_RESPONSE_FIELDS,
-        orion_error::CLI_ERROR_RESPONSE_FIELDS
-    );
-    assert_eq!(
-        HTTP_ERROR_RESPONSE_FIELDS,
-        orion_error::HTTP_ERROR_RESPONSE_FIELDS
-    );
-    assert_eq!(
-        LOG_ERROR_RESPONSE_FIELDS,
-        orion_error::LOG_ERROR_RESPONSE_FIELDS
-    );
-    assert_eq!(
-        RPC_ERROR_RESPONSE_FIELDS,
-        orion_error::RPC_ERROR_RESPONSE_FIELDS
-    );
     assert_eq!(cli.code, "sys.io_error");
     assert_eq!(cli.visibility, Visibility::Internal);
     assert_eq!(log.reason, "system error");

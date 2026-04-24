@@ -1,11 +1,13 @@
-use crate::{DomainReason, ErrorCategory, ErrorIdentityProvider, StructError};
+use crate::{core::DomainReason, ErrorCategory, ErrorIdentityProvider, StructError};
 
+#[allow(dead_code)]
 // 测试专用断言 (无消息)
 pub trait TestAssert {
     type Output;
     fn assert(self) -> Self::Output;
 }
 
+#[allow(dead_code)]
 // 测试专用断言 (带消息)
 pub trait TestAssertWithMsg<A> {
     type Output;

@@ -1,4 +1,4 @@
-use crate::{core::convert_error, DomainReason, ErrorCode, StructError};
+use crate::{core::convert_error, core::DomainReason, ErrorCode, StructError};
 use std::fmt::Display;
 
 pub trait ErrorConv<T, R: DomainReason>: Sized {
@@ -111,7 +111,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DomainReason, ErrorCode, OperationContext, StructError, UvsReason};
+    use crate::{core::DomainReason, ErrorCode, OperationContext, StructError, UvsReason};
 
     // 定义测试用的 DomainReason
     #[derive(Debug, Clone, PartialEq, thiserror::Error)]

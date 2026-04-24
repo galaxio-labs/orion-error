@@ -1,4 +1,4 @@
-use crate::{DomainReason, StructError};
+use crate::{core::DomainReason, StructError};
 
 use super::{
     context::OperationResult, report::DiagnosticReport, ErrorCategory, ErrorIdentityProvider,
@@ -6,31 +6,6 @@ use super::{
 };
 
 pub const STABLE_SNAPSHOT_SCHEMA_VERSION: &str = "orion-error.snapshot.v2";
-pub const STABLE_SNAPSHOT_TOP_LEVEL_FIELDS: &[&str] = &[
-    "schema_version",
-    "reason",
-    "detail",
-    "position",
-    "want",
-    "path",
-    "context",
-    "root_metadata",
-    "source_frames",
-];
-pub const STABLE_SNAPSHOT_CONTEXT_FIELDS: &[&str] =
-    &["target", "action", "locator", "path", "metadata"];
-pub const STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS: &[&str] = &[
-    "index",
-    "message",
-    "error_code",
-    "reason",
-    "want",
-    "path",
-    "detail",
-    "metadata",
-    "is_root_cause",
-];
-
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct SnapshotContextFrame {
@@ -506,18 +481,14 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        ContextRecord, DomainReason, ErrorCategory, ErrorCode, ErrorIdentityProvider,
-        OperationContext, StructError, UvsReason,
+        core::{context::ContextRecord, DomainReason, ErrorMetadata, SourceFrame},
+        ErrorCategory, ErrorCode, ErrorIdentityProvider, OperationContext, StructError, UvsReason,
     };
 
     use super::{
-        ErrorSnapshot, SnapshotContextFrame, SnapshotSourceFrame, StableErrorSnapshot,
-        StableSnapshotContextFrame, StableSnapshotSourceFrame, STABLE_SNAPSHOT_SCHEMA_VERSION,
-    };
-    #[cfg(feature = "serde_json")]
-    use super::{
-        STABLE_SNAPSHOT_CONTEXT_FIELDS, STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS,
-        STABLE_SNAPSHOT_TOP_LEVEL_FIELDS,
+        DiagnosticReport, ErrorSnapshot, SnapshotContextFrame, SnapshotSourceFrame,
+        StableErrorSnapshot, StableSnapshotContextFrame, StableSnapshotSourceFrame,
+        STABLE_SNAPSHOT_SCHEMA_VERSION,
     };
 
     #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -666,12 +637,12 @@ mod tests {
                 action: None,
                 locator: None,
                 path: vec!["start engine".to_string()],
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 fields: vec![],
                 result: crate::core::context::OperationResult::Fail,
             }],
             root_metadata: {
-                let mut metadata = crate::ErrorMetadata::new();
+                let mut metadata = ErrorMetadata::new();
                 metadata.insert("component.name", "engine");
                 metadata
             },
@@ -702,7 +673,7 @@ mod tests {
                 .clone()
                 .into_iter()
                 .map(Into::into)
-                .collect::<Vec<crate::SourceFrame>>()
+                .collect::<Vec<SourceFrame>>()
         );
     }
 
@@ -755,11 +726,11 @@ mod tests {
                 action: None,
                 locator: None,
                 path: vec!["start engine".to_string()],
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 fields: vec![("tenant".to_string(), "alpha".to_string())],
                 result: crate::core::context::OperationResult::Fail,
             }],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![SnapshotSourceFrame {
                 index: 0,
                 message: "db unavailable".to_string(),
@@ -770,14 +741,14 @@ mod tests {
                 want: Some("load config".to_string()),
                 path: Some("load config / read".to_string()),
                 detail: Some("inner detail".to_string()),
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
         };
 
         let via_borrowed = snapshot.report();
         let via_owned = snapshot.clone().into_report();
-        let via_from = crate::DiagnosticReport::from(snapshot);
+        let via_from = DiagnosticReport::from(snapshot);
 
         assert_eq!(via_owned, via_borrowed);
         assert_eq!(via_from, via_borrowed);
@@ -862,11 +833,11 @@ mod tests {
                 action: None,
                 locator: None,
                 path: vec!["start engine".to_string()],
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 fields: vec![("tenant".to_string(), "alpha".to_string())],
                 result: crate::core::context::OperationResult::Fail,
             }],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![SnapshotSourceFrame {
                 index: 0,
                 message: "db unavailable".to_string(),
@@ -877,7 +848,7 @@ mod tests {
                 want: Some("load config".to_string()),
                 path: Some("load config / read".to_string()),
                 detail: Some("inner detail".to_string()),
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
         };
@@ -920,7 +891,7 @@ mod tests {
             action: None,
             locator: None,
             path: vec!["start engine".to_string()],
-            metadata: crate::ErrorMetadata::new(),
+            metadata: ErrorMetadata::new(),
             fields: vec![("tenant".to_string(), "alpha".to_string())],
             result: crate::core::context::OperationResult::Fail,
         };
@@ -934,7 +905,7 @@ mod tests {
             want: Some("load config".to_string()),
             path: Some("load config / read".to_string()),
             detail: Some("inner detail".to_string()),
-            metadata: crate::ErrorMetadata::new(),
+            metadata: ErrorMetadata::new(),
             is_root_cause: true,
         };
 
@@ -970,9 +941,9 @@ mod tests {
                 action: None,
                 locator: None,
                 path: vec!["start engine".to_string()],
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
             }],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![StableSnapshotSourceFrame {
                 index: 0,
                 message: "db unavailable".to_string(),
@@ -981,7 +952,7 @@ mod tests {
                 want: Some("load config".to_string()),
                 path: Some("load config / read".to_string()),
                 detail: Some("inner detail".to_string()),
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
         };
@@ -999,7 +970,7 @@ mod tests {
             action: None,
             locator: None,
             path: vec!["start engine".to_string()],
-            metadata: crate::ErrorMetadata::new(),
+            metadata: ErrorMetadata::new(),
         };
         let source = StableSnapshotSourceFrame {
             index: 0,
@@ -1009,7 +980,7 @@ mod tests {
             want: Some("load config".to_string()),
             path: Some("load config / read".to_string()),
             detail: Some("inner detail".to_string()),
-            metadata: crate::ErrorMetadata::new(),
+            metadata: ErrorMetadata::new(),
             is_root_cause: true,
         };
 
@@ -1096,14 +1067,14 @@ mod tests {
             path: Some("load config / read".to_string()),
             detail: Some("inner detail".to_string()),
             metadata: {
-                let mut metadata = crate::ErrorMetadata::new();
+                let mut metadata = ErrorMetadata::new();
                 metadata.insert("config.kind", "sink_defaults");
                 metadata
             },
             is_root_cause: true,
         };
 
-        let report_frame: crate::SourceFrame = frame.clone().into();
+        let report_frame: SourceFrame = frame.clone().into();
         let roundtrip = SnapshotSourceFrame::from(report_frame);
 
         assert_eq!(roundtrip, frame);
@@ -1212,7 +1183,7 @@ mod tests {
                 locator: Some("engine.toml".to_string()),
                 path: vec!["start engine".to_string()],
                 metadata: {
-                    let mut metadata = crate::ErrorMetadata::new();
+                    let mut metadata = ErrorMetadata::new();
                     metadata.insert("component.name", "engine");
                     metadata
                 },
@@ -1220,7 +1191,7 @@ mod tests {
                 result: crate::core::context::OperationResult::Fail,
             }],
             root_metadata: {
-                let mut metadata = crate::ErrorMetadata::new();
+                let mut metadata = ErrorMetadata::new();
                 metadata.insert("component.name", "engine");
                 metadata
             },
@@ -1235,7 +1206,7 @@ mod tests {
                 path: Some("load config / read".to_string()),
                 detail: Some("inner detail".to_string()),
                 metadata: {
-                    let mut metadata = crate::ErrorMetadata::new();
+                    let mut metadata = ErrorMetadata::new();
                     metadata.insert("config.kind", "sink_defaults");
                     metadata
                 },
@@ -1304,11 +1275,11 @@ mod tests {
                 action: Some("start engine".to_string()),
                 locator: Some("engine.toml".to_string()),
                 path: vec!["start engine".to_string()],
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 fields: vec![("tenant".to_string(), "alpha".to_string())],
                 result: crate::core::context::OperationResult::Fail,
             }],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![SnapshotSourceFrame {
                 index: 0,
                 message: "db unavailable".to_string(),
@@ -1319,7 +1290,7 @@ mod tests {
                 want: Some("load config".to_string()),
                 path: Some("load config / read".to_string()),
                 detail: None,
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
         };
@@ -1360,11 +1331,11 @@ mod tests {
                 action: None,
                 locator: None,
                 path: vec!["start engine".to_string()],
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 fields: vec![("tenant".to_string(), "alpha".to_string())],
                 result: crate::core::context::OperationResult::Fail,
             }],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![SnapshotSourceFrame {
                 index: 0,
                 message: "db unavailable".to_string(),
@@ -1375,7 +1346,7 @@ mod tests {
                 want: Some("load config".to_string()),
                 path: Some("load config / read".to_string()),
                 detail: Some("inner detail".to_string()),
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
         };
@@ -1387,15 +1358,35 @@ mod tests {
 
         assert_eq!(
             sorted_keys(top_level),
-            sorted_strings(STABLE_SNAPSHOT_TOP_LEVEL_FIELDS)
+            sorted_strings(&[
+                "schema_version",
+                "reason",
+                "detail",
+                "position",
+                "want",
+                "path",
+                "context",
+                "root_metadata",
+                "source_frames",
+            ])
         );
         assert_eq!(
             sorted_keys(context),
-            sorted_strings(STABLE_SNAPSHOT_CONTEXT_FIELDS)
+            sorted_strings(&["target", "action", "locator", "path", "metadata"])
         );
         assert_eq!(
             sorted_keys(source_frame),
-            sorted_strings(STABLE_SNAPSHOT_SOURCE_FRAME_FIELDS)
+            sorted_strings(&[
+                "index",
+                "message",
+                "error_code",
+                "reason",
+                "want",
+                "path",
+                "detail",
+                "metadata",
+                "is_root_cause",
+            ])
         );
     }
 

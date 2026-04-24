@@ -27,6 +27,12 @@ Optional features:
 orion-error = { version = "0.7.0", features = ["serde"] }
 # or
 orion-error = { version = "0.7.0", features = ["tracing"] }
+# or
+orion-error = { version = "0.7.0", features = ["serde_json"] }
+# or
+orion-error = { version = "0.7.0", features = ["anyhow"] }
+# or
+orion-error = { version = "0.7.0", features = ["toml"] }
 ```
 
 Default features include `log` and `derive`.
@@ -46,16 +52,24 @@ bridge APIs instead of calling `std::error::Error::source(&err)` directly on
 
 Current docs:
 
+- [CHANGELOG.md](./CHANGELOG.md)
 - [docs/tutorial.md](./docs/tutorial.md)
 - [docs/reason-identity-guide.md](./docs/reason-identity-guide.md)
 - [docs/protocol-contract.md](./docs/protocol-contract.md)
 - [docs/stable-snapshot-schema.md](./docs/stable-snapshot-schema.md)
 - [docs/thiserror-comparison.md](./docs/thiserror-comparison.md)
+- [orion-error-derive/README.md](./orion-error-derive/README.md)
+
+Release order on crates.io:
+
+1. Publish `orion-error-derive` first.
+2. Wait for crates.io index propagation.
+3. Publish `orion-error`.
 
 Import guidance:
 
-- `orion_error::prelude::*` is the primary convenience wildcard import and intentionally exports only the main path: `OrionError`, `StructError`, `IntoAs`, `ErrorWith`, `ErrorWrapAs`, and `DefaultErrorPolicy`.
-- Small root imports such as `orion_error::{StructError, OrionError}` are preferred when you want explicit imports.
+- `orion_error::prelude::*` is the primary convenience wildcard import and intentionally exports only the main path: `OrionError`, `StructError`, `IntoAs`, `ErrorWith`, `ErrorWrapAs`, and `DefaultExposurePolicy`.
+- Small root imports such as `orion_error::{StructError, OrionError}` are preferred when you want explicit imports for the main path only.
 - `orion_error::advanced_prelude::*` is only for advanced protocol/schema checks and migration tests.
 - Layered imports are available when code needs stricter responsibility boundaries:
   - `orion_error::runtime::*`
@@ -64,9 +78,51 @@ Import guidance:
   - `orion_error::report::*`
   - `orion_error::bridge::*`
   - `orion_error::reason::*`
+  - `orion_error::testcase::*`
 - `orion_error::compat_prelude::*` / `orion_error::compat_traits::*` are explicit legacy compatibility imports for `owe(...)`
 
-For new code, prefer `orion_error::prelude::*` plus small layered imports for examples, and small root imports for production modules. Use layered imports when the module benefits from explicit runtime / snapshot / report boundaries.
+For new code, prefer `orion_error::prelude::*` plus small layered imports for examples, and small root imports for production modules. Use layered imports when the module benefits from explicit runtime / snapshot / report / bridge / testcase boundaries.
+
+Recommended import split:
+
+- `reason::*` for `ErrorCode`, `ErrorCategory`, `ErrorIdentityProvider`, `UvsReason`
+- `report::*` for `Visibility`, projection response types, and projection/rendering APIs
+- `snapshot::*` for stable snapshot schema constants
+- `bridge::*` for `raw_source` and `RawStdError`
+- `testcase::*` for `assert_err_identity(...)` and other test helpers
+
+Root exceptions that are still reasonable:
+
+- `ErrorCode` and `ErrorIdentityProvider` remain valid root imports because those names are also derive-macro entry points.
+
+## Recommended API
+
+Current primary names:
+
+- `DefaultExposurePolicy`
+- `ExposurePolicy`
+- `ExposureDecision`
+- `ExposureView`
+- `exposure_view()`
+- `exposure_snapshot()`
+- `to_exposure_snapshot_json()`
+
+## Feature matrix
+
+- `derive`
+  Enables `#[derive(OrionError)]`.
+- `log`
+  Enables `OperationContext` log integration.
+- `tracing`
+  Switches `OperationContext` logging to `tracing`.
+- `serde`
+  Enables serde support for runtime, report, and snapshot structures.
+- `serde_json`
+  Enables JSON helper methods such as `to_stable_snapshot_json()` and `to_exposure_snapshot_json()`.
+- `anyhow`
+  Enables `anyhow::Error` integration for `into_as(...)`.
+- `toml`
+  Enables TOML error integration for `into_as(...)`.
 
 ## Quick Start
 
@@ -104,25 +160,18 @@ Notes:
 - `DomainReason` is implemented by `OrionError`; reason enums should derive `OrionError` instead of relying on structural blanket impls.
 - Derive `OrionError` on domain enums and declare stable `identity` with `#[orion_error(...)]`.
 - Use `record_field(...)` / `record_meta(...)` on `OperationContext`; `with_context(...)` is the primary error-side API for full context frames.
-- Default to `into_as(...)` for plain `Result<T, E: Error>` entering the structured system the first time.
+- Default to `into_as(...)` for supported plain error sources entering the structured system the first time.
 - Use `wrap_as(...)` when the upstream value is already `StructError<_>` and the upper layer wants a new reason boundary.
-- Use `snapshot()` for export-layer work.
-- Use `into_snapshot()` when the runtime error can be consumed into an owned snapshot.
-- Use `snapshot().stable_export()` when you want the stable snapshot field set.
-- Use `snapshot().into_stable_export()` or `StableErrorSnapshot::from(snapshot)` when the snapshot can be consumed.
-- Use `StableErrorSnapshot::from(&err)` / `DiagnosticReport::from(&err)` for direct read-only runtime projections.
-- Use `stable.report()` for report-layer rendering from a stable snapshot.
-- With the `serde_json` feature, use `snapshot().to_stable_snapshot_json()` for stable JSON output.
-- Stable snapshot JSON includes `schema_version = "orion-error.snapshot.v2"`.
-- Use `report()` for human-facing rendering/redaction views.
-- Use `into_report()` when the runtime error or snapshot can be consumed into an owned report view.
+- Runtime propagation uses `StructError`; stable machine export uses `StableErrorSnapshot`; human diagnostics use `DiagnosticReport`.
+- For export-layer work, prefer `snapshot().stable_export()` or, with the `serde_json` feature, `snapshot().to_stable_snapshot_json()`.
+- For human-facing diagnostics and redaction, use `report()` / `render(...)` / `render_redacted(...)`.
 - Use `into_std()` / `OwnedStdStructError::from(err)` / `as_std()` / `StdStructRef::from(&err)` when explicitly bridging a `StructError<_>` into the standard error ecosystem.
 - Use `OwnedStdStructError::into_struct()` when you need to come back from the owned bridge to the structured runtime carrier.
 - Use `into_dyn_std()` only when an owned, type-erased official bridge is required, such as an `anyhow::Error` boundary that must later be recognized by `into_as(...)`.
 - Use `into_boxed_std()` when a boundary requires `Box<dyn std::error::Error + Send + Sync>`.
 - Use `source_payload()` / `source_payload_kind()` only for read-only inspection of the source payload branch.
 - Use legacy `owe(...)` only as a compatibility path for `Display`-only values.
-- Prefer `with_source(...)` and `builder.source(...)` for automatic source routing. Use `with_std_source(...)` / `with_struct_source(...)` and `source_std(...)` / `source_struct(...)` when the call site should make the source branch explicit.
+- Prefer `with_std_source(...)` / `with_struct_source(...)` and `source_std(...)` / `source_struct(...)` in new code so the source branch stays explicit. `with_source(...)` and `builder.source(...)` remain available as compatibility helpers for automatic routing.
 
 ## Core Concepts
 
@@ -181,7 +230,7 @@ For non-structured sources on an existing `StructError`, prefer:
 ```rust
 let err = StructError::from(UvsReason::system_error())
     .with_detail("failed to read config")
-    .with_source(std::io::Error::other("disk offline"));
+    .with_std_source(std::io::Error::other("disk offline"));
 ```
 
 ### 3. Context Propagation
@@ -214,7 +263,8 @@ Rules of thumb:
 `OperationContext` can also carry machine-readable metadata for diagnostics and classification:
 
 ```rust
-use orion_error::{ErrorMetadata, OperationContext, StructError, UvsReason};
+use orion_error::{OperationContext, StructError, UvsReason};
+use orion_error::runtime::ErrorMetadata;
 
 let ctx = OperationContext::doing("load sink defaults")
     .with_meta("config.kind", "sink_defaults")
@@ -349,7 +399,13 @@ The same rule applies to the builder API: use `.source_struct(lower_err)` for `S
 
 ## Reports and Redaction
 
-Default `Display` should stay concise. For diagnostics, logs, or structured export, use `DiagnosticReport` and the explicit render APIs:
+Default `Display` should stay concise. Use this separation:
+
+- Runtime propagation uses `StructError`.
+- Stable machine export uses `StableErrorSnapshot`.
+- Human diagnostics and redaction use `DiagnosticReport`.
+
+Most application code can stay on `StructError` and call the high-level helpers:
 
 ```rust
 use orion_error::{
@@ -373,7 +429,7 @@ impl RedactPolicy for SimplePolicy {
 let err = StructError::from(UvsReason::config_error())
     .with_detail("load config failed")
     .with_context(
-        orion_error::OperationContext::doing("load config")
+        orion_error::runtime::OperationContext::doing("load config")
             .with_meta("config.kind", "sink_defaults")
             .with_meta("config.secret", "/prod/secrets/api-key"),
     );
@@ -390,7 +446,8 @@ assert!(redacted.contains("<redacted>"));
 
 Recommended usage:
 
-- `report()` for structured inspection or custom serialization pipelines.
+- `snapshot().stable_export()` or, with the `serde_json` feature, `snapshot().to_stable_snapshot_json()` for stable machine export.
+- `report()` for human diagnostic inspection.
 - `render(RenderMode::Compact)` for short summaries.
 - `render(RenderMode::Verbose)` for local diagnostics and debug output.
 - `render_redacted(...)` before writing potentially sensitive diagnostics to logs or external systems.
@@ -415,10 +472,10 @@ Use `scoped_success()` if you want RAII-style success marking.
 
 ## Source Chain
 
-If you use `with_source(...)`, `raw_source(...)`, or `into_as(...)`, the original error remains available:
+If you use `with_std_source(...)`, `raw_source(...)`, or `into_as(...)`, the original error remains available:
 
 ```rust
-use orion_error::{conversion::IntoAs, reason::UvsReason, StructError};
+use orion_error::{conversion::IntoAs, reason::UvsReason, runtime::StructError};
 
 let err: StructError<UvsReason> = std::fs::read_to_string("config.toml")
     .into_as(UvsReason::system_error(), "read config failed")

@@ -5,8 +5,9 @@ mod tests {
     use thiserror::Error;
 
     use crate::{
-        core::convert_error, ContextRecord, DomainReason, ErrorCode, ErrorWith, OperationContext,
-        StructError, TestAssertWithMsg, UvsReason,
+        core::{context::ContextRecord, convert_error},
+        testcase::TestAssertWithMsg,
+        DomainReason, ErrorCode, ErrorWith, OperationContext, StructError, UvsReason,
     };
 
     // 测试用领域原因类型

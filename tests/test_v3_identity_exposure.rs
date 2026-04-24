@@ -1,11 +1,12 @@
+use orion_error::report::Visibility as ReportVisibility;
+use orion_error::testcase::{assert_err_identity, assert_err_operation, assert_err_path};
 use orion_error::{
-    assert_err_identity, assert_err_operation, assert_err_path, DefaultErrorPolicy, ErrorCategory,
-    ErrorRenderer, ErrorWith, IntoAs, OperationContext, RenderMode, StructError,
-    TextDiagnosticRenderer, TextReportRenderer, UvsReason, Visibility,
+    DefaultExposurePolicy, ErrorCategory, ErrorRenderer, ErrorWith, IntoAs, OperationContext,
+    RenderMode, StructError, TextDiagnosticRenderer, TextReportRenderer, UvsReason, Visibility,
 };
 
 #[test]
-fn test_root_exports_support_identity_and_policy_flow() {
+fn test_root_exports_support_identity_and_exposure_flow() {
     let err = std::fs::read_to_string("missing-config.toml")
         .into_as(UvsReason::system_error(), "read config failed")
         .doing("read config")
@@ -14,14 +15,14 @@ fn test_root_exports_support_identity_and_policy_flow() {
     assert_err_identity(&err, "sys.io_error", ErrorCategory::Sys);
 
     let identity = err.identity_snapshot();
-    let view = err.policy_report();
-    let policy = DefaultErrorPolicy;
-    let decision = view.decision(&policy);
-    let snapshot = err.policy_snapshot(&policy);
-    let http = err.http_response(&policy);
-    let cli = err.cli_response(&policy);
-    let log = err.log_response(&policy);
-    let rpc = err.rpc_response(&policy);
+    let view = err.exposure_view();
+    let exposure_policy = DefaultExposurePolicy;
+    let decision = view.decision(&exposure_policy);
+    let snapshot = err.exposure_snapshot(&exposure_policy);
+    let http = err.http_response(&exposure_policy);
+    let cli = err.cli_response(&exposure_policy);
+    let log = err.log_response(&exposure_policy);
+    let rpc = err.rpc_response(&exposure_policy);
     let rendered = TextDiagnosticRenderer::new(RenderMode::Compact).render(view.report());
 
     assert_eq!(identity.code, "sys.io_error");
@@ -30,7 +31,7 @@ fn test_root_exports_support_identity_and_policy_flow() {
     assert_err_path(&err, "read config");
     assert_eq!(view.identity(), &identity);
     assert_eq!(decision.http_status, 500);
-    assert_eq!(decision.visibility, orion_error::Visibility::Internal);
+    assert_eq!(decision.visibility, ReportVisibility::Internal);
     assert_eq!(
         decision.default_hints,
         vec!["check filesystem state", "verify file permissions"]
@@ -56,20 +57,21 @@ fn test_root_exports_support_identity_and_policy_flow() {
 }
 
 #[test]
-fn test_root_exports_support_business_identity_and_policy_flow() {
+fn test_root_exports_support_business_identity_and_exposure_flow() {
     let err = ErrorWith::with_context(
         StructError::from(UvsReason::business_error()).with_detail("order state invalid"),
         OperationContext::doing("validate order"),
     );
 
     let identity = err.identity_snapshot();
-    let view = err.policy_report();
-    let decision = view.decision(&DefaultErrorPolicy);
-    let snapshot = err.policy_snapshot(&DefaultErrorPolicy);
-    let http = err.http_response(&DefaultErrorPolicy);
-    let cli = err.cli_response(&DefaultErrorPolicy);
-    let log = err.log_response(&DefaultErrorPolicy);
-    let rpc = err.rpc_response(&DefaultErrorPolicy);
+    let view = err.exposure_view();
+    let exposure_policy = DefaultExposurePolicy;
+    let decision = view.decision(&exposure_policy);
+    let snapshot = err.exposure_snapshot(&exposure_policy);
+    let http = err.http_response(&exposure_policy);
+    let cli = err.cli_response(&exposure_policy);
+    let log = err.log_response(&exposure_policy);
+    let rpc = err.rpc_response(&exposure_policy);
     let renderer = TextDiagnosticRenderer::new(RenderMode::Verbose);
     let rendered = view.render_with(renderer);
 
@@ -104,7 +106,7 @@ fn test_root_exports_support_business_identity_and_policy_flow() {
 #[test]
 fn test_root_exports_keep_legacy_text_report_renderer_alias() {
     let err = StructError::from(UvsReason::system_error()).with_detail("legacy renderer");
-    let view = err.policy_report();
+    let view = err.exposure_view();
     let rendered = TextReportRenderer::new(RenderMode::Compact).render(view.report());
 
     assert!(rendered.contains("legacy renderer"));

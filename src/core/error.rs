@@ -1,21 +1,15 @@
 use std::{error::Error as StdError, fmt::Display, ops::Deref, sync::Arc};
 
-use crate::ErrorWith;
-
 use super::{
-    context::OperationContext, domain::DomainReason, metadata::ErrorMetadata, ContextAdd, ErrorCode,
+    context::OperationContext, domain::DomainReason, metadata::ErrorMetadata, ContextAdd,
+    ErrorCategory, ErrorCode, ErrorIdentityProvider,
 };
+use crate::traits::ErrorWith;
 #[macro_export]
 macro_rules! location {
     () => {
         format!("{}:{}:{}", file!(), line!(), column!())
     };
-}
-
-pub trait StructErrorTrait<T: DomainReason> {
-    fn get_reason(&self) -> &T;
-    fn get_detail(&self) -> Option<&String>;
-    fn get_target(&self) -> Option<String>;
 }
 
 impl<T: DomainReason + ErrorCode> ErrorCode for StructError<T> {
@@ -24,15 +18,15 @@ impl<T: DomainReason + ErrorCode> ErrorCode for StructError<T> {
     }
 }
 
-impl<T> crate::ErrorIdentityProvider for StructError<T>
+impl<T> ErrorIdentityProvider for StructError<T>
 where
-    T: DomainReason + crate::ErrorIdentityProvider,
+    T: DomainReason + ErrorIdentityProvider,
 {
     fn stable_code(&self) -> &'static str {
         self.reason.stable_code()
     }
 
-    fn error_category(&self) -> crate::ErrorCategory {
+    fn error_category(&self) -> ErrorCategory {
         self.reason.error_category()
     }
 }
@@ -989,20 +983,6 @@ impl<T: DomainReason> StructError<T> {
     }
 }
 
-impl<T: DomainReason> StructErrorTrait<T> for StructError<T> {
-    fn get_reason(&self) -> &T {
-        &self.reason
-    }
-
-    fn get_detail(&self) -> Option<&String> {
-        self.detail.as_ref()
-    }
-
-    fn get_target(&self) -> Option<String> {
-        self.target()
-    }
-}
-
 /*
 impl<S1: Into<String>, S2: Into<String>, T: DomainReason> ContextAdd<(S1, S2)> for StructError<T> {
     fn add_context(&mut self, val: (S1, S2)) {
@@ -1177,7 +1157,10 @@ impl<T: DomainReason> ErrorWith for StructError<T> {
 mod tests {
     use std::{error::Error as StdError, fmt};
 
-    use crate::{core::context::CallContext, ContextRecord, DomainReason, UvsReason};
+    use crate::{
+        core::context::{CallContext, ContextRecord},
+        DomainReason, UvsReason,
+    };
 
     use super::*;
     use derive_more::From;

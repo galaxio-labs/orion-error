@@ -1,9 +1,6 @@
 use std::{error::Error as StdError, fmt};
 
-use crate::{DomainReason, StructError};
-
-#[cfg(feature = "anyhow")]
-use crate::OwnedDynStdStructError;
+use crate::{core::{DomainReason, OwnedDynStdStructError}, StructError};
 
 mod private {
     pub trait Sealed {}
@@ -44,7 +41,8 @@ pub struct RawSource<E>(E);
 /// ```rust
 /// use std::fmt;
 ///
-/// use orion_error::{raw_source, IntoAs, RawStdError, UvsReason};
+/// use orion_error::{IntoAs, UvsReason};
+/// use orion_error::bridge::{raw_source, RawStdError};
 ///
 /// #[derive(Debug)]
 /// struct ThirdPartyError;
@@ -68,7 +66,8 @@ pub struct RawSource<E>(E);
 /// ```
 ///
 /// ```compile_fail
-/// use orion_error::{raw_source, RawStdError, StructError, UvsReason};
+/// use orion_error::{StructError, UvsReason};
+/// use orion_error::bridge::{raw_source, RawStdError};
 ///
 /// let structured = StructError::from(UvsReason::system_error());
 /// let _ = raw_source(structured);

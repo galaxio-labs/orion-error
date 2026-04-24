@@ -1,3 +1,4 @@
+use orion_error::ErrorWith;
 use orion_error::{bridge, compat_prelude, conversion, reason, report, runtime, snapshot};
 
 #[test]
@@ -11,8 +12,6 @@ fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interopera
     let snapshot_value: snapshot::ErrorSnapshot = err.snapshot();
     let stable: snapshot::StableErrorSnapshot = snapshot_value.stable_export();
     let report_value: report::DiagnosticReport = stable.report();
-    let cli_fields: &[&str] = report::CLI_ERROR_RESPONSE_FIELDS;
-    let http_fields: &[&str] = report::HTTP_ERROR_RESPONSE_FIELDS;
     let bridge_view: bridge::StdStructRef<'_, reason::UvsReason> = err.as_std();
     let owned_bridge: bridge::OwnedStdStructError<reason::UvsReason> = err.clone().into_std();
 
@@ -26,28 +25,6 @@ fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interopera
         snapshot::STABLE_SNAPSHOT_SCHEMA_VERSION
     );
     assert_eq!(report_value.reason, "system error");
-    assert_eq!(
-        cli_fields,
-        &[
-            "code",
-            "category",
-            "summary",
-            "detail",
-            "visibility",
-            "hints"
-        ]
-    );
-    assert_eq!(
-        http_fields,
-        &[
-            "status",
-            "code",
-            "category",
-            "message",
-            "visibility",
-            "hints"
-        ]
-    );
     #[cfg(feature = "serde")]
     assert_eq!(
         serde_json::to_value(&err).unwrap()["reason"],
@@ -76,11 +53,22 @@ fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interopera
 }
 
 #[test]
+fn test_testcase_module_exports_assert_helpers() {
+    let err = runtime::StructError::from(reason::UvsReason::business_error())
+        .with_detail("order state invalid")
+        .doing("validate order");
+
+    orion_error::testcase::assert_err_identity(
+        &err,
+        "biz.business_error",
+        reason::ErrorCategory::Biz,
+    );
+    orion_error::testcase::assert_err_operation(&err, "validate order");
+    orion_error::testcase::assert_err_path(&err, "validate order");
+}
+
+#[test]
 fn test_advanced_prelude_types_and_report_exports_include_cli_projection() {
-    let cli_fields: &[&str] = orion_error::advanced_prelude::CLI_ERROR_RESPONSE_FIELDS;
-    let http_fields: &[&str] = orion_error::types::HTTP_ERROR_RESPONSE_FIELDS;
-    let log_fields: &[&str] = orion_error::report::LOG_ERROR_RESPONSE_FIELDS;
-    let rpc_fields: &[&str] = orion_error::report::RPC_ERROR_RESPONSE_FIELDS;
     let cli = orion_error::report::ErrorCliResponse {
         code: "biz.business_error".to_string(),
         category: orion_error::reason::ErrorCategory::Biz,
@@ -89,7 +77,7 @@ fn test_advanced_prelude_types_and_report_exports_include_cli_projection() {
         visibility: orion_error::report::Visibility::Public,
         hints: vec!["fix order state".to_string()],
     };
-    let log = orion_error::types::ErrorLogResponse {
+    let log = orion_error::report::ErrorLogResponse {
         code: "biz.business_error".to_string(),
         category: orion_error::reason::ErrorCategory::Biz,
         reason: "business logic error".to_string(),
@@ -98,11 +86,11 @@ fn test_advanced_prelude_types_and_report_exports_include_cli_projection() {
         path: Some("validate order".to_string()),
         visibility: orion_error::report::Visibility::Public,
         hints: vec!["fix order state".to_string()],
-        root_metadata: orion_error::ErrorMetadata::new(),
+        root_metadata: orion_error::runtime::ErrorMetadata::new(),
         context: vec![],
         source_frames: vec![],
     };
-    let rpc = orion_error::types::ErrorRpcResponse {
+    let rpc = orion_error::report::ErrorRpcResponse {
         status: 400,
         code: "biz.business_error".to_string(),
         category: orion_error::reason::ErrorCategory::Biz,
@@ -113,10 +101,6 @@ fn test_advanced_prelude_types_and_report_exports_include_cli_projection() {
         retryable: false,
     };
 
-    assert_eq!(cli_fields, orion_error::CLI_ERROR_RESPONSE_FIELDS);
-    assert_eq!(http_fields, orion_error::HTTP_ERROR_RESPONSE_FIELDS);
-    assert_eq!(log_fields, orion_error::LOG_ERROR_RESPONSE_FIELDS);
-    assert_eq!(rpc_fields, orion_error::RPC_ERROR_RESPONSE_FIELDS);
     assert_eq!(cli.code, "biz.business_error");
     assert_eq!(cli.summary, "business logic error");
     assert_eq!(log.reason, "business logic error");

@@ -2,34 +2,30 @@
 
 更新时间：2026-04-23
 
-本文档描述 `orion-error` 当前已经实际落地的协议面。
+本文档描述 `orion-error` 当前已经落地的协议层设计。
 
-这里不是新的规划文档，而是对当前源码、测试和对外导出面的归档。
+这里说的“协议层”不是新的 runtime 传播模型，而是对外稳定消费接口。
 
-如果本文档与实现冲突，以 `src/`、测试和顶层 `README` 为准。
+## 1. 三层结构
 
-## 1. 当前范围
+当前协议层由三层组成：
 
-当前已经落地的协议由三层组成：
+1. 稳定身份：`ErrorIdentity`
+2. exposure 决策：`ExposureDecision`
+3. 出口投影：HTTP / CLI / log / RPC / user debug
 
-1. 稳定身份
-2. policy decision
-3. 出口投影
+推荐把它理解为：
 
-当前覆盖的出口投影包括：
-
-- `HTTP`
-- `CLI`
-- `log`
-- `RPC`
-- `human debug summary`
-- `test helper`
-
-当前还没有单独的 typed governance/export 协议文档；治理系统如果需要稳定主键和消费规则，应优先复用本文档列出的 `identity_snapshot()`、`policy_snapshot()` 和各 projection。
+- `StructError<R>` 负责运行时传播
+- `ErrorIdentity` 负责稳定识别
+- `DiagnosticReport` 负责人类诊断
+- `ErrorProtocolSnapshot` 负责把 identity + decision + report 组装成统一消费输入
 
 ## 2. 稳定身份
 
-稳定身份由 [src/core/snapshot.rs](/Users/zuowenjian/devspace/wp-labs/dev/crates/orion-error/src/core/snapshot.rs) 中的 `ErrorIdentity` 表达：
+稳定身份结构是 [`ErrorIdentity`](/Users/zuowenjian/devspace/wp-labs/dev/crates/orion-error/src/core/snapshot.rs:134)。
+
+字段：
 
 - `code`
 - `category`
@@ -39,84 +35,80 @@
 - `want`
 - `path`
 
-设计约束：
+语义：
 
-- `code` 是长期稳定主键
-- `category` 是稳定分类位
-- `reason` 是稳定展示语义的一部分，但不是唯一主键
-- `detail` 不是身份主键，只是补充说明
+- `code`：稳定机器主键
+- `category`：稳定分类
+- `reason`：稳定的人类摘要
+- `detail`：可变补充说明，不是主键
 
-主调用入口：
+入口：
 
 - `StructError::identity_snapshot()`
 - `assert_err_code(...)`
 - `assert_err_category(...)`
 - `assert_err_identity(...)`
 
-## 3. Policy Decision
+注意：当前 `assert_err_code(...)` 断言的是 stable code 字符串，不是数值 `error_code()`。
 
-policy decision 由 [src/core/report.rs](/Users/zuowenjian/devspace/wp-labs/dev/crates/orion-error/src/core/report.rs) 中的 `ErrorPolicyDecision` 表达：
+## 3. Exposure
+
+exposure 决策结构是 [`ExposureDecision`](/Users/zuowenjian/devspace/wp-labs/dev/crates/orion-error/src/core/report.rs:82)。
+
+字段：
 
 - `http_status`
 - `visibility`
 - `default_hints`
 - `retryable`
 
-当前默认 policy 为 `DefaultErrorPolicy`。
+默认 exposure 策略实现是 `DefaultExposurePolicy`。
 
 当前默认规则：
 
 - `Biz -> 400 + Public`
-- `Conf/Logic/Sys -> 500 + Internal`
-- `sys.network_error` / `sys.timeout` 默认为 `retryable = true`
-- 其他内建稳定 code 默认 `retryable = false`
+- `Conf / Logic / Sys -> 500 + Internal`
+- `sys.network_error` / `sys.timeout` -> `retryable = true`
+- 其他 stable code 默认 `retryable = false`
 
-`retryable` 已经属于 policy 语义，不再是 `RPC` projection 的本地硬编码字段。
+主要入口：
 
-主调用入口：
+- `ExposurePolicy::decide(...)`
+- `ExposureView::decision(...)`
+- `StructError::exposure_view()`
+- `StructError::exposure_snapshot(...)`
+- `DiagnosticReport::exposure_snapshot(...)`
 
-- `ErrorPolicy::decide(...)`
-- `ErrorPolicyInput::decision(...)`
-- `StructError::policy_snapshot(...)`
-- `DiagnosticReport::policy_snapshot(...)`
+## 4. `ErrorProtocolSnapshot`
 
-## 4. Policy Snapshot
+`ErrorProtocolSnapshot` 是当前统一协议输入。
 
-`policy snapshot` 是当前最完整的统一协议输入，结构为：
+结构：
 
 - `identity`
 - `decision`
 - `report`
 
-对应 schema 常量：
+入口：
 
-- `POLICY_SNAPSHOT_TOP_LEVEL_FIELDS`
-- `POLICY_DECISION_FIELDS`
-
-主调用入口：
-
-- `StructError::policy_snapshot(...)`
-- `StructError::into_policy_snapshot(...)`
-- `DiagnosticReport::policy_snapshot(...)`
-- `DiagnosticReport::to_policy_snapshot_json(...)`
-- `DiagnosticReport::to_policy_report_json(...)`
-- `StructError::render_user_debug(...)`
-- `StructError::render_user_debug_redacted(...)`
+- `StructError::exposure_snapshot(...)`
+- `StructError::into_exposure_snapshot(...)`
+- `DiagnosticReport::exposure_snapshot(...)`
 
 适用场景：
 
 - 测试快照
-- 统一导出
-- 上层 API/网关自己做二次投影
-
-不建议直接把 CLI 文本当成机器接口协议。
-
-`render_user_debug(...)` 的定位是“给人读的调试摘要”，用于本地调试、示例展示和人工排障。
-它不是 `HTTP` public message 的替代物，当前也不会按 `Visibility` 自动裁剪成对外暴露文案。
+- 网关二次投影
+- 协议统一出口
+- 用户调试摘要
 
 ## 5. HTTP Projection
 
-HTTP projection 结构：
+类型：
+
+- `ErrorHttpResponse`
+
+字段：
 
 - `status`
 - `code`
@@ -125,26 +117,29 @@ HTTP projection 结构：
 - `visibility`
 - `hints`
 
-对应类型与常量：
-
-- `ErrorHttpResponse`
-- `HTTP_ERROR_RESPONSE_FIELDS`
-
 默认规则：
 
-- `Public` 可见错误优先暴露 `detail`
-- `Internal` 可见错误默认只暴露稳定 `reason`
+- `Public` 时，`message` 优先使用 `detail`
+- `Internal` 时，`message` 使用稳定 `reason`
 
-主调用入口：
+入口：
 
 - `StructError::http_response(...)`
 - `DiagnosticReport::http_response(...)`
 - `ErrorProtocolSnapshot::http_response()`
-- `to_http_error_json(...)`
+
+如果启用了 `serde_json` feature，还可以使用：
+
+- `DiagnosticReport::to_http_error_json(...)`
+- `ErrorProtocolSnapshot::to_http_error_json()`
 
 ## 6. CLI Projection
 
-CLI projection 结构：
+类型：
+
+- `ErrorCliResponse`
+
+字段：
 
 - `code`
 - `category`
@@ -153,26 +148,29 @@ CLI projection 结构：
 - `visibility`
 - `hints`
 
-对应类型与常量：
-
-- `ErrorCliResponse`
-- `CLI_ERROR_RESPONSE_FIELDS`
-
 默认规则：
 
 - `summary` 使用 compact render
 - `detail` 使用 verbose render
 
-主调用入口：
+入口：
 
 - `StructError::cli_response(...)`
 - `DiagnosticReport::cli_response(...)`
 - `ErrorProtocolSnapshot::cli_response()`
-- `to_cli_error_json(...)`
+
+`serde_json` feature 开启后可用：
+
+- `DiagnosticReport::to_cli_error_json(...)`
+- `ErrorProtocolSnapshot::to_cli_error_json()`
 
 ## 7. Log Projection
 
-log projection 结构：
+类型：
+
+- `ErrorLogResponse`
+
+字段：
 
 - `code`
 - `category`
@@ -186,28 +184,30 @@ log projection 结构：
 - `context`
 - `source_frames`
 
-对应类型与常量：
-
-- `ErrorLogResponse`
-- `LOG_ERROR_RESPONSE_FIELDS`
-
 默认规则：
 
 - 保留完整 `context`
 - 保留 `root_metadata`
 - 保留 `source_frames`
-- 适合日志、机器采集和诊断链路
 
-主调用入口：
+入口：
 
 - `StructError::log_response(...)`
 - `DiagnosticReport::log_response(...)`
 - `ErrorProtocolSnapshot::log_response()`
-- `to_log_error_json(...)`
+
+`serde_json` feature 开启后可用：
+
+- `DiagnosticReport::to_log_error_json(...)`
+- `ErrorProtocolSnapshot::to_log_error_json()`
 
 ## 8. RPC Projection
 
-RPC projection 结构：
+类型：
+
+- `ErrorRpcResponse`
+
+字段：
 
 - `status`
 - `code`
@@ -218,63 +218,78 @@ RPC projection 结构：
 - `hints`
 - `retryable`
 
-对应类型与常量：
-
-- `ErrorRpcResponse`
-- `RPC_ERROR_RESPONSE_FIELDS`
-
 默认规则：
 
 - `detail` 只在 `Public` 可见时保留
-- `retryable` 来自 `policy decision`
-- 当前 `DefaultErrorPolicy` 只把 `sys.network_error` / `sys.timeout` 视为可重试
+- `retryable` 完全来自 exposure decision
 
-主调用入口：
+入口：
 
 - `StructError::rpc_response(...)`
 - `DiagnosticReport::rpc_response(...)`
 - `ErrorProtocolSnapshot::rpc_response()`
-- `to_rpc_error_json(...)`
 
-## 9. Test Helper
+`serde_json` feature 开启后可用：
 
-当前已落地的测试 helper：
+- `DiagnosticReport::to_rpc_error_json(...)`
+- `ErrorProtocolSnapshot::to_rpc_error_json()`
 
-- `assert_err_code(...)`
-- `assert_err_category(...)`
-- `assert_err_identity(...)`
-- `assert_err_operation(...)`
-- `assert_err_path(...)`
+## 9. User Debug Summary
 
-推荐断言顺序：
+`render_user_debug(...)` 是给人看的调试摘要，不是机器协议。
 
-1. 先断言 `code`
-2. 再断言 `category`
-3. 再断言 `operation/path/meta`
-4. 最后才断言渲染文本
+入口：
 
-不建议把 `detail` 全文本作为唯一断言目标。
+- `StructError::render_user_debug(...)`
+- `StructError::render_user_debug_redacted(...)`
+- `ExposureView::render_user_debug(...)`
+- `ErrorProtocolSnapshot::render_user_debug()`
 
-## 10. 调用路径约定
+它的定位是：
 
-当前推荐的消费路径：
+- 本地调试
+- 示例输出
+- 人工排障
 
-1. 如果只需要稳定身份：`identity_snapshot()`
-2. 如果需要统一协议输入：`policy_snapshot(...)`
-3. 如果是面向具体出口：`http_response(...)` / `cli_response(...)` / `log_response(...)` / `rpc_response(...)`
+它不是：
 
-如果上层要自定义策略，应优先实现自己的 `ErrorPolicy`，而不是复制 projection 逻辑。
+- public HTTP message
+- 稳定 JSON schema
 
-## 11. 已知限制
+## 10. `DiagnosticReport`
 
-当前仍有这些限制：
+`DiagnosticReport` 是 report 层对象。
 
-- `DiagnosticReport::policy_identity()` 仍是启发式兜底，不等于稳定身份主路径
-- `report().to_*_json(...)` 在没有显式 identity 时，仍可能退化成 `report.unclassified`
-- `retryable` 目前还是最小规则，不是完整重试策略系统
-- 还没有单独的 protocol version 字段；当前依赖各结构字段集和测试锁定行为
+它不依赖 `ErrorIdentityProvider`，因此更适合：
 
-因此：
+- 文本渲染
+- redaction
+- 人类诊断
 
-- 新代码优先从 `StructError<_>` 直接走 `policy_report()` / `policy_snapshot(...)`
-- 不要把 `DiagnosticReport` 的兜底 identity 当成稳定协议主路径
+常用入口：
+
+- `StructError::report()`
+- `StructError::into_report()`
+- `ErrorSnapshot::report()`
+- `StableErrorSnapshot::report()`
+
+如果启用了 `serde_json` feature，还可以使用：
+
+- `DiagnosticReport::to_exposure_snapshot_json(...)`
+- `DiagnosticReport::to_exposure_snapshot_json(...)`
+
+## 11. 建议的消费路径
+
+推荐顺序：
+
+1. 运行时传播用 `StructError<R>`
+2. 要稳定识别时取 `identity_snapshot()`
+3. 要统一出口规则时取 `exposure_view()` 或 `exposure_snapshot(...)`
+4. 要协议出口时使用 projection API
+5. 要人类摘要时使用 `render_user_debug(...)`
+
+不建议：
+
+- 直接把 `Display` 文本当协议主键
+- 直接把 CLI 文本当机器协议
+- 用 `detail` 全文本做唯一稳定断言

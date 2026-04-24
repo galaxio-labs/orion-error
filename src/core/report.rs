@@ -1,52 +1,9 @@
-use crate::{DomainReason, ErrorCategory, StructError};
+use crate::{core::DomainReason, ErrorCategory, StructError};
 
 use super::{
     snapshot::{ErrorIdentity, ErrorSnapshot, StableErrorSnapshot},
     ErrorIdentityProvider, ErrorMetadata, MetadataValue, OperationContext, SourceFrame,
 };
-
-pub const POLICY_SNAPSHOT_TOP_LEVEL_FIELDS: &[&str] = &["identity", "decision", "report"];
-pub const POLICY_DECISION_FIELDS: &[&str] =
-    &["http_status", "visibility", "default_hints", "retryable"];
-pub const HTTP_ERROR_RESPONSE_FIELDS: &[&str] = &[
-    "status",
-    "code",
-    "category",
-    "message",
-    "visibility",
-    "hints",
-];
-pub const CLI_ERROR_RESPONSE_FIELDS: &[&str] = &[
-    "code",
-    "category",
-    "summary",
-    "detail",
-    "visibility",
-    "hints",
-];
-pub const LOG_ERROR_RESPONSE_FIELDS: &[&str] = &[
-    "code",
-    "category",
-    "reason",
-    "detail",
-    "operation",
-    "path",
-    "visibility",
-    "hints",
-    "root_metadata",
-    "context",
-    "source_frames",
-];
-pub const RPC_ERROR_RESPONSE_FIELDS: &[&str] = &[
-    "status",
-    "code",
-    "category",
-    "reason",
-    "detail",
-    "visibility",
-    "hints",
-    "retryable",
-];
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq)]
@@ -60,9 +17,6 @@ pub struct DiagnosticReport {
     pub root_metadata: ErrorMetadata,
     pub source_frames: Vec<SourceFrame>,
 }
-
-#[doc(hidden)]
-pub type ErrorReport = DiagnosticReport;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderMode {
@@ -79,7 +33,7 @@ pub enum Visibility {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ErrorPolicyDecision {
+pub struct ExposureDecision {
     pub http_status: u16,
     pub visibility: Visibility,
     pub default_hints: Vec<&'static str>,
@@ -90,7 +44,7 @@ pub struct ErrorPolicyDecision {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ErrorProtocolSnapshot {
     pub identity: ErrorIdentity,
-    pub decision: ErrorPolicyDecision,
+    pub decision: ExposureDecision,
     pub report: DiagnosticReport,
 }
 
@@ -145,7 +99,7 @@ pub struct ErrorRpcResponse {
     pub retryable: bool,
 }
 
-pub trait ErrorPolicy {
+pub trait ExposurePolicy {
     fn http_status(&self, _identity: &ErrorIdentity) -> u16 {
         500
     }
@@ -162,8 +116,8 @@ pub trait ErrorPolicy {
         false
     }
 
-    fn decide(&self, identity: &ErrorIdentity) -> ErrorPolicyDecision {
-        ErrorPolicyDecision {
+    fn decide(&self, identity: &ErrorIdentity) -> ExposureDecision {
+        ExposureDecision {
             http_status: self.http_status(identity),
             visibility: self.visibility(identity),
             default_hints: self.default_hints(identity).to_vec(),
@@ -171,7 +125,6 @@ pub trait ErrorPolicy {
         }
     }
 }
-
 pub trait ErrorRenderer {
     type Output;
 
@@ -179,12 +132,12 @@ pub trait ErrorRenderer {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ErrorPolicyInput {
+pub struct ExposureView {
     identity: ErrorIdentity,
     report: DiagnosticReport,
 }
 
-impl ErrorPolicyInput {
+impl ExposureView {
     pub fn new(identity: ErrorIdentity, report: DiagnosticReport) -> Self {
         Self { identity, report }
     }
@@ -208,61 +161,61 @@ impl ErrorPolicyInput {
         renderer.render(&self.report)
     }
 
-    pub fn http_status(&self, policy: &impl ErrorPolicy) -> u16 {
-        policy.http_status(&self.identity)
+    pub fn http_status(&self, exposure_policy: &impl ExposurePolicy) -> u16 {
+        exposure_policy.http_status(&self.identity)
     }
 
-    pub fn visibility(&self, policy: &impl ErrorPolicy) -> Visibility {
-        policy.visibility(&self.identity)
+    pub fn visibility(&self, exposure_policy: &impl ExposurePolicy) -> Visibility {
+        exposure_policy.visibility(&self.identity)
     }
 
-    pub fn default_hints(&self, policy: &impl ErrorPolicy) -> &'static [&'static str] {
-        policy.default_hints(&self.identity)
+    pub fn default_hints(&self, exposure_policy: &impl ExposurePolicy) -> &'static [&'static str] {
+        exposure_policy.default_hints(&self.identity)
     }
 
-    pub fn decision(&self, policy: &impl ErrorPolicy) -> ErrorPolicyDecision {
-        policy.decide(&self.identity)
+    pub fn decision(&self, exposure_policy: &impl ExposurePolicy) -> ExposureDecision {
+        exposure_policy.decide(&self.identity)
     }
 
-    pub fn snapshot(&self, policy: &impl ErrorPolicy) -> ErrorProtocolSnapshot {
+    pub fn snapshot(&self, exposure_policy: &impl ExposurePolicy) -> ErrorProtocolSnapshot {
         ErrorProtocolSnapshot {
             identity: self.identity.clone(),
-            decision: self.decision(policy),
+            decision: self.decision(exposure_policy),
             report: self.report.clone(),
         }
     }
 
-    pub fn http_response(&self, policy: &impl ErrorPolicy) -> ErrorHttpResponse {
-        self.snapshot(policy).http_response()
+    pub fn http_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorHttpResponse {
+        self.snapshot(exposure_policy).http_response()
     }
 
-    pub fn cli_response(&self, policy: &impl ErrorPolicy) -> ErrorCliResponse {
-        self.snapshot(policy).cli_response()
+    pub fn cli_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorCliResponse {
+        self.snapshot(exposure_policy).cli_response()
     }
 
-    pub fn log_response(&self, policy: &impl ErrorPolicy) -> ErrorLogResponse {
-        self.snapshot(policy).log_response()
+    pub fn log_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorLogResponse {
+        self.snapshot(exposure_policy).log_response()
     }
 
-    pub fn rpc_response(&self, policy: &impl ErrorPolicy) -> ErrorRpcResponse {
-        self.snapshot(policy).rpc_response()
+    pub fn rpc_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorRpcResponse {
+        self.snapshot(exposure_policy).rpc_response()
     }
 
-    pub fn render_user_debug(&self, policy: &impl ErrorPolicy) -> String {
-        self.snapshot(policy).render_user_debug()
+    pub fn render_user_debug(&self, exposure_policy: &impl ExposurePolicy) -> String {
+        self.snapshot(exposure_policy).render_user_debug()
     }
 
     pub fn render_user_debug_redacted(
         &self,
-        policy: &impl ErrorPolicy,
+        exposure_policy: &impl ExposurePolicy,
         redact_policy: &impl RedactPolicy,
     ) -> String {
-        self.snapshot(policy)
+        self.snapshot(exposure_policy)
             .render_user_debug_redacted(redact_policy)
     }
 
-    pub fn render_debug_summary(&self, policy: &impl ErrorPolicy) -> String {
-        self.render_user_debug(policy)
+    pub fn render_debug_summary(&self, exposure_policy: &impl ExposurePolicy) -> String {
+        self.render_user_debug(exposure_policy)
     }
 }
 
@@ -293,9 +246,9 @@ impl ErrorRenderer for TextDiagnosticRenderer {
 pub type TextReportRenderer = TextDiagnosticRenderer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DefaultErrorPolicy;
+pub struct DefaultExposurePolicy;
 
-impl ErrorPolicy for DefaultErrorPolicy {
+impl ExposurePolicy for DefaultExposurePolicy {
     fn http_status(&self, identity: &ErrorIdentity) -> u16 {
         match identity.category {
             ErrorCategory::Biz => 400,
@@ -355,55 +308,61 @@ impl<T> StructError<T>
 where
     T: DomainReason + ErrorIdentityProvider,
 {
-    pub fn policy_report(&self) -> ErrorPolicyInput {
-        ErrorPolicyInput::new(self.identity_snapshot(), self.report())
+    pub fn exposure_view(&self) -> ExposureView {
+        ExposureView::new(self.identity_snapshot(), self.report())
     }
 
-    pub fn into_policy_report(self) -> ErrorPolicyInput {
+    pub fn into_exposure_view(self) -> ExposureView {
         let identity = self.identity_snapshot();
         let report = self.into_report();
-        ErrorPolicyInput::new(identity, report)
+        ExposureView::new(identity, report)
     }
 
-    pub fn policy_snapshot(&self, policy: &impl ErrorPolicy) -> ErrorProtocolSnapshot {
-        self.policy_report().snapshot(policy)
+    pub fn exposure_snapshot(
+        &self,
+        exposure_policy: &impl ExposurePolicy,
+    ) -> ErrorProtocolSnapshot {
+        self.exposure_view().snapshot(exposure_policy)
     }
 
-    pub fn into_policy_snapshot(self, policy: &impl ErrorPolicy) -> ErrorProtocolSnapshot {
-        self.into_policy_report().snapshot(policy)
+    pub fn into_exposure_snapshot(
+        self,
+        exposure_policy: &impl ExposurePolicy,
+    ) -> ErrorProtocolSnapshot {
+        self.into_exposure_view().snapshot(exposure_policy)
     }
 
-    pub fn http_response(&self, policy: &impl ErrorPolicy) -> ErrorHttpResponse {
-        self.policy_snapshot(policy).http_response()
+    pub fn http_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorHttpResponse {
+        self.exposure_snapshot(exposure_policy).http_response()
     }
 
-    pub fn cli_response(&self, policy: &impl ErrorPolicy) -> ErrorCliResponse {
-        self.policy_snapshot(policy).cli_response()
+    pub fn cli_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorCliResponse {
+        self.exposure_snapshot(exposure_policy).cli_response()
     }
 
-    pub fn log_response(&self, policy: &impl ErrorPolicy) -> ErrorLogResponse {
-        self.policy_snapshot(policy).log_response()
+    pub fn log_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorLogResponse {
+        self.exposure_snapshot(exposure_policy).log_response()
     }
 
-    pub fn rpc_response(&self, policy: &impl ErrorPolicy) -> ErrorRpcResponse {
-        self.policy_snapshot(policy).rpc_response()
+    pub fn rpc_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorRpcResponse {
+        self.exposure_snapshot(exposure_policy).rpc_response()
     }
 
-    pub fn render_user_debug(&self, policy: &impl ErrorPolicy) -> String {
-        self.policy_snapshot(policy).render_user_debug()
+    pub fn render_user_debug(&self, exposure_policy: &impl ExposurePolicy) -> String {
+        self.exposure_snapshot(exposure_policy).render_user_debug()
     }
 
     pub fn render_user_debug_redacted(
         &self,
-        policy: &impl ErrorPolicy,
+        exposure_policy: &impl ExposurePolicy,
         redact_policy: &impl RedactPolicy,
     ) -> String {
-        self.policy_snapshot(policy)
+        self.exposure_snapshot(exposure_policy)
             .render_user_debug_redacted(redact_policy)
     }
 
-    pub fn render_debug_summary(&self, policy: &impl ErrorPolicy) -> String {
-        self.render_user_debug(policy)
+    pub fn render_debug_summary(&self, exposure_policy: &impl ExposurePolicy) -> String {
+        self.render_user_debug(exposure_policy)
     }
 }
 
@@ -546,7 +505,7 @@ impl DiagnosticReport {
 }
 
 impl DiagnosticReport {
-    pub fn policy_identity(&self) -> ErrorIdentity {
+    pub fn exposure_identity(&self) -> ErrorIdentity {
         let category = if self.reason.contains("configuration error") {
             ErrorCategory::Conf
         } else {
@@ -564,96 +523,91 @@ impl DiagnosticReport {
         }
     }
 
-    pub fn http_status(&self, policy: &impl ErrorPolicy) -> u16 {
-        policy.http_status(&self.policy_identity())
+    pub fn http_status(&self, exposure_policy: &impl ExposurePolicy) -> u16 {
+        exposure_policy.http_status(&self.exposure_identity())
     }
 
-    pub fn visibility(&self, policy: &impl ErrorPolicy) -> Visibility {
-        policy.visibility(&self.policy_identity())
+    pub fn visibility(&self, exposure_policy: &impl ExposurePolicy) -> Visibility {
+        exposure_policy.visibility(&self.exposure_identity())
     }
 
-    pub fn default_hints(&self, policy: &impl ErrorPolicy) -> &'static [&'static str] {
-        policy.default_hints(&self.policy_identity())
+    pub fn default_hints(&self, exposure_policy: &impl ExposurePolicy) -> &'static [&'static str] {
+        exposure_policy.default_hints(&self.exposure_identity())
     }
 
-    pub fn decision(&self, policy: &impl ErrorPolicy) -> ErrorPolicyDecision {
-        policy.decide(&self.policy_identity())
+    pub fn decision(&self, exposure_policy: &impl ExposurePolicy) -> ExposureDecision {
+        exposure_policy.decide(&self.exposure_identity())
     }
 
-    pub fn policy_snapshot(&self, policy: &impl ErrorPolicy) -> ErrorProtocolSnapshot {
+    pub fn exposure_snapshot(
+        &self,
+        exposure_policy: &impl ExposurePolicy,
+    ) -> ErrorProtocolSnapshot {
         ErrorProtocolSnapshot {
-            identity: self.policy_identity(),
-            decision: self.decision(policy),
+            identity: self.exposure_identity(),
+            decision: self.decision(exposure_policy),
             report: self.clone(),
         }
     }
 
-    pub fn http_response(&self, policy: &impl ErrorPolicy) -> ErrorHttpResponse {
-        self.policy_snapshot(policy).http_response()
+    pub fn http_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorHttpResponse {
+        self.exposure_snapshot(exposure_policy).http_response()
     }
 
-    pub fn cli_response(&self, policy: &impl ErrorPolicy) -> ErrorCliResponse {
-        self.policy_snapshot(policy).cli_response()
+    pub fn cli_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorCliResponse {
+        self.exposure_snapshot(exposure_policy).cli_response()
     }
 
-    pub fn log_response(&self, policy: &impl ErrorPolicy) -> ErrorLogResponse {
-        self.policy_snapshot(policy).log_response()
+    pub fn log_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorLogResponse {
+        self.exposure_snapshot(exposure_policy).log_response()
     }
 
-    pub fn rpc_response(&self, policy: &impl ErrorPolicy) -> ErrorRpcResponse {
-        self.policy_snapshot(policy).rpc_response()
-    }
-
-    #[cfg(feature = "serde_json")]
-    pub fn to_policy_snapshot_json(
-        &self,
-        policy: &impl ErrorPolicy,
-    ) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self.policy_snapshot(policy))
-    }
-
-    pub fn policy_view(self, identity: ErrorIdentity) -> ErrorPolicyInput {
-        ErrorPolicyInput::new(identity, self)
+    pub fn rpc_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorRpcResponse {
+        self.exposure_snapshot(exposure_policy).rpc_response()
     }
 
     #[cfg(feature = "serde_json")]
-    pub fn to_policy_report_json(
+    pub fn to_exposure_snapshot_json(
         &self,
-        policy: &impl ErrorPolicy,
+        exposure_policy: &impl ExposurePolicy,
     ) -> serde_json::Result<serde_json::Value> {
-        self.to_policy_snapshot_json(policy)
+        serde_json::to_value(self.exposure_snapshot(exposure_policy))
+    }
+
+    pub fn exposure_view(self, identity: ErrorIdentity) -> ExposureView {
+        ExposureView::new(identity, self)
     }
 
     #[cfg(feature = "serde_json")]
     pub fn to_http_error_json(
         &self,
-        policy: &impl ErrorPolicy,
+        exposure_policy: &impl ExposurePolicy,
     ) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self.http_response(policy))
+        serde_json::to_value(self.http_response(exposure_policy))
     }
 
     #[cfg(feature = "serde_json")]
     pub fn to_cli_error_json(
         &self,
-        policy: &impl ErrorPolicy,
+        exposure_policy: &impl ExposurePolicy,
     ) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self.cli_response(policy))
+        serde_json::to_value(self.cli_response(exposure_policy))
     }
 
     #[cfg(feature = "serde_json")]
     pub fn to_log_error_json(
         &self,
-        policy: &impl ErrorPolicy,
+        exposure_policy: &impl ExposurePolicy,
     ) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self.log_response(policy))
+        serde_json::to_value(self.log_response(exposure_policy))
     }
 
     #[cfg(feature = "serde_json")]
     pub fn to_rpc_error_json(
         &self,
-        policy: &impl ErrorPolicy,
+        exposure_policy: &impl ExposurePolicy,
     ) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self.rpc_response(policy))
+        serde_json::to_value(self.rpc_response(exposure_policy))
     }
 }
 
@@ -964,24 +918,20 @@ fn redact_required_text(key: Option<&str>, value: &str, policy: &impl RedactPoli
 #[cfg(test)]
 mod tests {
     use crate::{
-        ContextRecord, DomainReason, ErrorCategory, ErrorCode, ErrorIdentity,
-        ErrorIdentityProvider, ErrorMetadata, OperationContext, SourceFrame, StructError,
-        UvsReason,
+        core::DomainReason,
+        core::{
+            context::ContextRecord, ErrorIdentity, ErrorMetadata, SourceFrame, StableErrorSnapshot,
+            StableSnapshotContextFrame, StableSnapshotSourceFrame,
+        },
+        ErrorCategory, ErrorCode, ErrorIdentityProvider, OperationContext, StructError, UvsReason,
     };
 
     use super::{
-        DefaultErrorPolicy, DiagnosticReport, ErrorCliResponse, ErrorHttpResponse,
-        ErrorLogResponse, ErrorPolicy, ErrorPolicyDecision, ErrorPolicyInput,
-        ErrorProtocolSnapshot, ErrorRenderer, ErrorRpcResponse, RedactPolicy, RenderMode,
-        TextDiagnosticRenderer, Visibility, CLI_ERROR_RESPONSE_FIELDS, HTTP_ERROR_RESPONSE_FIELDS,
-        LOG_ERROR_RESPONSE_FIELDS, POLICY_DECISION_FIELDS, POLICY_SNAPSHOT_TOP_LEVEL_FIELDS,
-        RPC_ERROR_RESPONSE_FIELDS,
+        DefaultExposurePolicy, DiagnosticReport, ErrorCliResponse, ErrorHttpResponse,
+        ErrorLogResponse, ErrorProtocolSnapshot, ErrorRenderer, ErrorRpcResponse, ExposureDecision,
+        ExposurePolicy, ExposureView, RedactPolicy, RenderMode, TextDiagnosticRenderer, Visibility,
     };
-    use crate::{
-        StableErrorSnapshot, StableSnapshotContextFrame, StableSnapshotSourceFrame,
-        STABLE_SNAPSHOT_SCHEMA_VERSION,
-    };
-
+    use crate::core::STABLE_SNAPSHOT_SCHEMA_VERSION;
     #[derive(Debug)]
     struct TestPolicy;
 
@@ -1110,9 +1060,9 @@ mod tests {
                 action: None,
                 locator: None,
                 path: vec!["start engine".to_string()],
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
             }],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![StableSnapshotSourceFrame {
                 index: 0,
                 message: "db unavailable".to_string(),
@@ -1121,7 +1071,7 @@ mod tests {
                 want: Some("load config".to_string()),
                 path: Some("load config / read".to_string()),
                 detail: Some("inner detail".to_string()),
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
         };
@@ -1144,7 +1094,7 @@ mod tests {
             path: Some("load / parse".to_string()),
             context: vec![],
             root_metadata: {
-                let mut metadata = crate::ErrorMetadata::new();
+                let mut metadata = ErrorMetadata::new();
                 metadata.insert("component.name", "engine");
                 metadata
             },
@@ -1160,7 +1110,7 @@ mod tests {
                 path: None,
                 detail: None,
                 metadata: {
-                    let mut metadata = crate::ErrorMetadata::new();
+                    let mut metadata = ErrorMetadata::new();
                     metadata.insert("config.kind", "sink_defaults");
                     metadata
                 },
@@ -1183,7 +1133,7 @@ mod tests {
             want: Some("load".to_string()),
             path: Some("load / parse".to_string()),
             context: vec![],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![],
         };
 
@@ -1213,7 +1163,7 @@ mod tests {
             want: None,
             path: None,
             context: vec![],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![],
         };
 
@@ -1221,8 +1171,8 @@ mod tests {
     }
 
     #[test]
-    fn test_default_error_policy_maps_category_to_http_status_and_visibility() {
-        let policy = DefaultErrorPolicy;
+    fn test_default_exposure_policy_maps_category_to_http_status_and_visibility() {
+        let exposure_policy = DefaultExposurePolicy;
         let biz_identity = ErrorIdentity {
             code: "biz.validation_error".to_string(),
             category: ErrorCategory::Biz,
@@ -1242,17 +1192,23 @@ mod tests {
             path: None,
         };
 
-        assert_eq!(policy.http_status(&biz_identity), 400);
-        assert_eq!(policy.http_status(&sys_identity), 500);
-        assert_eq!(policy.visibility(&biz_identity), Visibility::Public);
-        assert_eq!(policy.visibility(&sys_identity), Visibility::Internal);
+        assert_eq!(exposure_policy.http_status(&biz_identity), 400);
+        assert_eq!(exposure_policy.http_status(&sys_identity), 500);
         assert_eq!(
-            policy.default_hints(&sys_identity),
+            exposure_policy.visibility(&biz_identity),
+            Visibility::Public
+        );
+        assert_eq!(
+            exposure_policy.visibility(&sys_identity),
+            Visibility::Internal
+        );
+        assert_eq!(
+            exposure_policy.default_hints(&sys_identity),
             ["check filesystem state", "verify file permissions"]
         );
         assert_eq!(
-            policy.decide(&sys_identity),
-            ErrorPolicyDecision {
+            exposure_policy.decide(&sys_identity),
+            ExposureDecision {
                 http_status: 500,
                 visibility: Visibility::Internal,
                 default_hints: vec!["check filesystem state", "verify file permissions"],
@@ -1262,7 +1218,7 @@ mod tests {
     }
 
     #[test]
-    fn test_policy_view_uses_explicit_identity_without_report_side_guessing() {
+    fn test_exposure_view_uses_explicit_identity_without_report_side_guessing() {
         let report = DiagnosticReport {
             reason: "system error".to_string(),
             detail: Some("disk offline".to_string()),
@@ -1270,7 +1226,7 @@ mod tests {
             want: Some("load config".to_string()),
             path: Some("load config".to_string()),
             context: vec![],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![],
         };
         let identity = ErrorIdentity {
@@ -1282,45 +1238,45 @@ mod tests {
             want: None,
             path: None,
         };
-        let policy = DefaultErrorPolicy;
-        let view = report.policy_view(identity.clone());
+        let exposure_policy = DefaultExposurePolicy;
+        let view = report.exposure_view(identity.clone());
 
         assert_eq!(view.identity(), &identity);
-        assert_eq!(view.http_status(&policy), 400);
-        assert_eq!(view.visibility(&policy), Visibility::Public);
+        assert_eq!(view.http_status(&exposure_policy), 400);
+        assert_eq!(view.visibility(&exposure_policy), Visibility::Public);
         assert_eq!(view.report().reason, "system error");
     }
 
     #[test]
-    fn test_struct_error_policy_report_uses_real_stable_identity() {
+    fn test_struct_error_exposure_view_uses_real_stable_identity() {
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("engine bootstrap failed")
             .with_context(OperationContext::doing("start engine"));
 
-        let policy_view = err.policy_report();
-        let policy = DefaultErrorPolicy;
+        let exposure_view = err.exposure_view();
+        let exposure_policy = DefaultExposurePolicy;
 
-        assert_eq!(policy_view.identity().code, "sys.io_error");
-        assert_eq!(policy_view.identity().category, ErrorCategory::Sys);
-        assert_eq!(policy_view.http_status(&policy), 500);
+        assert_eq!(exposure_view.identity().code, "sys.io_error");
+        assert_eq!(exposure_view.identity().category, ErrorCategory::Sys);
+        assert_eq!(exposure_view.http_status(&exposure_policy), 500);
         assert_eq!(
-            policy_view.default_hints(&policy),
+            exposure_view.default_hints(&exposure_policy),
             ["check filesystem state", "verify file permissions"]
         );
         assert_eq!(
-            policy_view.decision(&policy),
-            ErrorPolicyDecision {
+            exposure_view.decision(&exposure_policy),
+            ExposureDecision {
                 http_status: 500,
                 visibility: Visibility::Internal,
                 default_hints: vec!["check filesystem state", "verify file permissions"],
                 retryable: false,
             }
         );
-        assert_eq!(policy_view.report().reason, "system error");
+        assert_eq!(exposure_view.report().reason, "system error");
     }
 
     #[test]
-    fn test_policy_view_render_with_uses_underlying_report() {
+    fn test_exposure_view_render_with_uses_underlying_report() {
         let report = DiagnosticReport {
             reason: "test error".to_string(),
             detail: Some("failed".to_string()),
@@ -1328,10 +1284,10 @@ mod tests {
             want: None,
             path: None,
             context: vec![],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![],
         };
-        let view = ErrorPolicyInput::new(
+        let view = ExposureView::new(
             ErrorIdentity {
                 code: "test.test_error".to_string(),
                 category: ErrorCategory::Logic,
@@ -1351,7 +1307,7 @@ mod tests {
     }
 
     #[test]
-    fn test_policy_view_snapshot_contains_identity_decision_and_report() {
+    fn test_exposure_view_snapshot_contains_identity_decision_and_report() {
         let report = DiagnosticReport {
             reason: "test error".to_string(),
             detail: Some("failed".to_string()),
@@ -1359,7 +1315,7 @@ mod tests {
             want: None,
             path: None,
             context: vec![],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![],
         };
         let identity = ErrorIdentity {
@@ -1371,13 +1327,13 @@ mod tests {
             want: None,
             path: None,
         };
-        let view = ErrorPolicyInput::new(identity.clone(), report.clone());
+        let view = ExposureView::new(identity.clone(), report.clone());
 
         assert_eq!(
-            view.snapshot(&DefaultErrorPolicy),
+            view.snapshot(&DefaultExposurePolicy),
             ErrorProtocolSnapshot {
                 identity,
-                decision: ErrorPolicyDecision {
+                decision: ExposureDecision {
                     http_status: 400,
                     visibility: Visibility::Public,
                     default_hints: vec![],
@@ -1389,7 +1345,7 @@ mod tests {
     }
 
     #[test]
-    fn test_report_decision_uses_policy_identity_fallback() {
+    fn test_report_decision_uses_exposure_identity_fallback() {
         let report = DiagnosticReport {
             reason: "configuration error".to_string(),
             detail: Some("invalid config".to_string()),
@@ -1397,13 +1353,13 @@ mod tests {
             want: None,
             path: None,
             context: vec![],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![],
         };
 
         assert_eq!(
-            report.decision(&DefaultErrorPolicy),
-            ErrorPolicyDecision {
+            report.decision(&DefaultExposurePolicy),
+            ExposureDecision {
                 http_status: 500,
                 visibility: Visibility::Internal,
                 default_hints: vec![],
@@ -1414,15 +1370,15 @@ mod tests {
 
     #[cfg(feature = "serde_json")]
     #[test]
-    fn test_policy_snapshot_json_contains_identity_decision_and_report_sections() {
+    fn test_exposure_snapshot_json_contains_identity_decision_and_report_sections() {
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("engine bootstrap failed")
             .with_context(OperationContext::doing("start engine"));
 
         let json_value = err
             .report()
-            .to_policy_report_json(&DefaultErrorPolicy)
-            .expect("serialize policy snapshot");
+            .to_exposure_snapshot_json(&DefaultExposurePolicy)
+            .expect("serialize exposure snapshot");
 
         assert_eq!(
             json_value["identity"]["code"],
@@ -1447,39 +1403,26 @@ mod tests {
     }
 
     #[test]
-    fn test_policy_snapshot_schema_constants_match_expected_fields() {
-        assert_eq!(
-            POLICY_SNAPSHOT_TOP_LEVEL_FIELDS,
-            &["identity", "decision", "report"]
-        );
-        assert_eq!(
-            POLICY_DECISION_FIELDS,
-            &["http_status", "visibility", "default_hints", "retryable"]
-        );
-    }
-
-    #[cfg(feature = "serde_json")]
-    #[test]
-    fn test_policy_snapshot_json_keys_match_schema_constants() {
+    fn test_exposure_snapshot_json_keys_match_expected_shape() {
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("engine bootstrap failed");
 
         let json_value = err
             .report()
-            .to_policy_snapshot_json(&DefaultErrorPolicy)
-            .expect("serialize policy snapshot");
+            .to_exposure_snapshot_json(&DefaultExposurePolicy)
+            .expect("serialize exposure snapshot");
 
         let mut top_level = json_value
             .as_object()
-            .expect("policy snapshot object")
+            .expect("exposure snapshot object")
             .keys()
             .cloned()
             .collect::<Vec<_>>();
         top_level.sort();
 
-        let mut expected_top_level = POLICY_SNAPSHOT_TOP_LEVEL_FIELDS
-            .iter()
-            .map(|field| field.to_string())
+        let mut expected_top_level = ["identity", "decision", "report"]
+            .into_iter()
+            .map(str::to_string)
             .collect::<Vec<_>>();
         expected_top_level.sort();
 
@@ -1491,10 +1434,11 @@ mod tests {
             .collect::<Vec<_>>();
         decision_fields.sort();
 
-        let mut expected_decision_fields = POLICY_DECISION_FIELDS
-            .iter()
-            .map(|field| field.to_string())
-            .collect::<Vec<_>>();
+        let mut expected_decision_fields =
+            ["http_status", "visibility", "default_hints", "retryable"]
+                .into_iter()
+                .map(str::to_string)
+                .collect::<Vec<_>>();
         expected_decision_fields.sort();
 
         assert_eq!(top_level, expected_top_level);
@@ -1507,7 +1451,7 @@ mod tests {
             .with_detail("order state invalid");
 
         assert_eq!(
-            err.http_response(&DefaultErrorPolicy),
+            err.http_response(&DefaultExposurePolicy),
             ErrorHttpResponse {
                 status: 400,
                 code: "biz.business_error".to_string(),
@@ -1525,7 +1469,7 @@ mod tests {
             .with_detail("disk offline");
 
         assert_eq!(
-            err.http_response(&DefaultErrorPolicy),
+            err.http_response(&DefaultExposurePolicy),
             ErrorHttpResponse {
                 status: 500,
                 code: "sys.io_error".to_string(),
@@ -1541,29 +1485,13 @@ mod tests {
     }
 
     #[test]
-    fn test_http_error_response_schema_constants_match_expected_fields() {
-        assert_eq!(
-            HTTP_ERROR_RESPONSE_FIELDS,
-            &[
-                "status",
-                "code",
-                "category",
-                "message",
-                "visibility",
-                "hints"
-            ]
-        );
-    }
-
-    #[cfg(feature = "serde_json")]
-    #[test]
-    fn test_http_error_json_keys_match_schema_constants() {
+    fn test_http_error_json_keys_match_expected_shape() {
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("disk offline");
 
         let json_value = err
             .report()
-            .to_http_error_json(&DefaultErrorPolicy)
+            .to_http_error_json(&DefaultExposurePolicy)
             .expect("serialize http error");
 
         let mut keys = json_value
@@ -1574,10 +1502,17 @@ mod tests {
             .collect::<Vec<_>>();
         keys.sort();
 
-        let mut expected = HTTP_ERROR_RESPONSE_FIELDS
-            .iter()
-            .map(|field| field.to_string())
-            .collect::<Vec<_>>();
+        let mut expected = [
+            "status",
+            "code",
+            "category",
+            "message",
+            "visibility",
+            "hints",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
         expected.sort();
 
         assert_eq!(keys, expected);
@@ -1592,7 +1527,7 @@ mod tests {
             .with_detail("disk offline");
 
         assert_eq!(
-            err.cli_response(&DefaultErrorPolicy),
+            err.cli_response(&DefaultExposurePolicy),
             ErrorCliResponse {
                 code: "sys.io_error".to_string(),
                 category: ErrorCategory::Sys,
@@ -1608,31 +1543,16 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_error_response_schema_constants_match_expected_fields() {
-        assert_eq!(
-            CLI_ERROR_RESPONSE_FIELDS,
-            &[
-                "code",
-                "category",
-                "summary",
-                "detail",
-                "visibility",
-                "hints"
-            ]
-        );
-    }
-
-    #[test]
     fn test_log_response_projection_contains_machine_facing_diagnostics() {
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("disk offline")
             .with_std_source(std::io::Error::other("root cause"))
             .with_context(OperationContext::doing("load config").with_meta("tenant", "acme"));
-        let mut root_metadata = crate::ErrorMetadata::new();
+        let mut root_metadata = ErrorMetadata::new();
         root_metadata.insert("tenant", "acme");
 
         assert_eq!(
-            err.log_response(&DefaultErrorPolicy),
+            err.log_response(&DefaultExposurePolicy),
             ErrorLogResponse {
                 code: "sys.io_error".to_string(),
                 category: ErrorCategory::Sys,
@@ -1653,32 +1573,12 @@ mod tests {
     }
 
     #[test]
-    fn test_log_error_response_schema_constants_match_expected_fields() {
-        assert_eq!(
-            LOG_ERROR_RESPONSE_FIELDS,
-            &[
-                "code",
-                "category",
-                "reason",
-                "detail",
-                "operation",
-                "path",
-                "visibility",
-                "hints",
-                "root_metadata",
-                "context",
-                "source_frames"
-            ]
-        );
-    }
-
-    #[test]
     fn test_rpc_response_projection_hides_internal_detail_and_marks_retryable() {
         let err = StructError::from(TestReason::Uvs(UvsReason::timeout_error()))
             .with_detail("downstream rpc timeout");
 
         assert_eq!(
-            err.rpc_response(&DefaultErrorPolicy),
+            err.rpc_response(&DefaultExposurePolicy),
             ErrorRpcResponse {
                 status: 500,
                 code: "sys.timeout".to_string(),
@@ -1701,7 +1601,7 @@ mod tests {
             .with_detail("order state invalid");
 
         assert_eq!(
-            err.rpc_response(&DefaultErrorPolicy),
+            err.rpc_response(&DefaultExposurePolicy),
             ErrorRpcResponse {
                 status: 400,
                 code: "biz.business_error".to_string(),
@@ -1716,7 +1616,7 @@ mod tests {
     }
 
     #[test]
-    fn test_policy_snapshot_render_debug_summary_prefers_detail_path_context_and_component() {
+    fn test_exposure_snapshot_render_debug_summary_prefers_detail_path_context_and_component() {
         let snapshot = ErrorProtocolSnapshot {
             identity: ErrorIdentity {
                 code: "biz.order_invalid".to_string(),
@@ -1727,7 +1627,7 @@ mod tests {
                 want: Some("place_order".to_string()),
                 path: Some("place_order / parse order".to_string()),
             },
-            decision: ErrorPolicyDecision {
+            decision: ExposureDecision {
                 http_status: 400,
                 visibility: Visibility::Public,
                 default_hints: vec![],
@@ -1768,7 +1668,7 @@ mod tests {
     }
 
     #[test]
-    fn test_policy_snapshot_render_debug_summary_falls_back_to_reason_and_source() {
+    fn test_exposure_snapshot_render_debug_summary_falls_back_to_reason_and_source() {
         let snapshot = ErrorProtocolSnapshot {
             identity: ErrorIdentity {
                 code: "sys.storage_full".to_string(),
@@ -1779,7 +1679,7 @@ mod tests {
                 want: Some("place_order".to_string()),
                 path: Some("place_order / save order".to_string()),
             },
-            decision: ErrorPolicyDecision {
+            decision: ExposureDecision {
                 http_status: 500,
                 visibility: Visibility::Internal,
                 default_hints: vec![],
@@ -1817,7 +1717,7 @@ mod tests {
     }
 
     #[test]
-    fn test_policy_snapshot_render_debug_summary_prefers_root_cause_source_frame() {
+    fn test_exposure_snapshot_render_debug_summary_prefers_root_cause_source_frame() {
         let snapshot = ErrorProtocolSnapshot {
             identity: ErrorIdentity {
                 code: "sys.io_error".to_string(),
@@ -1828,7 +1728,7 @@ mod tests {
                 want: Some("place_order".to_string()),
                 path: Some("place_order / save order".to_string()),
             },
-            decision: ErrorPolicyDecision {
+            decision: ExposureDecision {
                 http_status: 500,
                 visibility: Visibility::Internal,
                 default_hints: vec![],
@@ -1892,10 +1792,14 @@ mod tests {
                 ctx
             });
 
-        let via_struct = err.render_user_debug(&DefaultErrorPolicy);
-        let via_struct_compat = err.render_debug_summary(&DefaultErrorPolicy);
-        let via_view = err.policy_report().render_user_debug(&DefaultErrorPolicy);
-        let via_snapshot = err.policy_snapshot(&DefaultErrorPolicy).render_user_debug();
+        let via_struct = err.render_user_debug(&DefaultExposurePolicy);
+        let via_struct_compat = err.render_debug_summary(&DefaultExposurePolicy);
+        let via_view = err
+            .exposure_view()
+            .render_user_debug(&DefaultExposurePolicy);
+        let via_snapshot = err
+            .exposure_snapshot(&DefaultExposurePolicy)
+            .render_user_debug();
 
         assert_eq!(via_struct, via_struct_compat);
         assert_eq!(via_struct, via_view);
@@ -1914,7 +1818,7 @@ mod tests {
                 ctx
             });
 
-        let rendered = err.render_user_debug_redacted(&DefaultErrorPolicy, &TestPolicy);
+        let rendered = err.render_user_debug_redacted(&DefaultExposurePolicy, &TestPolicy);
 
         assert!(rendered.contains("<redacted>"));
         assert!(!rendered.contains("token=abc"));
@@ -1923,31 +1827,13 @@ mod tests {
     }
 
     #[test]
-    fn test_rpc_error_response_schema_constants_match_expected_fields() {
-        assert_eq!(
-            RPC_ERROR_RESPONSE_FIELDS,
-            &[
-                "status",
-                "code",
-                "category",
-                "reason",
-                "detail",
-                "visibility",
-                "hints",
-                "retryable"
-            ]
-        );
-    }
-
-    #[cfg(feature = "serde_json")]
-    #[test]
-    fn test_cli_error_json_keys_match_schema_constants() {
+    fn test_cli_error_json_keys_match_expected_shape() {
         let err = StructError::from(TestReason::Uvs(UvsReason::business_error()))
             .with_detail("order state invalid");
 
         let json_value = err
             .report()
-            .to_cli_error_json(&DefaultErrorPolicy)
+            .to_cli_error_json(&DefaultExposurePolicy)
             .expect("serialize cli error");
 
         let mut keys = json_value
@@ -1958,10 +1844,17 @@ mod tests {
             .collect::<Vec<_>>();
         keys.sort();
 
-        let mut expected = CLI_ERROR_RESPONSE_FIELDS
-            .iter()
-            .map(|field| field.to_string())
-            .collect::<Vec<_>>();
+        let mut expected = [
+            "code",
+            "category",
+            "summary",
+            "detail",
+            "visibility",
+            "hints",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
         expected.sort();
 
         assert_eq!(keys, expected);
@@ -1974,14 +1867,14 @@ mod tests {
 
     #[cfg(feature = "serde_json")]
     #[test]
-    fn test_log_error_json_keys_match_schema_constants() {
+    fn test_log_error_json_keys_match_expected_shape() {
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("disk offline")
             .with_context(OperationContext::doing("load config"));
 
         let json_value = err
             .report()
-            .to_log_error_json(&DefaultErrorPolicy)
+            .to_log_error_json(&DefaultExposurePolicy)
             .expect("serialize log error");
 
         let mut keys = json_value
@@ -1992,10 +1885,22 @@ mod tests {
             .collect::<Vec<_>>();
         keys.sort();
 
-        let mut expected = LOG_ERROR_RESPONSE_FIELDS
-            .iter()
-            .map(|field| field.to_string())
-            .collect::<Vec<_>>();
+        let mut expected = [
+            "code",
+            "category",
+            "reason",
+            "detail",
+            "operation",
+            "path",
+            "visibility",
+            "hints",
+            "root_metadata",
+            "context",
+            "source_frames",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
         expected.sort();
 
         assert_eq!(keys, expected);
@@ -2006,13 +1911,13 @@ mod tests {
 
     #[cfg(feature = "serde_json")]
     #[test]
-    fn test_rpc_error_json_keys_match_schema_constants() {
+    fn test_rpc_error_json_keys_match_expected_shape() {
         let err = StructError::from(TestReason::Uvs(UvsReason::timeout_error()))
             .with_detail("downstream rpc timeout");
 
         let json_value = err
             .report()
-            .to_rpc_error_json(&DefaultErrorPolicy)
+            .to_rpc_error_json(&DefaultExposurePolicy)
             .expect("serialize rpc error");
 
         let mut keys = json_value
@@ -2023,10 +1928,19 @@ mod tests {
             .collect::<Vec<_>>();
         keys.sort();
 
-        let mut expected = RPC_ERROR_RESPONSE_FIELDS
-            .iter()
-            .map(|field| field.to_string())
-            .collect::<Vec<_>>();
+        let mut expected = [
+            "status",
+            "code",
+            "category",
+            "reason",
+            "detail",
+            "visibility",
+            "hints",
+            "retryable",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
         expected.sort();
 
         assert_eq!(keys, expected);
@@ -2068,7 +1982,7 @@ mod tests {
             want: None,
             path: None,
             context: vec![],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
                 index: 0,
                 message: "inner".to_string(),
@@ -2080,7 +1994,7 @@ mod tests {
                 want: None,
                 path: None,
                 detail: None,
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
         };
@@ -2106,7 +2020,7 @@ mod tests {
             want: None,
             path: None,
             context: vec![],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
                 index: 0,
                 message: "inner".to_string(),
@@ -2118,7 +2032,7 @@ mod tests {
                 want: None,
                 path: None,
                 detail: None,
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
         };
@@ -2137,7 +2051,7 @@ mod tests {
             want: Some("load /srv/app/config.toml".to_string()),
             path: Some("load /srv/app/config.toml / parse".to_string()),
             context: vec![OperationContext::at("/srv/app/config.toml")],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
                 index: 0,
                 message: "inner".to_string(),
@@ -2149,7 +2063,7 @@ mod tests {
                 want: Some("open /srv/app/config.toml".to_string()),
                 path: Some("open /srv/app/config.toml / read".to_string()),
                 detail: None,
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
         };
@@ -2182,7 +2096,7 @@ mod tests {
             want: None,
             path: None,
             context: vec![],
-            root_metadata: crate::ErrorMetadata::new(),
+            root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
                 index: 0,
                 message: "inner".to_string(),
@@ -2194,7 +2108,7 @@ mod tests {
                 want: None,
                 path: None,
                 detail: None,
-                metadata: crate::ErrorMetadata::new(),
+                metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
         };

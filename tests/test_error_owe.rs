@@ -4,7 +4,7 @@
 // paths alive until the compatibility surface is removed.
 use orion_error::compat_prelude::ErrorOweBase;
 use orion_error::conversion::IntoAs;
-use orion_error::ErrorCode;
+use orion_error::reason::ErrorCode;
 use orion_error::{StructError, UvsReason};
 
 #[test]

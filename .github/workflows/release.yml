@@ -22,17 +22,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  publish-crate:
-    name: Publish to crates.io
+  publish-crates:
+    name: Publish crates to crates.io
     runs-on: ubuntu-latest
     if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     needs: create-release
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - name: Cargo publish (dry run)
+      - name: Cargo publish derive (dry run)
+        if: ${{ endsWith(github.ref, '-dryrun') }}
+        run: cargo publish --manifest-path orion-error-derive/Cargo.toml --dry-run
+      - name: Cargo publish root (dry run)
         if: ${{ endsWith(github.ref, '-dryrun') }}
         run: cargo publish --dry-run
-      - name: Cargo publish
+      - name: Cargo publish derive
+        if: ${{ !endsWith(github.ref, '-dryrun') }}
+        run: cargo publish --manifest-path orion-error-derive/Cargo.toml --token ${{ secrets.CRATES_IO_TOKEN }}
+      - name: Wait for crates.io index
+        if: ${{ !endsWith(github.ref, '-dryrun') }}
+        run: sleep 30
+      - name: Cargo publish root
         if: ${{ !endsWith(github.ref, '-dryrun') }}
         run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}

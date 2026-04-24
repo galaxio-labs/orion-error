@@ -1,19 +1,25 @@
-# 日志记录
+# 日志说明
 
-`orion-error` 的日志能力围绕 `OperationContext` 展开。
+`orion-error` 的日志能力围绕 `OperationContext` 和 `OperationScope` 展开。
 
-## 启用方式
+## 1. Feature
 
 ```toml
 [dependencies]
-orion-error = { version = "0.7", features = ["log"] }
+orion-error = { version = "0.7.0", features = ["log"] }
 # 或
-orion-error = { version = "0.7", features = ["tracing"] }
+orion-error = { version = "0.7.0", features = ["tracing"] }
 ```
 
 默认 feature 已包含 `log`。
 
-## 基本用法
+行为规则：
+
+- 只启用 `log`：使用 `log` 宏输出
+- 启用 `tracing`：优先走 `tracing`
+- 同时启用：走 `tracing`
+
+## 2. 基本用法
 
 ```rust
 use orion_error::OperationContext;
@@ -21,6 +27,7 @@ use orion_error::OperationContext;
 let mut ctx = OperationContext::doing("order_processing");
 ctx.record_field("order_id", "123");
 ctx.record_field("amount", "100.0");
+ctx.record_meta("component.name", "order_service");
 
 ctx.info("start");
 ctx.debug("payload prepared");
@@ -29,7 +36,7 @@ ctx.error("final failure");
 ctx.trace("verbose trace");
 ```
 
-也可以使用别名方法：
+也可以使用别名：
 
 - `log_info`
 - `log_debug`
@@ -37,7 +44,7 @@ ctx.trace("verbose trace");
 - `log_error`
 - `log_trace`
 
-## 自动结果日志
+## 3. 自动结果日志
 
 ```rust
 use orion_error::OperationContext;
@@ -49,9 +56,22 @@ do_sync()?;
 ctx.mark_suc();
 ```
 
-默认结果是失败。如果启用了 `with_auto_log()` 但没有标记成功，Drop 时会输出失败日志。
+默认结果是失败。
 
-## 使用 `OperationScope`
+如果启用了 `with_auto_log()`，但离开作用域前没有调用：
+
+- `mark_suc()`
+- `mark_cancel()`
+
+那么 `Drop` 时会输出失败日志。
+
+兼容旧名：
+
+- `with_exit_log()` 已废弃，当前请使用 `with_auto_log()`
+
+## 4. `OperationScope`
+
+`OperationScope` 是面向一个局部作用域的 guard。
 
 ```rust
 use orion_error::OperationContext;
@@ -59,19 +79,61 @@ use orion_error::OperationContext;
 let mut ctx = OperationContext::doing("sync_user").with_auto_log();
 
 {
-    let mut scope = ctx.scoped_success();
+    let mut scope = ctx.scope();
     scope.record_field("user_id", "42");
     validate()?;
+    scope.mark_success();
 }
 ```
 
-可选方法：
+方法：
 
-- `scope()`：默认失败，需要显式 `mark_success()`
-- `scoped_success()`：作用域结束时自动标记成功
+- `scope()`：默认失败，只有显式 `mark_success()` 才会成功
+- `scoped_success()`：创建后默认成功，除非后续显式 `mark_failure()` 或 `cancel()`
+- `mark_success()`：标记成功
+- `mark_failure()`：恢复为失败
 - `cancel()`：标记取消
 
-## `op_context!` 宏
+## 5. `scoped_success()` 的使用边界
+
+`scoped_success()` 适合这种场景：
+
+- 作用域里的逻辑已经自行处理完失败分支
+- 失败时会明确调用 `mark_failure()`
+- 或者这段逻辑本身不会通过 `?` 提前返回
+
+例如：
+
+```rust
+let mut ctx = OperationContext::doing("process_order").with_auto_log();
+
+{
+    let mut scope = ctx.scoped_success();
+    let ok = validate_order();
+    if !ok {
+        scope.mark_failure();
+    }
+}
+```
+
+不推荐这样写：
+
+```rust,ignore
+let mut scope = ctx.scoped_success();
+validate()?;
+```
+
+因为当前实现里 `scoped_success()` 一创建就默认成功，如果 `?` 提前返回，`Drop` 仍会把该作用域标记为成功。
+
+对可能早退的 fallible 流程，优先使用：
+
+```rust
+let mut scope = ctx.scope();
+validate()?;
+scope.mark_success();
+```
+
+## 6. `op_context!` 宏
 
 ```rust
 use orion_error::op_context;
@@ -80,18 +142,13 @@ let mut ctx = op_context!("load_config").with_auto_log();
 ctx.record_field("path", "config.toml");
 ```
 
-这个宏会在调用处展开 `module_path!()`，方便日志系统显示正确模块路径。
+这个宏会在调用点展开 `module_path!()`，让自动结果日志带上更准确的模块路径。
 
-## log 与 tracing
+## 7. 推荐实践
 
-- 只启用 `log` 时，使用 `log` 宏输出
-- 启用 `tracing` 时，优先使用 `tracing`
-- 同时启用时，代码路径以 `tracing` 为准
-
-## 推荐实践
-
-- 用 `doing(...)` 描述操作目标
+- 用 `doing(...)` 命名操作
 - 用 `record_field(...)` 记录关键诊断字段
+- 用 `record_meta(...)` 记录结构化 metadata
 - 用 `with_auto_log()` 只包裹真正需要结果日志的作用域
-- 对成功路径使用 `mark_suc()` 或 `scoped_success()`
-- 不要继续新增 `with_exit_log()`；它已废弃
+- 对可能 `?` 提前返回的逻辑，优先 `scope() + mark_success()`
+- 只有在失败路径已被显式处理时，再使用 `scoped_success()`
