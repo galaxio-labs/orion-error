@@ -76,6 +76,11 @@ let stable = StableErrorSnapshot::from(&err);
 - 兼容观察
 - 中间层转换
 
+说明：
+
+- `want` / `path` 继续保留在 snapshot 中，主要是兼容投影
+- 当前运行时主语义和新代码文档应优先使用 `doing(...)` / `action`
+
 ## 4. `StableErrorSnapshot`
 
 `StableErrorSnapshot` 是稳定机器导出对象。
@@ -91,6 +96,9 @@ let stable = StableErrorSnapshot::from(&err);
 - `context`
 - `root_metadata`
 - `source_frames`
+
+这里的 `want` 仍是稳定导出的一部分，但它不代表新代码应继续使用
+`want(...)` 作为主路径 API。
 
 ## 5. Stable Context Frame
 
@@ -122,6 +130,8 @@ let stable = StableErrorSnapshot::from(&err);
 - `detail`
 - `metadata`
 - `is_root_cause`
+
+其中 `want` / `path` 仍属于兼容投影信息。
 
 不属于稳定 schema 的 source frame 字段：
 

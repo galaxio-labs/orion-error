@@ -41,6 +41,7 @@
 - `category`：稳定分类
 - `reason`：稳定的人类摘要
 - `detail`：可变补充说明，不是主键
+- `want` / `path`：兼容投影字段；当前主语义应优先理解为 `action` / `locator`
 
 入口：
 
@@ -70,6 +71,12 @@ exposure 决策结构是 [`ExposureDecision`](/Users/zuowenjian/devspace/wp-labs
 - `Conf / Logic / Sys -> 500 + Internal`
 - `sys.network_error` / `sys.timeout` -> `retryable = true`
 - 其他 stable code 默认 `retryable = false`
+
+说明：
+
+- 当前文档中的运行时主路径仍然是 `doing(...)`
+- `want` 继续存在于 identity / report / snapshot 投影里，主要用于兼容旧消费方
+- 不应在新文档或新示例里把 `want(...)` 当成主路径 API 介绍
 
 主要入口：
 

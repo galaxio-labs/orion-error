@@ -109,6 +109,8 @@ fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
 - `into_as(...)` 把普通 Rust 错误接进结构化体系
 - `doing(...)` / `with_context(...)` 把操作上下文补进去
 
+对新代码来说，操作语义统一使用 `doing(...)`。`want(...)` 只作为兼容旧代码的路径存在。
+
 ## 新用户先学这 4 个 API
 
 1. `#[derive(OrionError)]`

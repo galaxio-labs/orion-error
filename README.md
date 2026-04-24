@@ -104,6 +104,9 @@ What happens here:
 - `into_as(...)` converts a normal Rust error into the structured system
 - `doing(...)` and `with_context(...)` add operation context
 
+For new code, treat `doing(...)` as the standard operation verb. `want(...)`
+only exists as a compatibility path for older code.
+
 ## The 4 APIs To Learn First
 
 1. `#[derive(OrionError)]`
