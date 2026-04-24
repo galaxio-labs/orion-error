@@ -6,15 +6,17 @@
 
 建议阅读顺序：
 
-1. [变更记录](../CHANGELOG.md)
-2. [使用教程](./tutorial.md)
-3. [OrionError 与稳定身份](./reason-identity-guide.md)
-4. [协议契约](./protocol-contract.md)
-5. [Stable Snapshot Schema](./stable-snapshot-schema.md)
-6. [日志说明](./LOGGING.md)
-7. [与 thiserror 的关系](./thiserror-comparison.md)
-8. [0.8 Breaking Plan](./0.8-breaking-plan.md)
-9. [Release Checklist](./release-checklist.md)
+1. [README](../README.md)
+2. [README 中文版](../README.zh-CN.md)
+3. [变更记录](../CHANGELOG.md)
+4. [使用教程](./tutorial.md)
+5. [OrionError 与稳定身份](./reason-identity-guide.md)
+6. [协议契约](./protocol-contract.md)
+7. [Stable Snapshot Schema](./stable-snapshot-schema.md)
+8. [日志说明](./LOGGING.md)
+9. [与 thiserror 的关系](./thiserror-comparison.md)
+10. [0.8 Breaking Plan](./0.8-breaking-plan.md)
+11. [Release Checklist](./release-checklist.md)
 
 ## crates.io 发布顺序
 
