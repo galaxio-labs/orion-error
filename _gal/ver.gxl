@@ -15,12 +15,13 @@ mod ver {
       gx.ver ( file : "${GXL_START_ROOT}/version.txt" ,  inc : "feature"  );
       gx.echo ( "current version : ${VERSION}"  );
     }
-flow set_cargo_ver {
-        gx.patch_file(
-        file   : "./Cargo.toml",
-        action : "set",
-        marker : "version",
-        value  : r#""${VERSION}""#
-        );
+
+    flow sync_file {
+            gx.patch_file(
+            file   : "${CARGO_FILE}",
+            action : "set",
+            marker : "version",
+            value  : r#""${VERSION}""#
+            );
     }
 }

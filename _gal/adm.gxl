@@ -7,11 +7,19 @@ mod  envs {
 }
 mod main   : lib_ver_adm {
 
-#[auto_load(entry)]
-  flow _entry : ver.use {
-  }
+    #[auto_load(entry)]
+    flow _entry : ver.use {
+    }
 
-#[auto_load(exit)]
-  flow _set_ver | ver.set_cargo_ver {
-  }
+    #[auto_load(exit)]
+    flow _set_ver | _sync_root_cargo |  _sync_derive_cargo {
+    }
+
+    flow _sync_root_cargo | ver.sync_file {
+        CARGO_FILE = "./Cargo.toml" ;
+    }
+    flow _sync_derive_cargo | ver.sync_file {
+        CARGO_FILE = "./orion-error-derive/Cargo.toml" ;
+    }
+
 }

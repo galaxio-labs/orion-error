@@ -1,6 +1,6 @@
 [package]
 name = "orion-error-derive"
-version = "0.7.0"
+version = "0.7.1" #@gxl:set(version)
 edition = "2021"
 authors = ["wukong <sec-wukong@outlook.com>"]
 description = "Derive macros for orion-error"
