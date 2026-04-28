@@ -67,42 +67,27 @@ fn test_testcase_module_exports_assert_helpers() {
     orion_error::testcase::assert_err_path(&err, "validate order");
 }
 
+#[cfg(feature = "serde_json")]
 #[test]
 fn test_advanced_prelude_types_and_report_exports_include_cli_projection() {
-    let cli = orion_error::report::ErrorCliResponse {
-        code: "biz.business_error".to_string(),
-        category: orion_error::reason::ErrorCategory::Biz,
-        summary: "business logic error".to_string(),
-        detail: "order state invalid".to_string(),
-        visibility: orion_error::report::Visibility::Public,
-        hints: vec!["fix order state".to_string()],
-    };
-    let log = orion_error::report::ErrorLogResponse {
-        code: "biz.business_error".to_string(),
-        category: orion_error::reason::ErrorCategory::Biz,
-        reason: "business logic error".to_string(),
-        detail: Some("order state invalid".to_string()),
-        operation: Some("validate order".to_string()),
-        path: Some("validate order".to_string()),
-        visibility: orion_error::report::Visibility::Public,
-        hints: vec!["fix order state".to_string()],
-        root_metadata: orion_error::runtime::ErrorMetadata::new(),
-        context: vec![],
-        source_frames: vec![],
-    };
-    let rpc = orion_error::report::ErrorRpcResponse {
-        status: 400,
-        code: "biz.business_error".to_string(),
-        category: orion_error::reason::ErrorCategory::Biz,
-        reason: "business logic error".to_string(),
-        detail: Some("order state invalid".to_string()),
-        visibility: orion_error::report::Visibility::Public,
-        hints: vec!["fix order state".to_string()],
-        retryable: false,
-    };
+    use orion_error::{DefaultExposurePolicy, StructError, UvsReason};
 
-    assert_eq!(cli.code, "biz.business_error");
-    assert_eq!(cli.summary, "business logic error");
-    assert_eq!(log.reason, "business logic error");
-    assert_eq!(rpc.status, 400);
+    let snapshot = StructError::from(UvsReason::business_error())
+        .with_detail("order state invalid")
+        .exposure_snapshot(&DefaultExposurePolicy);
+
+    let http = snapshot.to_http_error_json().unwrap();
+    let cli = snapshot.to_cli_error_json().unwrap();
+    let rpc = snapshot.to_rpc_error_json().unwrap();
+
+    assert_eq!(http["code"], serde_json::json!("biz.business_error"));
+    assert_eq!(http["status"], serde_json::json!(400));
+    assert_eq!(cli["code"], serde_json::json!("biz.business_error"));
+    assert_eq!(
+        cli["summary"],
+        serde_json::json!("business logic error: order state invalid")
+    );
+    assert_eq!(rpc["status"], serde_json::json!(400));
+    assert_eq!(rpc["code"], serde_json::json!("biz.business_error"));
+    assert_eq!(rpc["detail"], serde_json::json!("order state invalid"));
 }

@@ -3,6 +3,14 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
+/// Typed structured metadata attached to an error context.
+///
+/// Unlike the [`ContextRecord`](crate::ContextRecord) trait (whose entries appear
+/// in the error's `Display` output), metadata stored here is **not** visible in
+/// terminal output. It is intended for programmatic consumers: serialization,
+/// snapshots, structured logs, and API responses.
+///
+/// Supports `String`, `bool`, `i64`, and `u64` values via [`MetadataValue`].
 pub struct ErrorMetadata {
     fields: BTreeMap<String, MetadataValue>,
 }
@@ -10,6 +18,10 @@ pub struct ErrorMetadata {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
+/// A typed value stored in [`ErrorMetadata`].
+///
+/// Supports string, boolean, and integer variants. Use `from()` / `into()`
+/// to convert from native Rust types.
 pub enum MetadataValue {
     String(String),
     Bool(bool),
@@ -59,7 +71,16 @@ impl ErrorMetadata {
         self.fields.iter()
     }
 
-    pub(crate) fn merge_missing(&mut self, other: &ErrorMetadata) {
+    /// Merge entries from `other`, keeping existing values.
+    ///
+    /// For each key in `other`, the value is only inserted if the key does not
+    /// already exist in `self`. This implements an **inner/first wins** strategy
+    /// useful when merging layered metadata where earlier layers should take
+    /// priority.
+    ///
+    /// See [`StructError::context_metadata()`](crate::StructError::context_metadata)
+    /// for a usage example.
+    pub fn merge_missing(&mut self, other: &ErrorMetadata) {
         for (key, value) in other.iter() {
             self.fields
                 .entry(key.clone())

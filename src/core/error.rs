@@ -1,4 +1,4 @@
-use std::{error::Error as StdError, fmt::Display, ops::Deref, sync::Arc};
+use std::{error::Error as StdError, fmt::Display, sync::Arc};
 
 use super::{
     context::OperationContext, domain::DomainReason, metadata::ErrorMetadata, ContextAdd,
@@ -14,7 +14,7 @@ macro_rules! location {
 
 impl<T: DomainReason + ErrorCode> ErrorCode for StructError<T> {
     fn error_code(&self) -> i32 {
-        self.reason.error_code()
+        self.reason().error_code()
     }
 }
 
@@ -23,11 +23,11 @@ where
     T: DomainReason + ErrorIdentityProvider,
 {
     fn stable_code(&self) -> &'static str {
-        self.reason.stable_code()
+        self.reason().stable_code()
     }
 
     fn error_category(&self) -> ErrorCategory {
-        self.reason.error_category()
+        self.reason().error_category()
     }
 }
 
@@ -139,14 +139,6 @@ pub struct SourceFrame {
     pub is_root_cause: bool,
 }
 
-fn merged_context_metadata(contexts: &[OperationContext]) -> ErrorMetadata {
-    let mut merged = ErrorMetadata::new();
-    for ctx in contexts {
-        merged.merge_missing(ctx.metadata());
-    }
-    merged
-}
-
 fn collect_source_frames(
     err: &(dyn StdError + 'static),
     root_type_name: Option<&'static str>,
@@ -194,7 +186,7 @@ where
 
 fn collect_struct_error_source_frames<R>(source: &StructError<R>) -> Vec<SourceFrame>
 where
-    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    R: DomainReason + ErrorCode,
 {
     let mut frames = Vec::with_capacity(source.source_frames().len() + 1);
     frames.push(SourceFrame {
@@ -239,7 +231,7 @@ impl InternalSourceState {
 
     fn from_struct<R>(source: StructError<R>) -> Self
     where
-        R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+        R: DomainReason + ErrorCode,
     {
         let frames = collect_struct_error_source_frames(&source);
         Self {
@@ -293,7 +285,7 @@ where
 
 impl<R> IntoSourcePayload for StructError<R>
 where
-    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    R: DomainReason + ErrorCode,
 {
     fn into_source_payload(self) -> SourcePayload {
         SourcePayload::from_state(InternalSourceState::from_struct(self))
@@ -302,7 +294,7 @@ where
 
 fn internal_into_std_bridge<R>(source: StructError<R>) -> BoxedSource
 where
-    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    R: DomainReason,
 {
     Arc::new(OwnedStdStructError { inner: source })
 }
@@ -348,7 +340,7 @@ impl OwnedDynStdStructError {
 
 impl<R> From<StructError<R>> for OwnedDynStdStructError
 where
-    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    R: DomainReason + ErrorCode,
 {
     fn from(value: StructError<R>) -> Self {
         let display = value.to_string();
@@ -368,7 +360,7 @@ where
 
 impl<R> From<OwnedStdStructError<R>> for OwnedDynStdStructError
 where
-    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    R: DomainReason + ErrorCode,
 {
     fn from(value: OwnedStdStructError<R>) -> Self {
         value.into_struct().into()
@@ -409,7 +401,7 @@ where
 
 impl<R> Display for OwnedStdStructError<R>
 where
-    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    R: DomainReason,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.inner, f)
@@ -418,7 +410,7 @@ where
 
 impl<R> StdError for OwnedStdStructError<R>
 where
-    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    R: DomainReason,
 {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         self.inner.source_ref()
@@ -427,7 +419,7 @@ where
 
 impl<'a, R> Display for StdStructRef<'a, R>
 where
-    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    R: DomainReason,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(self.inner, f)
@@ -436,7 +428,7 @@ where
 
 impl<'a, R> StdError for StdStructRef<'a, R>
 where
-    R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+    R: DomainReason,
 {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         self.inner.source_ref()
@@ -541,37 +533,6 @@ pub struct StructError<T: DomainReason> {
     imp: Box<StructErrorImpl<T>>,
 }
 
-#[cfg(feature = "serde")]
-impl<T: DomainReason> serde::Serialize for StructError<T>
-where
-    T: serde::Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-
-        let source_frames = self.source_frames();
-        let source_chain = self.source_chain();
-        let source_message = source_chain.first().cloned();
-        let want = self.target_main();
-        let path = self.target_path();
-
-        let mut state = serializer.serialize_struct("StructError", 9)?;
-        state.serialize_field("reason", &self.imp.reason)?;
-        state.serialize_field("detail", &self.imp.detail)?;
-        state.serialize_field("position", &self.imp.position)?;
-        state.serialize_field("context", self.imp.context.as_ref())?;
-        state.serialize_field("want", &want)?;
-        state.serialize_field("path", &path)?;
-        state.serialize_field("source_frames", &source_frames)?;
-        state.serialize_field("source_message", &source_message)?;
-        state.serialize_field("source_chain", &source_chain)?;
-        state.end()
-    }
-}
-
 impl<T: DomainReason> StructError<T> {
     pub fn imp(&self) -> &StructErrorImpl<T> {
         &self.imp
@@ -584,14 +545,19 @@ impl<T: DomainReason> PartialEq for StructError<T> {
     }
 }
 
-impl<T: DomainReason> Deref for StructError<T> {
-    type Target = StructErrorImpl<T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.imp
-    }
-}
 impl<T: DomainReason> StructError<T> {
+    pub fn reason(&self) -> &T {
+        &self.imp.reason
+    }
+
+    pub fn detail(&self) -> &Option<String> {
+        &self.imp.detail
+    }
+
+    pub fn position(&self) -> &Option<String> {
+        &self.imp.position
+    }
+
     pub fn new(
         reason: T,
         detail: Option<String>,
@@ -720,11 +686,7 @@ impl<T: DomainReason> StructError<T> {
     }
 
     #[must_use]
-    /// Attach a non-structured source error.
-    ///
-    /// For `StructError<_>` sources, use `with_struct_source(...)` so metadata and
-    /// structured source frames are preserved.
-    pub fn with_std_source<E>(self, source: E) -> Self
+    pub(crate) fn with_std_source<E>(self, source: E) -> Self
     where
         E: StdError + Send + Sync + 'static,
     {
@@ -732,11 +694,15 @@ impl<T: DomainReason> StructError<T> {
     }
 
     #[must_use]
-    /// Recommended helper that auto-routes either a standard source error or an
-    /// existing `StructError<_>` through the dual-channel source model.
+    /// Auto-route a source error through the dual-channel source model.
     ///
-    /// Use `with_std_source(...)` / `with_struct_source(...)` instead when the
-    /// call site should make the source kind explicit.
+    /// This is the recommended public entry point for attaching sources. It
+    /// accepts both standard `StdError` values and `StructError<_>` values,
+    /// automatically routing through the correct internal channel via the
+    /// [`IntoSourcePayload`] trait.
+    ///
+    /// For call sites that need to explicitly choose the source kind, use
+    /// [`attach_source`](Self::attach_source) instead.
     pub fn with_source<S>(self, source: S) -> Self
     where
         S: IntoSourcePayload,
@@ -747,18 +713,29 @@ impl<T: DomainReason> StructError<T> {
     #[must_use]
     pub(crate) fn with_struct_error_source<R>(mut self, source: StructError<R>) -> Self
     where
-        R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+        R: DomainReason + ErrorCode,
     {
         self = self.with_internal_source(InternalSourceState::from_struct(source));
         self
     }
 
     #[must_use]
-    pub fn with_struct_source<R>(self, source: StructError<R>) -> Self
+    pub(crate) fn with_struct_source<R>(self, source: StructError<R>) -> Self
     where
-        R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+        R: DomainReason + ErrorCode,
     {
         self.with_struct_error_source(source)
+    }
+
+    /// Internal helper: creates a new `StructError<R2>` wrapping `self` as the
+    /// structured source. Used by [`WrapStructErrorAs`](crate::traits::WrapStructErrorAs).
+    #[must_use]
+    pub(crate) fn wrap<R2>(self, reason: R2) -> StructError<R2>
+    where
+        T: ErrorCode,
+        R2: DomainReason,
+    {
+        StructError::from(reason).with_struct_source(self)
     }
 
     pub fn source_ref(&self) -> Option<&(dyn StdError + 'static)> {
@@ -788,8 +765,30 @@ impl<T: DomainReason> StructError<T> {
         self.source_frames().last()
     }
 
+    /// Returns merged metadata from all context layers.
+    ///
+    /// Context layers are iterated in push order (innermost first). The merge
+    /// uses an **inner wins** strategy: the first value set for any key is kept;
+    /// outer layers only supply keys that are missing from inner layers.
+    ///
+    /// For example, if inner context sets `key = "inner"` and outer context sets
+    /// `key = "outer"`, the result is `key = "inner"`.
+    ///
+    /// To query metadata from a specific context layer, use [`context_metadata_at`].
     pub fn context_metadata(&self) -> ErrorMetadata {
-        merged_context_metadata(self.contexts())
+        let mut merged = ErrorMetadata::new();
+        for ctx in self.contexts() {
+            merged.merge_missing(ctx.metadata());
+        }
+        merged
+    }
+
+    /// Returns the metadata from a specific context layer by index.
+    ///
+    /// Index 0 is the innermost (first pushed) context layer.
+    /// Returns `None` if the index is out of bounds.
+    pub fn context_metadata_at(&self, index: usize) -> Option<&ErrorMetadata> {
+        self.contexts().get(index).map(|ctx| ctx.metadata())
     }
 
     pub fn source_chain(&self) -> Vec<String> {
@@ -830,7 +829,7 @@ impl<T: DomainReason> StructError<T> {
 
     pub fn display_chain(&self) -> String
     where
-        T: ErrorCode + std::fmt::Debug + Display + 'static,
+        T: std::fmt::Debug + Display + 'static,
     {
         let mut out = format!("{self}");
         let chain = self.source_chain();
@@ -847,18 +846,6 @@ impl<T: DomainReason> StructError<T> {
             }
         }
         out
-    }
-
-    pub fn render(&self, mode: super::report::RenderMode) -> String {
-        self.report().render(mode)
-    }
-
-    pub fn render_redacted(
-        &self,
-        mode: super::report::RenderMode,
-        policy: &impl super::report::RedactPolicy,
-    ) -> String {
-        self.report().render_redacted(mode, policy)
     }
 
     #[cfg(feature = "anyhow")]
@@ -905,21 +892,21 @@ impl<T: DomainReason> StructError<T> {
         Err(self)
     }
     pub fn target_main(&self) -> Option<String> {
-        self.context
+        self.imp.context
             .iter()
             .rev()
             .find_map(|ctx| ctx.target().clone())
     }
 
     pub fn action_main(&self) -> Option<String> {
-        self.context
+        self.imp.context
             .iter()
             .rev()
             .find_map(|ctx| ctx.action().clone())
     }
 
     pub fn locator_main(&self) -> Option<String> {
-        self.context
+        self.imp.context
             .iter()
             .rev()
             .find_map(|ctx| ctx.locator().clone())
@@ -936,7 +923,7 @@ impl<T: DomainReason> StructError<T> {
         let mut path = Vec::new();
         let mut pending_locators: Vec<String> = Vec::new();
 
-        for ctx in self.context.iter().rev() {
+        for ctx in self.imp.context.iter().rev() {
             let locator_only = ctx.action().is_none()
                 && ctx.target().is_none()
                 && ctx.locator().is_some()
@@ -1002,13 +989,13 @@ impl<T: DomainReason> ContextAdd<OperationContext> for StructError<T> {
     }
 }
 
-impl<T: std::fmt::Display + DomainReason + ErrorCode> Display for StructError<T> {
+impl<T: DomainReason> Display for StructError<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // 核心错误信息
-        write!(f, "[{}] {reason}", self.error_code(), reason = self.reason)?;
+        write!(f, "{reason}", reason = self.reason())?;
 
         // 位置信息优先显示
-        if let Some(pos) = &self.position {
+        if let Some(pos) = &self.imp.position {
             write!(f, "\n  -> At: {pos}")?;
         }
 
@@ -1025,7 +1012,7 @@ impl<T: std::fmt::Display + DomainReason + ErrorCode> Display for StructError<T>
         }
 
         // 技术细节
-        if let Some(detail) = &self.detail {
+        if let Some(detail) = &self.imp.detail {
             write!(f, "\n  -> Details: {detail}")?;
         }
 
@@ -1034,10 +1021,10 @@ impl<T: std::fmt::Display + DomainReason + ErrorCode> Display for StructError<T>
         }
 
         // 上下文信息
-        if !self.context.is_empty() {
+        if !self.imp.context.is_empty() {
             writeln!(f, "\n  -> Context stack:")?;
 
-            for (i, c) in self.context.iter().enumerate() {
+            for (i, c) in self.imp.context.iter().enumerate() {
                 writeln!(f, "context {i}: ")?;
                 writeln!(f, "{c}")?;
             }
@@ -1113,7 +1100,7 @@ impl<T: DomainReason> StructErrorBuilder<T> {
 
     pub fn source_struct<R>(mut self, source: StructError<R>) -> Self
     where
-        R: DomainReason + ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+        R: DomainReason + ErrorCode,
     {
         self = self.with_internal_source(InternalSourceState::from_struct(source));
         self
@@ -1618,7 +1605,7 @@ mod tests {
         assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Struct));
         assert_eq!(
             payload.source().to_string(),
-            "[1001] test error\n  -> Details: repo layer failed\n  -> Source: db unavailable"
+            "test error\n  -> Details: repo layer failed\n  -> Source: db unavailable"
         );
         assert_eq!(payload.root_cause().to_string(), "db unavailable");
         assert_eq!(
@@ -1678,7 +1665,7 @@ mod tests {
 
         assert_eq!(
             bridged.to_string(),
-            "[1001] test error\n  -> Details: repo layer failed\n  -> Source: db unavailable"
+            "test error\n  -> Details: repo layer failed\n  -> Source: db unavailable"
         );
         assert_eq!(
             StdError::source(bridged.as_ref()).unwrap().to_string(),
@@ -1898,53 +1885,6 @@ mod tests {
         let display_output = format!("{error}");
         assert!(!display_output.contains("config.kind"));
         assert!(!display_output.contains("sink_defaults"));
-    }
-
-    #[cfg(feature = "serde")]
-    #[test]
-    fn test_source_frame_serialization_skips_empty_metadata() {
-        let frame = SourceFrame {
-            index: 0,
-            message: "message".to_string(),
-            display: None,
-            debug: "debug".to_string(),
-            type_name: None,
-            error_code: None,
-            reason: None,
-            want: None,
-            path: None,
-            detail: None,
-            metadata: ErrorMetadata::default(),
-            is_root_cause: true,
-        };
-
-        let json_value = serde_json::to_value(&frame).unwrap();
-        assert!(!json_value
-            .as_object()
-            .expect("object")
-            .contains_key("metadata"));
-    }
-
-    #[cfg(feature = "serde")]
-    #[test]
-    fn test_source_frame_serialization_includes_metadata() {
-        let error = StructError::from(TestDomainReason::TestError).with_context(
-            OperationContext::doing("load sink defaults")
-                .with_meta("config.kind", "sink_defaults")
-                .with_meta("parse.line", 1u32),
-        );
-        let wrapped = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
-            .with_struct_source(error);
-
-        let json_value = serde_json::to_value(&wrapped).unwrap();
-        assert_eq!(
-            json_value["source_frames"][0]["metadata"]["config.kind"],
-            serde_json::Value::String("sink_defaults".to_string())
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["metadata"]["parse.line"],
-            serde_json::json!(1)
-        );
     }
 
     #[allow(deprecated)]

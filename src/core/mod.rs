@@ -1,10 +1,13 @@
 mod case;
+pub mod cli;
 mod context;
 mod domain;
 mod error;
 mod metadata;
 mod reason;
 mod report;
+#[cfg(feature = "serde")]
+mod serde;
 mod snapshot;
 mod universal;
 
@@ -19,9 +22,8 @@ pub use error::{
 pub use metadata::{ErrorMetadata, MetadataValue};
 pub use reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
 pub use report::{
-    DefaultExposurePolicy, DiagnosticReport, ErrorCliResponse, ErrorHttpResponse, ErrorLogResponse,
-    ErrorProtocolSnapshot, ErrorRenderer, ErrorRpcResponse, ExposureDecision, ExposurePolicy,
-    ExposureView, RedactPolicy, RenderMode, TextDiagnosticRenderer, TextReportRenderer, Visibility,
+    DefaultExposurePolicy, DiagnosticReport, ErrorProtocolSnapshot, ExposureDecision,
+    ExposurePolicy, RedactPolicy, Visibility,
 };
 pub use snapshot::{
     ErrorIdentity, ErrorSnapshot, SnapshotContextFrame, SnapshotSourceFrame, StableErrorSnapshot,

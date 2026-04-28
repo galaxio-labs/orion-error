@@ -80,6 +80,7 @@ pub struct ErrorSnapshot {
     pub position: Option<String>,
     pub want: Option<String>,
     pub path: Option<String>,
+    pub category: ErrorCategory,
     pub context: Vec<SnapshotContextFrame>,
     pub root_metadata: ErrorMetadata,
     pub source_frames: Vec<SnapshotSourceFrame>,
@@ -94,6 +95,7 @@ pub struct StableErrorSnapshot {
     pub position: Option<String>,
     pub want: Option<String>,
     pub path: Option<String>,
+    pub category: ErrorCategory,
     pub context: Vec<StableSnapshotContextFrame>,
     pub root_metadata: ErrorMetadata,
     pub source_frames: Vec<StableSnapshotSourceFrame>,
@@ -114,16 +116,6 @@ pub struct ErrorIdentity {
     pub position: Option<String>,
     pub want: Option<String>,
     pub path: Option<String>,
-}
-
-#[cfg(feature = "serde")]
-impl serde::Serialize for ErrorSnapshot {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.stable_export().serialize(serializer)
-    }
 }
 
 impl ErrorSnapshot {
@@ -151,6 +143,7 @@ impl ErrorSnapshot {
             position: self.position,
             want: self.want,
             path: self.path,
+            category: self.category,
             context: self.context.into_iter().map(Into::into).collect(),
             root_metadata: self.root_metadata,
             source_frames: self.source_frames.into_iter().map(Into::into).collect(),
@@ -173,6 +166,7 @@ impl ErrorSnapshot {
             position: self.position,
             want: self.want,
             path: self.path,
+            category: self.category,
             context: self.context.into_iter().map(Into::into).collect(),
             root_metadata: self.root_metadata,
             source_frames: self.source_frames.into_iter().map(Into::into).collect(),
@@ -188,6 +182,7 @@ impl StableErrorSnapshot {
             position: self.position.clone(),
             want: self.want.clone(),
             path: self.path.clone(),
+            category: self.category,
             context: self.context.iter().cloned().map(Into::into).collect(),
             root_metadata: self.root_metadata.clone(),
             source_frames: self.source_frames.iter().cloned().map(Into::into).collect(),
@@ -201,6 +196,7 @@ impl StableErrorSnapshot {
             position: self.position,
             want: self.want,
             path: self.path,
+            category: self.category,
             context: self.context.into_iter().map(Into::into).collect(),
             root_metadata: self.root_metadata,
             source_frames: self.source_frames.into_iter().map(Into::into).collect(),
@@ -401,43 +397,10 @@ impl From<&StableSnapshotSourceFrame> for SourceFrame {
     }
 }
 
-impl<T: DomainReason> From<&StructError<T>> for ErrorSnapshot {
-    fn from(value: &StructError<T>) -> Self {
-        value.snapshot()
-    }
-}
-
-impl<T: DomainReason> From<StructError<T>> for ErrorSnapshot {
-    fn from(value: StructError<T>) -> Self {
-        value.into_snapshot()
-    }
-}
-
-impl From<&ErrorSnapshot> for StableErrorSnapshot {
-    fn from(value: &ErrorSnapshot) -> Self {
-        value.stable_export()
-    }
-}
-
-impl From<ErrorSnapshot> for StableErrorSnapshot {
-    fn from(value: ErrorSnapshot) -> Self {
-        value.into_stable_export()
-    }
-}
-
-impl<T: DomainReason> From<&StructError<T>> for StableErrorSnapshot {
-    fn from(value: &StructError<T>) -> Self {
-        value.snapshot().into_stable_export()
-    }
-}
-
-impl<T: DomainReason> From<StructError<T>> for StableErrorSnapshot {
-    fn from(value: StructError<T>) -> Self {
-        value.into_snapshot().into_stable_export()
-    }
-}
-
-impl<T: DomainReason> StructError<T> {
+impl<T> StructError<T>
+where
+    T: DomainReason + ErrorIdentityProvider,
+{
     pub fn snapshot(&self) -> ErrorSnapshot {
         ErrorSnapshot {
             reason: self.reason().to_string(),
@@ -445,6 +408,7 @@ impl<T: DomainReason> StructError<T> {
             position: self.position().clone(),
             want: self.target_main(),
             path: self.target_path(),
+            category: self.error_category(),
             context: self.contexts().iter().cloned().map(Into::into).collect(),
             root_metadata: self.context_metadata(),
             source_frames: self
@@ -459,12 +423,7 @@ impl<T: DomainReason> StructError<T> {
     pub fn into_snapshot(self) -> ErrorSnapshot {
         self.snapshot()
     }
-}
 
-impl<T> StructError<T>
-where
-    T: DomainReason + ErrorIdentityProvider,
-{
     pub fn identity_snapshot(&self) -> ErrorIdentity {
         ErrorIdentity {
             code: self.stable_code().to_string(),
@@ -475,6 +434,54 @@ where
             want: self.target_main(),
             path: self.target_path(),
         }
+    }
+}
+
+impl<T> From<&StructError<T>> for ErrorSnapshot
+where
+    T: DomainReason + ErrorIdentityProvider,
+{
+    fn from(value: &StructError<T>) -> Self {
+        value.snapshot()
+    }
+}
+
+impl<T> From<StructError<T>> for ErrorSnapshot
+where
+    T: DomainReason + ErrorIdentityProvider,
+{
+    fn from(value: StructError<T>) -> Self {
+        value.into_snapshot()
+    }
+}
+
+impl<T> From<&StructError<T>> for StableErrorSnapshot
+where
+    T: DomainReason + ErrorIdentityProvider,
+{
+    fn from(value: &StructError<T>) -> Self {
+        value.snapshot().into_stable_export()
+    }
+}
+
+impl<T> From<StructError<T>> for StableErrorSnapshot
+where
+    T: DomainReason + ErrorIdentityProvider,
+{
+    fn from(value: StructError<T>) -> Self {
+        value.into_snapshot().into_stable_export()
+    }
+}
+
+impl From<&ErrorSnapshot> for StableErrorSnapshot {
+    fn from(value: &ErrorSnapshot) -> Self {
+        value.stable_export()
+    }
+}
+
+impl From<ErrorSnapshot> for StableErrorSnapshot {
+    fn from(value: ErrorSnapshot) -> Self {
+        value.into_stable_export()
     }
 }
 
@@ -580,28 +587,6 @@ mod tests {
         assert_eq!(identity.path.as_deref(), Some("start engine"));
     }
 
-    #[cfg(feature = "serde")]
-    #[test]
-    fn test_identity_snapshot_serialization_includes_code_and_category() {
-        use super::ErrorIdentity;
-
-        let identity = ErrorIdentity {
-            code: "sys.io_error".to_string(),
-            category: ErrorCategory::Sys,
-            reason: "system error".to_string(),
-            detail: Some("engine bootstrap failed".to_string()),
-            position: Some("src/main.rs:42".to_string()),
-            want: Some("start engine".to_string()),
-            path: Some("start engine".to_string()),
-        };
-
-        let value = serde_json::to_value(identity).unwrap();
-
-        assert_eq!(value["code"], serde_json::json!("sys.io_error"));
-        assert_eq!(value["category"], serde_json::json!("Sys"));
-        assert_eq!(value["reason"], serde_json::json!("system error"));
-    }
-
     #[test]
     fn test_snapshot_preserves_action_and_locator_context_fields() {
         let mut ctx = OperationContext::at("config.toml");
@@ -647,6 +632,7 @@ mod tests {
                 metadata
             },
             source_frames: vec![],
+            category: ErrorCategory::Sys,
         };
 
         let report = snapshot.report();
@@ -744,6 +730,7 @@ mod tests {
                 metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
+            category: ErrorCategory::Sys,
         };
 
         let via_borrowed = snapshot.report();
@@ -851,6 +838,7 @@ mod tests {
                 metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
+            category: ErrorCategory::Sys,
         };
 
         let via_borrowed = snapshot.stable_export();
@@ -955,6 +943,7 @@ mod tests {
                 metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
+            category: ErrorCategory::Sys,
         };
 
         let via_method = stable.report();
@@ -1080,187 +1069,6 @@ mod tests {
         assert_eq!(roundtrip, frame);
     }
 
-    #[cfg(feature = "serde")]
-    #[test]
-    fn test_snapshot_default_serialization_uses_stable_export_shape() {
-        let source = StructError::from(TestReason::TestError)
-            .with_detail("inner detail")
-            .with_context(
-                OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
-            );
-        let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
-            .with_detail("engine bootstrap failed")
-            .with_position("src/main.rs:42")
-            .with_context(
-                OperationContext::doing("start engine").with_meta("component.name", "engine"),
-            )
-            .with_struct_source(source);
-
-        let json_value = serde_json::to_value(err.snapshot()).unwrap();
-
-        assert_eq!(
-            json_value["schema_version"],
-            serde_json::json!(STABLE_SNAPSHOT_SCHEMA_VERSION)
-        );
-        assert_eq!(json_value["reason"], serde_json::json!("system error"));
-        assert_eq!(
-            json_value["detail"],
-            serde_json::json!("engine bootstrap failed")
-        );
-        assert_eq!(json_value["position"], serde_json::json!("src/main.rs:42"));
-        assert_eq!(json_value["want"], serde_json::json!("start engine"));
-        assert_eq!(json_value["path"], serde_json::json!("start engine"));
-        assert_eq!(
-            json_value["root_metadata"]["component.name"],
-            serde_json::json!("engine")
-        );
-        assert_eq!(
-            json_value["context"][0]["target"],
-            serde_json::json!("start engine")
-        );
-        assert_eq!(
-            json_value["context"][0]["action"],
-            serde_json::json!("start engine")
-        );
-        assert_eq!(json_value["context"][0]["locator"], serde_json::Value::Null);
-        assert_eq!(
-            json_value["context"][0]["path"],
-            serde_json::json!(["start engine"])
-        );
-        assert_eq!(
-            json_value["context"][0]["metadata"]["component.name"],
-            serde_json::json!("engine")
-        );
-        assert!(json_value["context"][0].get("fields").is_none());
-        assert!(json_value["context"][0].get("result").is_none());
-        assert_eq!(
-            json_value["source_frames"][0]["message"],
-            serde_json::json!("test error")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["reason"],
-            serde_json::json!("test error")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["want"],
-            serde_json::json!("load defaults")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["path"],
-            serde_json::json!("load defaults")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["detail"],
-            serde_json::json!("inner detail")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["metadata"]["config.kind"],
-            serde_json::json!("sink_defaults")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["is_root_cause"],
-            serde_json::json!(true)
-        );
-        assert!(json_value["source_frames"][0].get("debug").is_none());
-        assert!(json_value["source_frames"][0].get("display").is_none());
-        assert!(json_value["source_frames"][0].get("type_name").is_none());
-        assert!(json_value.get("source_message").is_none());
-        assert!(json_value.get("source_chain").is_none());
-    }
-
-    #[cfg(feature = "serde")]
-    #[test]
-    fn test_snapshot_stable_export_serialization_omits_compat_projection_fields() {
-        let snapshot = ErrorSnapshot {
-            reason: "system error".to_string(),
-            detail: Some("outer detail".to_string()),
-            position: Some("src/main.rs:42".to_string()),
-            want: Some("start engine".to_string()),
-            path: Some("start engine".to_string()),
-            context: vec![SnapshotContextFrame {
-                target: Some("start engine".to_string()),
-                action: Some("start engine".to_string()),
-                locator: Some("engine.toml".to_string()),
-                path: vec!["start engine".to_string()],
-                metadata: {
-                    let mut metadata = ErrorMetadata::new();
-                    metadata.insert("component.name", "engine");
-                    metadata
-                },
-                fields: vec![("tenant".to_string(), "alpha".to_string())],
-                result: crate::core::context::OperationResult::Fail,
-            }],
-            root_metadata: {
-                let mut metadata = ErrorMetadata::new();
-                metadata.insert("component.name", "engine");
-                metadata
-            },
-            source_frames: vec![SnapshotSourceFrame {
-                index: 0,
-                message: "db unavailable".to_string(),
-                display: Some("db unavailable".to_string()),
-                type_name: Some("std::io::Error".to_string()),
-                error_code: None,
-                reason: None,
-                want: Some("load config".to_string()),
-                path: Some("load config / read".to_string()),
-                detail: Some("inner detail".to_string()),
-                metadata: {
-                    let mut metadata = ErrorMetadata::new();
-                    metadata.insert("config.kind", "sink_defaults");
-                    metadata
-                },
-                is_root_cause: true,
-            }],
-        };
-
-        let stable = snapshot.stable_export();
-        let json_value = serde_json::to_value(&stable).unwrap();
-
-        assert_eq!(StableErrorSnapshot::clone(&stable), stable);
-        assert_eq!(
-            json_value["schema_version"],
-            serde_json::json!(STABLE_SNAPSHOT_SCHEMA_VERSION)
-        );
-        assert_eq!(json_value["reason"], serde_json::json!("system error"));
-        assert_eq!(
-            json_value["context"][0]["target"],
-            serde_json::json!("start engine")
-        );
-        assert_eq!(
-            json_value["context"][0]["action"],
-            serde_json::json!("start engine")
-        );
-        assert_eq!(
-            json_value["context"][0]["locator"],
-            serde_json::json!("engine.toml")
-        );
-        assert_eq!(
-            json_value["context"][0]["path"],
-            serde_json::json!(["start engine"])
-        );
-        assert_eq!(
-            json_value["context"][0]["metadata"]["component.name"],
-            serde_json::json!("engine")
-        );
-        assert!(json_value["context"][0].get("fields").is_none());
-        assert!(json_value["context"][0].get("result").is_none());
-        assert_eq!(
-            json_value["source_frames"][0]["message"],
-            serde_json::json!("db unavailable")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["path"],
-            serde_json::json!("load config / read")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["detail"],
-            serde_json::json!("inner detail")
-        );
-        assert!(json_value["source_frames"][0].get("display").is_none());
-        assert!(json_value["source_frames"][0].get("type_name").is_none());
-    }
-
     #[cfg(feature = "serde_json")]
     #[test]
     fn test_to_stable_snapshot_json_uses_stable_export_shape() {
@@ -1293,6 +1101,7 @@ mod tests {
                 metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
+            category: ErrorCategory::Sys,
         };
 
         let json_value = snapshot.to_stable_snapshot_json().unwrap();
@@ -1349,6 +1158,7 @@ mod tests {
                 metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
+            category: ErrorCategory::Sys,
         };
 
         let json_value = snapshot.to_stable_snapshot_json().unwrap();
@@ -1365,6 +1175,7 @@ mod tests {
                 "position",
                 "want",
                 "path",
+                "category",
                 "context",
                 "root_metadata",
                 "source_frames",

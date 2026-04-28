@@ -1,5 +1,4 @@
 use crate::{core::convert_error, core::DomainReason, ErrorCode, StructError};
-use std::fmt::Display;
 
 pub trait ErrorConv<T, R: DomainReason>: Sized {
     fn err_conv(self) -> Result<T, StructError<R>>;
@@ -9,13 +8,6 @@ pub trait ConvStructError<R: DomainReason>: Sized {
     fn conv(self) -> StructError<R>;
 }
 
-pub trait ErrorWrap<T, R: DomainReason>: Sized {
-    fn err_wrap(self, reason: R) -> Result<T, StructError<R>>;
-}
-
-pub trait WrapStructError<R: DomainReason>: Sized {
-    fn wrap(self, reason: R) -> StructError<R>;
-}
 
 pub trait ErrorWrapAs<T, R: DomainReason>: Sized {
     fn wrap_as(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>>;
@@ -48,29 +40,10 @@ where
     }
 }
 
-impl<T, R1, R2> ErrorWrap<T, R2> for Result<T, StructError<R1>>
-where
-    R1: DomainReason + ErrorCode + Display + std::fmt::Debug + Send + Sync + 'static,
-    R2: DomainReason,
-{
-    fn err_wrap(self, reason: R2) -> Result<T, StructError<R2>> {
-        self.map_err(|e| e.wrap(reason))
-    }
-}
-
-impl<R1, R2> WrapStructError<R2> for StructError<R1>
-where
-    R1: DomainReason + ErrorCode + Display + std::fmt::Debug + Send + Sync + 'static,
-    R2: DomainReason,
-{
-    fn wrap(self, reason: R2) -> StructError<R2> {
-        StructError::from(reason).with_struct_source(self)
-    }
-}
 
 impl<T, R1, R2> ErrorWrapAs<T, R2> for Result<T, StructError<R1>>
 where
-    R1: DomainReason + ErrorCode + Display + std::fmt::Debug + Send + Sync + 'static,
+    R1: DomainReason + ErrorCode,
     R2: DomainReason,
 {
     fn wrap_as(self, reason: R2, detail: impl Into<String>) -> Result<T, StructError<R2>> {
@@ -81,7 +54,7 @@ where
 
 impl<R1, R2> WrapStructErrorAs<R2> for StructError<R1>
 where
-    R1: DomainReason + ErrorCode + Display + std::fmt::Debug + Send + Sync + 'static,
+    R1: DomainReason + ErrorCode,
     R2: DomainReason,
 {
     fn wrap_as(self, reason: R2, detail: impl Into<String>) -> StructError<R2> {
@@ -268,7 +241,7 @@ mod tests {
         assert_eq!(err.detail().as_deref(), Some("service layer failed"));
         assert_eq!(
             err.source_ref().unwrap().to_string(),
-            "[1001] test error\n  -> Details: repo layer failed\n  -> Source: db unavailable"
+            "test error\n  -> Details: repo layer failed\n  -> Source: db unavailable"
         );
         assert_eq!(err.root_cause().unwrap().to_string(), "db unavailable");
         assert_eq!(err.source_chain().len(), 2);

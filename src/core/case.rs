@@ -41,6 +41,15 @@ mod tests {
 
     impl DomainReason for OtherDomainReason {}
 
+    impl ErrorCode for OtherDomainReason {
+        fn error_code(&self) -> i32 {
+            match self {
+                OtherDomainReason::Why2 => 300,
+                OtherDomainReason::Uvs(uvs_reason) => uvs_reason.error_code(),
+            }
+        }
+    }
+
     impl From<TestDomainReason> for OtherDomainReason {
         fn from(value: TestDomainReason) -> Self {
             match value {
@@ -74,7 +83,7 @@ mod tests {
 
         assert_eq!(err.target(), Some("user_profile".to_string()));
         assert!(err
-            .context()
+            .contexts()
             .first()
             .unwrap()
             .context()
@@ -110,7 +119,6 @@ mod tests {
         let display_output = format!("{err}");
         println!("{display_output}");
 
-        assert!(display_output.contains("[300]")); // ConfError的error code
         assert!(display_output.contains("configuration error << core config"));
         assert!(display_output.contains("-> At: src/config.rs:42"));
         assert!(display_output.contains("-> Want: database_config"));

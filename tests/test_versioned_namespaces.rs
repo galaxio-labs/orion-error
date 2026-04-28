@@ -65,46 +65,23 @@ fn test_layered_modules_and_root_prelude_compile() {
     );
 }
 
+#[cfg(feature = "serde_json")]
 #[test]
 fn test_advanced_prelude_exports_cli_projection_types() {
     use orion_error::advanced_prelude::*;
 
-    let cli = ErrorCliResponse {
-        code: "sys.io_error".to_string(),
-        category: ErrorCategory::Sys,
-        summary: "system error".to_string(),
-        detail: "disk offline".to_string(),
-        visibility: Visibility::Internal,
-        hints: vec!["check filesystem state".to_string()],
-    };
-    let log = ErrorLogResponse {
-        code: "sys.io_error".to_string(),
-        category: ErrorCategory::Sys,
-        reason: "system error".to_string(),
-        detail: Some("disk offline".to_string()),
-        operation: Some("load config".to_string()),
-        path: Some("load config".to_string()),
-        visibility: Visibility::Internal,
-        hints: vec!["check filesystem state".to_string()],
-        root_metadata: orion_error::runtime::ErrorMetadata::new(),
-        context: vec![],
-        source_frames: vec![],
-    };
-    let rpc = ErrorRpcResponse {
-        status: 500,
-        code: "sys.io_error".to_string(),
-        category: ErrorCategory::Sys,
-        reason: "system error".to_string(),
-        detail: None,
-        visibility: Visibility::Internal,
-        hints: vec!["check filesystem state".to_string()],
-        retryable: false,
-    };
+    let http = StructError::from(UvsReason::system_error())
+        .exposure_snapshot(&DefaultExposurePolicy)
+        .to_http_error_json()
+        .unwrap();
+    let cli = StructError::from(UvsReason::system_error())
+        .exposure_snapshot(&DefaultExposurePolicy)
+        .to_cli_error_json()
+        .unwrap();
 
-    assert_eq!(cli.code, "sys.io_error");
-    assert_eq!(cli.visibility, Visibility::Internal);
-    assert_eq!(log.reason, "system error");
-    assert_eq!(rpc.status, 500);
+    assert_eq!(http["code"], serde_json::json!("sys.io_error"));
+    assert_eq!(http["status"], serde_json::json!(500));
+    assert_eq!(cli["code"], serde_json::json!("sys.io_error"));
 }
 
 #[allow(deprecated)]

@@ -155,6 +155,14 @@ impl Display for OperationContext {
         Ok(())
     }
 }
+/// Record human-readable key-value context into the context stack.
+///
+/// Values recorded via this trait appear in the error's `Display` output under
+/// the "Context stack" section — they are intended for terminal/console visibility.
+///
+/// For typed metadata that should **not** appear in Display output (e.g.
+/// structured fields for serialization, snapshots, or API responses), use
+/// [`ErrorMetadata`] via [`OperationContext::with_meta()`] instead.
 pub trait ContextRecord<S1, S2> {
     fn record_field(&mut self, key: S1, val: S2);
 
@@ -476,6 +484,10 @@ impl OperationContext {
         self.normalized_path_string()
     }
 
+    /// Record a human-readable key-value pair into the context stack.
+    ///
+    /// The entry will appear in the error's `Display` output.
+    /// For typed metadata hidden from console output, use [`record_meta()`] instead.
     pub fn record_field<S1, S2>(&mut self, key: S1, val: S2)
     where
         Self: ContextRecord<S1, S2>,
@@ -483,6 +495,7 @@ impl OperationContext {
         <Self as ContextRecord<S1, S2>>::record_field(self, key, val);
     }
 
+    /// Builder-pattern version of [`record_field`].
     pub fn with_field<S1, S2>(mut self, key: S1, val: S2) -> Self
     where
         Self: ContextRecord<S1, S2>,
@@ -491,6 +504,10 @@ impl OperationContext {
         self
     }
 
+    /// Record typed metadata that is **not** included in Display output.
+    ///
+    /// Use this for structured fields intended for serialization, snapshots, or
+    /// API responses. For user-visible context entries, use [`record_field()`].
     pub fn record_meta<K, V>(&mut self, key: K, value: V)
     where
         K: Into<String>,
@@ -499,6 +516,7 @@ impl OperationContext {
         self.metadata.insert(key, value);
     }
 
+    /// Builder-pattern version of [`record_meta`].
     pub fn with_meta<K, V>(mut self, key: K, value: V) -> Self
     where
         K: Into<String>,
@@ -1561,27 +1579,6 @@ mod tests {
         assert!(formatted.contains("role"));
     }
 
-    #[cfg(feature = "serde")]
-    #[test]
-    fn test_context_serialization() {
-        let mut ctx = OperationContext::doing("serialization_test");
-        ctx.with_doing("inner_step");
-        ctx.record("key1", "value1");
-        ctx.record("key2", "value2");
-
-        // 测试序列化
-        let serialized = serde_json::to_string(&ctx).expect("序列化失败");
-        assert!(serialized.contains("serialization_test"));
-        assert!(serialized.contains("inner_step"));
-        assert!(serialized.contains("key1"));
-        assert!(serialized.contains("value1"));
-
-        // 测试反序列化
-        let deserialized: OperationContext =
-            serde_json::from_str(&serialized).expect("反序列化失败");
-        assert_eq!(ctx, deserialized);
-    }
-
     #[test]
     fn test_context_with_special_characters() {
         let mut ctx = OperationContext::new();
@@ -1884,41 +1881,4 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "serde")]
-    #[test]
-    fn test_context_serialization_skips_empty_metadata_and_reads_missing_field() {
-        let ctx = OperationContext::doing("serialization_test");
-
-        let serialized = serde_json::to_value(&ctx).expect("序列化失败");
-        assert!(!serialized
-            .as_object()
-            .expect("object")
-            .contains_key("metadata"));
-
-        let deserialized: OperationContext =
-            serde_json::from_value(serialized).expect("反序列化失败");
-        assert!(deserialized.metadata().is_empty());
-    }
-
-    #[cfg(feature = "serde")]
-    #[test]
-    fn test_context_serialization_preserves_metadata() {
-        let ctx = OperationContext::doing("serialization_test")
-            .with_meta("config.kind", "sink_defaults")
-            .with_meta("parse.line", 3u32);
-
-        let serialized = serde_json::to_value(&ctx).expect("序列化失败");
-        assert_eq!(
-            serialized["metadata"]["config.kind"],
-            serde_json::Value::String("sink_defaults".to_string())
-        );
-        assert_eq!(serialized["metadata"]["parse.line"], serde_json::json!(3));
-
-        let deserialized: OperationContext =
-            serde_json::from_value(serialized).expect("反序列化失败");
-        assert_eq!(
-            deserialized.metadata().get_str("config.kind"),
-            Some("sink_defaults")
-        );
-    }
 }

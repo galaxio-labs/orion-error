@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use crate::{core::DomainReason, StructError, UvsFrom};
 
 /// 非结构错误(StructError) 转化为结构错误。
@@ -10,6 +12,7 @@ where
     fn owe(self, reason: R) -> Result<T, StructError<R>>;
 }
 
+#[deprecated(since = "0.7.0", note = "use IntoAs instead")]
 pub trait ErrorOweSourceBase<T, R>
 where
     R: DomainReason,
@@ -17,6 +20,10 @@ where
     fn owe_source(self, reason: R) -> Result<T, StructError<R>>;
 }
 
+#[deprecated(
+    since = "0.7.0",
+    note = "use IntoAs or ErrorOweBase directly instead of category-specific shortcuts"
+)]
 pub trait ErrorOwe<T, R>: ErrorOweBase<T, R>
 where
     R: DomainReason + UvsFrom,

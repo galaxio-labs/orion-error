@@ -13,15 +13,10 @@ pub struct DiagnosticReport {
     pub position: Option<String>,
     pub want: Option<String>,
     pub path: Option<String>,
+    pub category: ErrorCategory,
     pub context: Vec<OperationContext>,
     pub root_metadata: ErrorMetadata,
     pub source_frames: Vec<SourceFrame>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RenderMode {
-    Compact,
-    Verbose,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -46,57 +41,6 @@ pub struct ErrorProtocolSnapshot {
     pub identity: ErrorIdentity,
     pub decision: ExposureDecision,
     pub report: DiagnosticReport,
-}
-
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ErrorHttpResponse {
-    pub status: u16,
-    pub code: String,
-    pub category: ErrorCategory,
-    pub message: String,
-    pub visibility: Visibility,
-    pub hints: Vec<String>,
-}
-
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ErrorCliResponse {
-    pub code: String,
-    pub category: ErrorCategory,
-    pub summary: String,
-    pub detail: String,
-    pub visibility: Visibility,
-    pub hints: Vec<String>,
-}
-
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Debug, Clone, PartialEq)]
-pub struct ErrorLogResponse {
-    pub code: String,
-    pub category: ErrorCategory,
-    pub reason: String,
-    pub detail: Option<String>,
-    pub operation: Option<String>,
-    pub path: Option<String>,
-    pub visibility: Visibility,
-    pub hints: Vec<String>,
-    pub root_metadata: ErrorMetadata,
-    pub context: Vec<OperationContext>,
-    pub source_frames: Vec<SourceFrame>,
-}
-
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ErrorRpcResponse {
-    pub status: u16,
-    pub code: String,
-    pub category: ErrorCategory,
-    pub reason: String,
-    pub detail: Option<String>,
-    pub visibility: Visibility,
-    pub hints: Vec<String>,
-    pub retryable: bool,
 }
 
 pub trait ExposurePolicy {
@@ -125,125 +69,6 @@ pub trait ExposurePolicy {
         }
     }
 }
-pub trait ErrorRenderer {
-    type Output;
-
-    fn render(&self, report: &DiagnosticReport) -> Self::Output;
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExposureView {
-    identity: ErrorIdentity,
-    report: DiagnosticReport,
-}
-
-impl ExposureView {
-    pub fn new(identity: ErrorIdentity, report: DiagnosticReport) -> Self {
-        Self { identity, report }
-    }
-
-    pub fn identity(&self) -> &ErrorIdentity {
-        &self.identity
-    }
-
-    pub fn report(&self) -> &DiagnosticReport {
-        &self.report
-    }
-
-    pub fn into_parts(self) -> (ErrorIdentity, DiagnosticReport) {
-        (self.identity, self.report)
-    }
-
-    pub fn render_with<R>(&self, renderer: R) -> R::Output
-    where
-        R: ErrorRenderer,
-    {
-        renderer.render(&self.report)
-    }
-
-    pub fn http_status(&self, exposure_policy: &impl ExposurePolicy) -> u16 {
-        exposure_policy.http_status(&self.identity)
-    }
-
-    pub fn visibility(&self, exposure_policy: &impl ExposurePolicy) -> Visibility {
-        exposure_policy.visibility(&self.identity)
-    }
-
-    pub fn default_hints(&self, exposure_policy: &impl ExposurePolicy) -> &'static [&'static str] {
-        exposure_policy.default_hints(&self.identity)
-    }
-
-    pub fn decision(&self, exposure_policy: &impl ExposurePolicy) -> ExposureDecision {
-        exposure_policy.decide(&self.identity)
-    }
-
-    pub fn snapshot(&self, exposure_policy: &impl ExposurePolicy) -> ErrorProtocolSnapshot {
-        ErrorProtocolSnapshot {
-            identity: self.identity.clone(),
-            decision: self.decision(exposure_policy),
-            report: self.report.clone(),
-        }
-    }
-
-    pub fn http_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorHttpResponse {
-        self.snapshot(exposure_policy).http_response()
-    }
-
-    pub fn cli_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorCliResponse {
-        self.snapshot(exposure_policy).cli_response()
-    }
-
-    pub fn log_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorLogResponse {
-        self.snapshot(exposure_policy).log_response()
-    }
-
-    pub fn rpc_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorRpcResponse {
-        self.snapshot(exposure_policy).rpc_response()
-    }
-
-    pub fn render_user_debug(&self, exposure_policy: &impl ExposurePolicy) -> String {
-        self.snapshot(exposure_policy).render_user_debug()
-    }
-
-    pub fn render_user_debug_redacted(
-        &self,
-        exposure_policy: &impl ExposurePolicy,
-        redact_policy: &impl RedactPolicy,
-    ) -> String {
-        self.snapshot(exposure_policy)
-            .render_user_debug_redacted(redact_policy)
-    }
-
-    pub fn render_debug_summary(&self, exposure_policy: &impl ExposurePolicy) -> String {
-        self.render_user_debug(exposure_policy)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TextDiagnosticRenderer {
-    mode: RenderMode,
-}
-
-impl TextDiagnosticRenderer {
-    pub fn new(mode: RenderMode) -> Self {
-        Self { mode }
-    }
-}
-
-impl ErrorRenderer for TextDiagnosticRenderer {
-    type Output = String;
-
-    fn render(&self, report: &DiagnosticReport) -> Self::Output {
-        match self.mode {
-            RenderMode::Compact => report.render_compact(),
-            RenderMode::Verbose => report.render_verbose(),
-        }
-    }
-}
-
-#[doc(hidden)]
-#[allow(dead_code)]
-pub type TextReportRenderer = TextDiagnosticRenderer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DefaultExposurePolicy;
@@ -290,7 +115,7 @@ pub trait RedactPolicy {
     }
 }
 
-impl<T: DomainReason> StructError<T> {
+impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
     pub fn report(&self) -> DiagnosticReport {
         self.snapshot().report()
     }
@@ -302,50 +127,44 @@ impl<T: DomainReason> StructError<T> {
     pub fn report_redacted(&self, policy: &impl RedactPolicy) -> DiagnosticReport {
         self.report().redacted(policy)
     }
+
+    pub fn render(&self) -> String {
+        self.report().render()
+    }
+
+    pub fn render_redacted(&self, policy: &impl RedactPolicy) -> String {
+        self.report().render_redacted(policy)
+    }
 }
 
 impl<T> StructError<T>
 where
     T: DomainReason + ErrorIdentityProvider,
 {
-    pub fn exposure_view(&self) -> ExposureView {
-        ExposureView::new(self.identity_snapshot(), self.report())
-    }
-
-    pub fn into_exposure_view(self) -> ExposureView {
-        let identity = self.identity_snapshot();
-        let report = self.into_report();
-        ExposureView::new(identity, report)
-    }
-
     pub fn exposure_snapshot(
         &self,
         exposure_policy: &impl ExposurePolicy,
     ) -> ErrorProtocolSnapshot {
-        self.exposure_view().snapshot(exposure_policy)
+        let identity = self.identity_snapshot();
+        ErrorProtocolSnapshot {
+            decision: exposure_policy.decide(&identity),
+            identity,
+            report: self.report(),
+        }
     }
 
     pub fn into_exposure_snapshot(
         self,
         exposure_policy: &impl ExposurePolicy,
     ) -> ErrorProtocolSnapshot {
-        self.into_exposure_view().snapshot(exposure_policy)
-    }
-
-    pub fn http_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorHttpResponse {
-        self.exposure_snapshot(exposure_policy).http_response()
-    }
-
-    pub fn cli_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorCliResponse {
-        self.exposure_snapshot(exposure_policy).cli_response()
-    }
-
-    pub fn log_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorLogResponse {
-        self.exposure_snapshot(exposure_policy).log_response()
-    }
-
-    pub fn rpc_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorRpcResponse {
-        self.exposure_snapshot(exposure_policy).rpc_response()
+        let identity = self.identity_snapshot();
+        let report = self.into_report();
+        let decision = exposure_policy.decide(&identity);
+        ErrorProtocolSnapshot {
+            identity,
+            decision,
+            report,
+        }
     }
 
     pub fn render_user_debug(&self, exposure_policy: &impl ExposurePolicy) -> String {
@@ -359,10 +178,6 @@ where
     ) -> String {
         self.exposure_snapshot(exposure_policy)
             .render_user_debug_redacted(redact_policy)
-    }
-
-    pub fn render_debug_summary(&self, exposure_policy: &impl ExposurePolicy) -> String {
-        self.render_user_debug(exposure_policy)
     }
 }
 
@@ -378,13 +193,13 @@ impl From<ErrorSnapshot> for DiagnosticReport {
     }
 }
 
-impl<T: DomainReason> From<&StructError<T>> for DiagnosticReport {
+impl<T: DomainReason + ErrorIdentityProvider> From<&StructError<T>> for DiagnosticReport {
     fn from(value: &StructError<T>) -> Self {
         value.report()
     }
 }
 
-impl<T: DomainReason> From<StructError<T>> for DiagnosticReport {
+impl<T: DomainReason + ErrorIdentityProvider> From<StructError<T>> for DiagnosticReport {
     fn from(value: StructError<T>) -> Self {
         value.into_report()
     }
@@ -403,54 +218,7 @@ impl From<StableErrorSnapshot> for DiagnosticReport {
 }
 
 impl DiagnosticReport {
-    pub fn render(&self, mode: RenderMode) -> String {
-        self.render_with(TextDiagnosticRenderer::new(mode))
-    }
-
-    pub fn render_with<R>(&self, renderer: R) -> R::Output
-    where
-        R: ErrorRenderer,
-    {
-        renderer.render(self)
-    }
-
-    pub fn redacted(&self, policy: &impl RedactPolicy) -> Self {
-        Self {
-            reason: redact_required_text(Some("reason"), &self.reason, policy),
-            detail: redact_optional_text(Some("detail"), self.detail.as_deref(), policy),
-            position: redact_optional_text(Some("position"), self.position.as_deref(), policy),
-            want: redact_optional_text(Some("want"), self.want.as_deref(), policy),
-            path: redact_optional_text(Some("path"), self.path.as_deref(), policy),
-            context: self
-                .context
-                .iter()
-                .cloned()
-                .map(|ctx| redact_context(ctx, policy))
-                .collect(),
-            root_metadata: redact_metadata(&self.root_metadata, policy),
-            source_frames: self
-                .source_frames
-                .iter()
-                .cloned()
-                .map(|frame| redact_frame(frame, policy))
-                .collect(),
-        }
-    }
-
-    pub fn render_redacted(&self, mode: RenderMode, policy: &impl RedactPolicy) -> String {
-        self.redacted(policy).render(mode)
-    }
-
-    fn render_compact(&self) -> String {
-        let mut out = self.reason.clone();
-        if let Some(detail) = &self.detail {
-            out.push_str(": ");
-            out.push_str(detail);
-        }
-        out
-    }
-
-    fn render_verbose(&self) -> String {
+    pub fn render(&self) -> String {
         let mut lines = Vec::new();
         lines.push(format!("reason: {}", self.reason));
 
@@ -502,19 +270,51 @@ impl DiagnosticReport {
 
         lines.join("\n")
     }
+
+    pub fn redacted(&self, policy: &impl RedactPolicy) -> Self {
+        Self {
+            reason: redact_required_text(Some("reason"), &self.reason, policy),
+            detail: redact_optional_text(Some("detail"), self.detail.as_deref(), policy),
+            position: redact_optional_text(Some("position"), self.position.as_deref(), policy),
+            want: redact_optional_text(Some("want"), self.want.as_deref(), policy),
+            path: redact_optional_text(Some("path"), self.path.as_deref(), policy),
+            category: self.category,
+            context: self
+                .context
+                .iter()
+                .cloned()
+                .map(|ctx| redact_context(ctx, policy))
+                .collect(),
+            root_metadata: redact_metadata(&self.root_metadata, policy),
+            source_frames: self
+                .source_frames
+                .iter()
+                .cloned()
+                .map(|frame| redact_frame(frame, policy))
+                .collect(),
+        }
+    }
+
+    pub fn render_redacted(&self, policy: &impl RedactPolicy) -> String {
+        self.redacted(policy).render()
+    }
+
+    pub fn render_compact(&self) -> String {
+        let mut out = self.reason.clone();
+        if let Some(detail) = &self.detail {
+            out.push_str(": ");
+            out.push_str(detail);
+        }
+        out
+    }
+
 }
 
 impl DiagnosticReport {
     pub fn exposure_identity(&self) -> ErrorIdentity {
-        let category = if self.reason.contains("configuration error") {
-            ErrorCategory::Conf
-        } else {
-            ErrorCategory::Sys
-        };
-
         ErrorIdentity {
             code: "report.unclassified".to_string(),
-            category,
+            category: self.category,
             reason: self.reason.clone(),
             detail: self.detail.clone(),
             position: self.position.clone(),
@@ -550,64 +350,12 @@ impl DiagnosticReport {
         }
     }
 
-    pub fn http_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorHttpResponse {
-        self.exposure_snapshot(exposure_policy).http_response()
-    }
-
-    pub fn cli_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorCliResponse {
-        self.exposure_snapshot(exposure_policy).cli_response()
-    }
-
-    pub fn log_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorLogResponse {
-        self.exposure_snapshot(exposure_policy).log_response()
-    }
-
-    pub fn rpc_response(&self, exposure_policy: &impl ExposurePolicy) -> ErrorRpcResponse {
-        self.exposure_snapshot(exposure_policy).rpc_response()
-    }
-
     #[cfg(feature = "serde_json")]
     pub fn to_exposure_snapshot_json(
         &self,
         exposure_policy: &impl ExposurePolicy,
     ) -> serde_json::Result<serde_json::Value> {
         serde_json::to_value(self.exposure_snapshot(exposure_policy))
-    }
-
-    pub fn exposure_view(self, identity: ErrorIdentity) -> ExposureView {
-        ExposureView::new(identity, self)
-    }
-
-    #[cfg(feature = "serde_json")]
-    pub fn to_http_error_json(
-        &self,
-        exposure_policy: &impl ExposurePolicy,
-    ) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self.http_response(exposure_policy))
-    }
-
-    #[cfg(feature = "serde_json")]
-    pub fn to_cli_error_json(
-        &self,
-        exposure_policy: &impl ExposurePolicy,
-    ) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self.cli_response(exposure_policy))
-    }
-
-    #[cfg(feature = "serde_json")]
-    pub fn to_log_error_json(
-        &self,
-        exposure_policy: &impl ExposurePolicy,
-    ) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self.log_response(exposure_policy))
-    }
-
-    #[cfg(feature = "serde_json")]
-    pub fn to_rpc_error_json(
-        &self,
-        exposure_policy: &impl ExposurePolicy,
-    ) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self.rpc_response(exposure_policy))
     }
 }
 
@@ -666,109 +414,66 @@ impl ErrorProtocolSnapshot {
         self.redacted(redact_policy).render_user_debug()
     }
 
-    pub fn render_debug_summary(&self) -> String {
-        self.render_user_debug()
-    }
-
-    pub fn http_response(&self) -> ErrorHttpResponse {
-        ErrorHttpResponse {
-            status: self.decision.http_status,
-            code: self.identity.code.clone(),
-            category: self.identity.category,
-            message: match self.decision.visibility {
-                Visibility::Public => self
-                    .report
-                    .detail
-                    .clone()
-                    .unwrap_or_else(|| self.report.reason.clone()),
-                Visibility::Internal => self.identity.reason.clone(),
-            },
-            visibility: self.decision.visibility,
-            hints: self
-                .decision
-                .default_hints
-                .iter()
-                .map(|hint| (*hint).to_string())
-                .collect(),
-        }
-    }
-
     #[cfg(feature = "serde_json")]
     pub fn to_http_error_json(&self) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self.http_response())
-    }
-
-    pub fn cli_response(&self) -> ErrorCliResponse {
-        ErrorCliResponse {
-            code: self.identity.code.clone(),
-            category: self.identity.category,
-            summary: self.report.render(RenderMode::Compact),
-            detail: self.report.render(RenderMode::Verbose),
-            visibility: self.decision.visibility,
-            hints: self
-                .decision
-                .default_hints
-                .iter()
-                .map(|hint| (*hint).to_string())
-                .collect(),
-        }
+        Ok(serde_json::json!({
+            "status": self.decision.http_status,
+            "code": self.identity.code,
+            "category": format!("{:?}", self.identity.category),
+            "message": match self.decision.visibility {
+                Visibility::Public => self.report.detail.clone()
+                    .unwrap_or_else(|| self.identity.reason.clone()),
+                Visibility::Internal => self.identity.reason.clone(),
+            },
+            "visibility": format!("{:?}", self.decision.visibility),
+            "hints": self.decision.default_hints,
+        }))
     }
 
     #[cfg(feature = "serde_json")]
     pub fn to_cli_error_json(&self) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self.cli_response())
-    }
-
-    pub fn log_response(&self) -> ErrorLogResponse {
-        ErrorLogResponse {
-            code: self.identity.code.clone(),
-            category: self.identity.category,
-            reason: self.identity.reason.clone(),
-            detail: self.report.detail.clone(),
-            operation: self.report.want.clone(),
-            path: self.report.path.clone(),
-            visibility: self.decision.visibility,
-            hints: self
-                .decision
-                .default_hints
-                .iter()
-                .map(|hint| (*hint).to_string())
-                .collect(),
-            root_metadata: self.report.root_metadata.clone(),
-            context: self.report.context.clone(),
-            source_frames: self.report.source_frames.clone(),
-        }
+        Ok(serde_json::json!({
+            "code": self.identity.code,
+            "category": format!("{:?}", self.identity.category),
+            "summary": self.report.render_compact(),
+            "detail": self.report.render(),
+            "visibility": format!("{:?}", self.decision.visibility),
+            "hints": self.decision.default_hints,
+        }))
     }
 
     #[cfg(feature = "serde_json")]
     pub fn to_log_error_json(&self) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self.log_response())
-    }
-
-    pub fn rpc_response(&self) -> ErrorRpcResponse {
-        ErrorRpcResponse {
-            status: self.decision.http_status,
-            code: self.identity.code.clone(),
-            category: self.identity.category,
-            reason: self.identity.reason.clone(),
-            detail: match self.decision.visibility {
-                Visibility::Public => self.report.detail.clone(),
-                Visibility::Internal => None,
-            },
-            visibility: self.decision.visibility,
-            hints: self
-                .decision
-                .default_hints
-                .iter()
-                .map(|hint| (*hint).to_string())
-                .collect(),
-            retryable: self.decision.retryable,
-        }
+        Ok(serde_json::json!({
+            "code": self.identity.code,
+            "category": format!("{:?}", self.identity.category),
+            "reason": self.identity.reason,
+            "detail": self.report.detail,
+            "operation": self.report.want,
+            "path": self.report.path,
+            "visibility": format!("{:?}", self.decision.visibility),
+            "hints": self.decision.default_hints,
+            "root_metadata": self.report.root_metadata,
+            "context": self.report.context,
+            "source_frames": self.report.source_frames,
+        }))
     }
 
     #[cfg(feature = "serde_json")]
     pub fn to_rpc_error_json(&self) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self.rpc_response())
+        Ok(serde_json::json!({
+            "status": self.decision.http_status,
+            "code": self.identity.code,
+            "category": format!("{:?}", self.identity.category),
+            "reason": self.identity.reason,
+            "detail": match self.decision.visibility {
+                Visibility::Public => self.report.detail.clone(),
+                Visibility::Internal => None,
+            },
+            "visibility": format!("{:?}", self.decision.visibility),
+            "hints": self.decision.default_hints,
+            "retryable": self.decision.retryable,
+        }))
     }
 
     pub fn redacted(&self, policy: &impl RedactPolicy) -> Self {
@@ -927,9 +632,8 @@ mod tests {
     };
 
     use super::{
-        DefaultExposurePolicy, DiagnosticReport, ErrorCliResponse, ErrorHttpResponse,
-        ErrorLogResponse, ErrorProtocolSnapshot, ErrorRenderer, ErrorRpcResponse, ExposureDecision,
-        ExposurePolicy, ExposureView, RedactPolicy, RenderMode, TextDiagnosticRenderer, Visibility,
+        DefaultExposurePolicy, DiagnosticReport, ErrorProtocolSnapshot, ExposureDecision,
+        ExposurePolicy, RedactPolicy, Visibility,
     };
     use crate::core::STABLE_SNAPSHOT_SCHEMA_VERSION;
     #[derive(Debug)]
@@ -1074,6 +778,7 @@ mod tests {
                 metadata: ErrorMetadata::new(),
                 is_root_cause: true,
             }],
+            category: ErrorCategory::Sys,
         };
 
         let via_method = stable.report();
@@ -1092,6 +797,7 @@ mod tests {
             position: None,
             want: Some("load".to_string()),
             path: Some("load / parse".to_string()),
+            category: ErrorCategory::Sys,
             context: vec![],
             root_metadata: {
                 let mut metadata = ErrorMetadata::new();
@@ -1118,56 +824,12 @@ mod tests {
             }],
         };
 
-        let rendered = report.render(RenderMode::Verbose);
+        let rendered = report.render();
+
+        assert!(rendered.contains("reason: test error"));
+        assert!(rendered.contains("detail: failed"));
         assert!(rendered.contains("root_metadata"));
-        assert!(rendered.contains("component.name"));
-        assert!(rendered.contains("config.kind"));
-    }
-
-    #[test]
-    fn test_text_report_renderer_matches_existing_render_output() {
-        let report = DiagnosticReport {
-            reason: "test error".to_string(),
-            detail: Some("failed".to_string()),
-            position: None,
-            want: Some("load".to_string()),
-            path: Some("load / parse".to_string()),
-            context: vec![],
-            root_metadata: ErrorMetadata::new(),
-            source_frames: vec![],
-        };
-
-        let renderer = TextDiagnosticRenderer::new(RenderMode::Verbose);
-        let via_renderer = renderer.render(&report);
-        let via_method = report.render(RenderMode::Verbose);
-
-        assert_eq!(via_renderer, via_method);
-    }
-
-    #[test]
-    fn test_render_with_uses_custom_renderer() {
-        struct ReasonOnlyRenderer;
-
-        impl ErrorRenderer for ReasonOnlyRenderer {
-            type Output = String;
-
-            fn render(&self, report: &DiagnosticReport) -> Self::Output {
-                format!("only:{}", report.reason)
-            }
-        }
-
-        let report = DiagnosticReport {
-            reason: "test error".to_string(),
-            detail: Some("failed".to_string()),
-            position: None,
-            want: None,
-            path: None,
-            context: vec![],
-            root_metadata: ErrorMetadata::new(),
-            source_frames: vec![],
-        };
-
-        assert_eq!(report.render_with(ReasonOnlyRenderer), "only:test error");
+        assert!(rendered.contains("source_frames"));
     }
 
     #[test]
@@ -1218,53 +880,22 @@ mod tests {
     }
 
     #[test]
-    fn test_exposure_view_uses_explicit_identity_without_report_side_guessing() {
-        let report = DiagnosticReport {
-            reason: "system error".to_string(),
-            detail: Some("disk offline".to_string()),
-            position: None,
-            want: Some("load config".to_string()),
-            path: Some("load config".to_string()),
-            context: vec![],
-            root_metadata: ErrorMetadata::new(),
-            source_frames: vec![],
-        };
-        let identity = ErrorIdentity {
-            code: "biz.validation_error".to_string(),
-            category: ErrorCategory::Biz,
-            reason: "validation error".to_string(),
-            detail: None,
-            position: None,
-            want: None,
-            path: None,
-        };
-        let exposure_policy = DefaultExposurePolicy;
-        let view = report.exposure_view(identity.clone());
-
-        assert_eq!(view.identity(), &identity);
-        assert_eq!(view.http_status(&exposure_policy), 400);
-        assert_eq!(view.visibility(&exposure_policy), Visibility::Public);
-        assert_eq!(view.report().reason, "system error");
-    }
-
-    #[test]
-    fn test_struct_error_exposure_view_uses_real_stable_identity() {
+    fn test_struct_error_exposure_snapshot_uses_real_stable_identity() {
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("engine bootstrap failed")
             .with_context(OperationContext::doing("start engine"));
 
-        let exposure_view = err.exposure_view();
-        let exposure_policy = DefaultExposurePolicy;
+        let snapshot = err.exposure_snapshot(&DefaultExposurePolicy);
 
-        assert_eq!(exposure_view.identity().code, "sys.io_error");
-        assert_eq!(exposure_view.identity().category, ErrorCategory::Sys);
-        assert_eq!(exposure_view.http_status(&exposure_policy), 500);
+        assert_eq!(snapshot.identity.code, "sys.io_error");
+        assert_eq!(snapshot.identity.category, ErrorCategory::Sys);
+        assert_eq!(snapshot.decision.http_status, 500);
         assert_eq!(
-            exposure_view.default_hints(&exposure_policy),
-            ["check filesystem state", "verify file permissions"]
+            snapshot.decision.default_hints,
+            vec!["check filesystem state", "verify file permissions"]
         );
         assert_eq!(
-            exposure_view.decision(&exposure_policy),
+            snapshot.decision,
             ExposureDecision {
                 http_status: 500,
                 visibility: Visibility::Internal,
@@ -1272,76 +903,7 @@ mod tests {
                 retryable: false,
             }
         );
-        assert_eq!(exposure_view.report().reason, "system error");
-    }
-
-    #[test]
-    fn test_exposure_view_render_with_uses_underlying_report() {
-        let report = DiagnosticReport {
-            reason: "test error".to_string(),
-            detail: Some("failed".to_string()),
-            position: None,
-            want: None,
-            path: None,
-            context: vec![],
-            root_metadata: ErrorMetadata::new(),
-            source_frames: vec![],
-        };
-        let view = ExposureView::new(
-            ErrorIdentity {
-                code: "test.test_error".to_string(),
-                category: ErrorCategory::Logic,
-                reason: "test error".to_string(),
-                detail: None,
-                position: None,
-                want: None,
-                path: None,
-            },
-            report.clone(),
-        );
-
-        assert_eq!(
-            view.render_with(TextDiagnosticRenderer::new(RenderMode::Compact)),
-            report.render(RenderMode::Compact)
-        );
-    }
-
-    #[test]
-    fn test_exposure_view_snapshot_contains_identity_decision_and_report() {
-        let report = DiagnosticReport {
-            reason: "test error".to_string(),
-            detail: Some("failed".to_string()),
-            position: None,
-            want: None,
-            path: None,
-            context: vec![],
-            root_metadata: ErrorMetadata::new(),
-            source_frames: vec![],
-        };
-        let identity = ErrorIdentity {
-            code: "biz.validation_error".to_string(),
-            category: ErrorCategory::Biz,
-            reason: "validation error".to_string(),
-            detail: None,
-            position: None,
-            want: None,
-            path: None,
-        };
-        let view = ExposureView::new(identity.clone(), report.clone());
-
-        assert_eq!(
-            view.snapshot(&DefaultExposurePolicy),
-            ErrorProtocolSnapshot {
-                identity,
-                decision: ExposureDecision {
-                    http_status: 400,
-                    visibility: Visibility::Public,
-                    default_hints: vec![],
-                    retryable: false,
-                },
-                report,
-            }
-        );
+        assert_eq!(snapshot.report.reason, "system error");
     }
 
     #[test]
@@ -1352,6 +914,7 @@ mod tests {
             position: None,
             want: None,
             path: None,
+            category: ErrorCategory::Sys,
             context: vec![],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![],
@@ -1446,42 +1009,42 @@ mod tests {
         assert_eq!(decision_fields, expected_decision_fields);
     }
 
+    #[cfg(feature = "serde_json")]
     #[test]
-    fn test_http_response_projection_uses_detail_for_public_visibility() {
+    fn test_http_response_json_for_public_visibility_uses_detail() {
         let err = StructError::from(TestReason::Uvs(UvsReason::business_error()))
             .with_detail("order state invalid");
+        let json = err
+            .exposure_snapshot(&DefaultExposurePolicy)
+            .to_http_error_json()
+            .unwrap();
 
-        assert_eq!(
-            err.http_response(&DefaultExposurePolicy),
-            ErrorHttpResponse {
-                status: 400,
-                code: "biz.business_error".to_string(),
-                category: ErrorCategory::Biz,
-                message: "order state invalid".to_string(),
-                visibility: Visibility::Public,
-                hints: vec![],
-            }
-        );
+        assert_eq!(json["status"], serde_json::json!(400));
+        assert_eq!(json["code"], serde_json::json!("biz.business_error"));
+        assert_eq!(json["category"], serde_json::json!("Biz"));
+        assert_eq!(json["message"], serde_json::json!("order state invalid"));
+        assert_eq!(json["visibility"], serde_json::json!("Public"));
+        assert_eq!(json["hints"], serde_json::json!([]));
     }
 
+    #[cfg(feature = "serde_json")]
     #[test]
-    fn test_http_response_projection_uses_reason_for_internal_visibility() {
+    fn test_http_response_json_for_internal_visibility_uses_reason() {
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("disk offline");
+        let json = err
+            .exposure_snapshot(&DefaultExposurePolicy)
+            .to_http_error_json()
+            .unwrap();
 
+        assert_eq!(json["status"], serde_json::json!(500));
+        assert_eq!(json["code"], serde_json::json!("sys.io_error"));
+        assert_eq!(json["category"], serde_json::json!("Sys"));
+        assert_eq!(json["message"], serde_json::json!("system error"));
+        assert_eq!(json["visibility"], serde_json::json!("Internal"));
         assert_eq!(
-            err.http_response(&DefaultExposurePolicy),
-            ErrorHttpResponse {
-                status: 500,
-                code: "sys.io_error".to_string(),
-                category: ErrorCategory::Sys,
-                message: "system error".to_string(),
-                visibility: Visibility::Internal,
-                hints: vec![
-                    "check filesystem state".to_string(),
-                    "verify file permissions".to_string(),
-                ],
-            }
+            json["hints"],
+            serde_json::json!(["check filesystem state", "verify file permissions"])
         );
     }
 
@@ -1492,8 +1055,8 @@ mod tests {
             .with_detail("disk offline");
 
         let json_value = err
-            .report()
-            .to_http_error_json(&DefaultExposurePolicy)
+            .exposure_snapshot(&DefaultExposurePolicy)
+            .to_http_error_json()
             .expect("serialize http error");
 
         let mut keys = json_value
@@ -1519,102 +1082,103 @@ mod tests {
 
         assert_eq!(keys, expected);
         assert_eq!(json_value["status"], serde_json::json!(500));
-        assert_eq!(json_value["code"], serde_json::json!("report.unclassified"));
+        assert_eq!(json_value["code"], serde_json::json!("sys.io_error"));
         assert_eq!(json_value["message"], serde_json::json!("system error"));
     }
 
+    #[cfg(feature = "serde_json")]
     #[test]
-    fn test_cli_response_projection_contains_summary_detail_and_hints() {
+    fn test_cli_response_json_contains_summary_detail_and_hints() {
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("disk offline");
+        let json = err
+            .exposure_snapshot(&DefaultExposurePolicy)
+            .to_cli_error_json()
+            .unwrap();
 
+        assert_eq!(json["code"], serde_json::json!("sys.io_error"));
+        assert_eq!(json["category"], serde_json::json!("Sys"));
+        assert_eq!(json["summary"], serde_json::json!("system error: disk offline"));
         assert_eq!(
-            err.cli_response(&DefaultExposurePolicy),
-            ErrorCliResponse {
-                code: "sys.io_error".to_string(),
-                category: ErrorCategory::Sys,
-                summary: "system error: disk offline".to_string(),
-                detail: "reason: system error\ndetail: disk offline".to_string(),
-                visibility: Visibility::Internal,
-                hints: vec![
-                    "check filesystem state".to_string(),
-                    "verify file permissions".to_string(),
-                ],
-            }
+            json["detail"],
+            serde_json::json!("reason: system error\ndetail: disk offline")
+        );
+        assert_eq!(json["visibility"], serde_json::json!("Internal"));
+        assert_eq!(
+            json["hints"],
+            serde_json::json!(["check filesystem state", "verify file permissions"])
         );
     }
 
+    #[cfg(feature = "serde_json")]
     #[test]
-    fn test_log_response_projection_contains_machine_facing_diagnostics() {
+    fn test_log_response_json_contains_machine_facing_diagnostics() {
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("disk offline")
             .with_std_source(std::io::Error::other("root cause"))
             .with_context(OperationContext::doing("load config").with_meta("tenant", "acme"));
-        let mut root_metadata = ErrorMetadata::new();
-        root_metadata.insert("tenant", "acme");
 
+        let json = err
+            .exposure_snapshot(&DefaultExposurePolicy)
+            .to_log_error_json()
+            .unwrap();
+
+        assert_eq!(json["code"], serde_json::json!("sys.io_error"));
+        assert_eq!(json["category"], serde_json::json!("Sys"));
+        assert_eq!(json["reason"], serde_json::json!("system error"));
+        assert_eq!(json["detail"], serde_json::json!("disk offline"));
+        assert_eq!(json["operation"], serde_json::json!("load config"));
+        assert_eq!(json["path"], serde_json::json!("load config"));
+        assert_eq!(json["visibility"], serde_json::json!("Internal"));
         assert_eq!(
-            err.log_response(&DefaultExposurePolicy),
-            ErrorLogResponse {
-                code: "sys.io_error".to_string(),
-                category: ErrorCategory::Sys,
-                reason: "system error".to_string(),
-                detail: Some("disk offline".to_string()),
-                operation: Some("load config".to_string()),
-                path: Some("load config".to_string()),
-                visibility: Visibility::Internal,
-                hints: vec![
-                    "check filesystem state".to_string(),
-                    "verify file permissions".to_string(),
-                ],
-                root_metadata,
-                context: vec![OperationContext::doing("load config").with_meta("tenant", "acme")],
-                source_frames: err.report().source_frames,
-            }
+            json["hints"],
+            serde_json::json!(["check filesystem state", "verify file permissions"])
         );
+        assert_eq!(json["root_metadata"]["tenant"], serde_json::json!("acme"));
+        assert_eq!(json["source_frames"][0]["message"], serde_json::json!("root cause"));
     }
 
+    #[cfg(feature = "serde_json")]
     #[test]
-    fn test_rpc_response_projection_hides_internal_detail_and_marks_retryable() {
+    fn test_rpc_response_json_hides_internal_detail_and_marks_retryable() {
         let err = StructError::from(TestReason::Uvs(UvsReason::timeout_error()))
             .with_detail("downstream rpc timeout");
+        let json = err
+            .exposure_snapshot(&DefaultExposurePolicy)
+            .to_rpc_error_json()
+            .unwrap();
 
+        assert_eq!(json["status"], serde_json::json!(500));
+        assert_eq!(json["code"], serde_json::json!("sys.timeout"));
+        assert_eq!(json["category"], serde_json::json!("Sys"));
+        assert_eq!(json["reason"], serde_json::json!("timeout error"));
+        assert_eq!(json["detail"], serde_json::json!(null));
+        assert_eq!(json["visibility"], serde_json::json!("Internal"));
         assert_eq!(
-            err.rpc_response(&DefaultExposurePolicy),
-            ErrorRpcResponse {
-                status: 500,
-                code: "sys.timeout".to_string(),
-                category: ErrorCategory::Sys,
-                reason: "timeout error".to_string(),
-                detail: None,
-                visibility: Visibility::Internal,
-                hints: vec![
-                    "retry later".to_string(),
-                    "inspect downstream service latency".to_string(),
-                ],
-                retryable: true,
-            }
+            json["hints"],
+            serde_json::json!(["retry later", "inspect downstream service latency"])
         );
+        assert_eq!(json["retryable"], serde_json::json!(true));
     }
 
+    #[cfg(feature = "serde_json")]
     #[test]
-    fn test_rpc_response_projection_keeps_public_detail() {
+    fn test_rpc_response_json_keeps_public_detail() {
         let err = StructError::from(TestReason::Uvs(UvsReason::business_error()))
             .with_detail("order state invalid");
+        let json = err
+            .exposure_snapshot(&DefaultExposurePolicy)
+            .to_rpc_error_json()
+            .unwrap();
 
-        assert_eq!(
-            err.rpc_response(&DefaultExposurePolicy),
-            ErrorRpcResponse {
-                status: 400,
-                code: "biz.business_error".to_string(),
-                category: ErrorCategory::Biz,
-                reason: "business logic error".to_string(),
-                detail: Some("order state invalid".to_string()),
-                visibility: Visibility::Public,
-                hints: vec![],
-                retryable: false,
-            }
-        );
+        assert_eq!(json["status"], serde_json::json!(400));
+        assert_eq!(json["code"], serde_json::json!("biz.business_error"));
+        assert_eq!(json["category"], serde_json::json!("Biz"));
+        assert_eq!(json["reason"], serde_json::json!("business logic error"));
+        assert_eq!(json["detail"], serde_json::json!("order state invalid"));
+        assert_eq!(json["visibility"], serde_json::json!("Public"));
+        assert_eq!(json["hints"], serde_json::json!([]));
+        assert_eq!(json["retryable"], serde_json::json!(false));
     }
 
     #[test]
@@ -1641,6 +1205,7 @@ mod tests {
                 position: None,
                 want: Some("place_order".to_string()),
                 path: Some("place_order / parse order".to_string()),
+                category: ErrorCategory::Biz,
                 context: vec![{
                     let mut ctx = OperationContext::doing("place_order");
                     ctx.record_field("user_id", "42");
@@ -1658,7 +1223,7 @@ mod tests {
             },
         };
 
-        let rendered = snapshot.render_debug_summary();
+        let rendered = snapshot.render_user_debug();
 
         assert!(rendered.contains("code          : biz.order_invalid (Biz)"));
         assert!(rendered.contains("detail        : order text must not be empty"));
@@ -1693,6 +1258,7 @@ mod tests {
                 position: None,
                 want: Some("place_order".to_string()),
                 path: Some("place_order / save order".to_string()),
+                category: ErrorCategory::Sys,
                 context: vec![],
                 root_metadata: ErrorMetadata::new(),
                 source_frames: vec![SourceFrame {
@@ -1712,7 +1278,7 @@ mod tests {
             },
         };
 
-        let rendered = snapshot.render_debug_summary();
+        let rendered = snapshot.render_user_debug();
 
         assert!(rendered.contains("detail        : storage full"));
         assert!(rendered.contains("source        : storage full"));
@@ -1742,6 +1308,7 @@ mod tests {
                 position: None,
                 want: Some("place_order".to_string()),
                 path: Some("place_order / save order".to_string()),
+                category: ErrorCategory::Sys,
                 context: vec![],
                 root_metadata: ErrorMetadata::new(),
                 source_frames: vec![
@@ -1777,35 +1344,10 @@ mod tests {
             },
         };
 
-        let rendered = snapshot.render_debug_summary();
+        let rendered = snapshot.render_user_debug();
 
         assert!(rendered.contains("source        : disk offline"));
         assert!(!rendered.contains("source        : storage layer failed"));
-    }
-
-    #[test]
-    fn test_render_user_debug_aliases_match_existing_debug_summary() {
-        let err = StructError::from(TestReason::Uvs(UvsReason::business_error()))
-            .with_detail("order state invalid")
-            .with_context({
-                let mut ctx = OperationContext::doing("validate order");
-                ctx.record_field("order_id", "A-1001");
-                ctx.record_meta("component.name", "order_service");
-                ctx
-            });
-
-        let via_struct = err.render_user_debug(&DefaultExposurePolicy);
-        let via_struct_compat = err.render_debug_summary(&DefaultExposurePolicy);
-        let via_view = err
-            .exposure_view()
-            .render_user_debug(&DefaultExposurePolicy);
-        let via_snapshot = err
-            .exposure_snapshot(&DefaultExposurePolicy)
-            .render_user_debug();
-
-        assert_eq!(via_struct, via_struct_compat);
-        assert_eq!(via_struct, via_view);
-        assert_eq!(via_struct, via_snapshot);
     }
 
     #[test]
@@ -1835,8 +1377,8 @@ mod tests {
             .with_detail("order state invalid");
 
         let json_value = err
-            .report()
-            .to_cli_error_json(&DefaultExposurePolicy)
+            .exposure_snapshot(&DefaultExposurePolicy)
+            .to_cli_error_json()
             .expect("serialize cli error");
 
         let mut keys = json_value
@@ -1861,7 +1403,7 @@ mod tests {
         expected.sort();
 
         assert_eq!(keys, expected);
-        assert_eq!(json_value["code"], serde_json::json!("report.unclassified"));
+        assert_eq!(json_value["code"], serde_json::json!("biz.business_error"));
         assert_eq!(
             json_value["summary"],
             serde_json::json!("business logic error: order state invalid")
@@ -1876,8 +1418,8 @@ mod tests {
             .with_context(OperationContext::doing("load config"));
 
         let json_value = err
-            .report()
-            .to_log_error_json(&DefaultExposurePolicy)
+            .exposure_snapshot(&DefaultExposurePolicy)
+            .to_log_error_json()
             .expect("serialize log error");
 
         let mut keys = json_value
@@ -1907,7 +1449,7 @@ mod tests {
         expected.sort();
 
         assert_eq!(keys, expected);
-        assert_eq!(json_value["code"], serde_json::json!("report.unclassified"));
+        assert_eq!(json_value["code"], serde_json::json!("sys.io_error"));
         assert_eq!(json_value["reason"], serde_json::json!("system error"));
         assert_eq!(json_value["operation"], serde_json::json!("load config"));
     }
@@ -1919,8 +1461,8 @@ mod tests {
             .with_detail("downstream rpc timeout");
 
         let json_value = err
-            .report()
-            .to_rpc_error_json(&DefaultExposurePolicy)
+            .exposure_snapshot(&DefaultExposurePolicy)
+            .to_rpc_error_json()
             .expect("serialize rpc error");
 
         let mut keys = json_value
@@ -1947,8 +1489,8 @@ mod tests {
         expected.sort();
 
         assert_eq!(keys, expected);
-        assert_eq!(json_value["code"], serde_json::json!("report.unclassified"));
-        assert_eq!(json_value["retryable"], serde_json::json!(false));
+        assert_eq!(json_value["code"], serde_json::json!("sys.timeout"));
+        assert_eq!(json_value["retryable"], serde_json::json!(true));
         assert_eq!(json_value["detail"], serde_json::Value::Null);
     }
 
@@ -1959,7 +1501,7 @@ mod tests {
             .with_std_source(std::io::Error::other("token=abc"))
             .with_context(OperationContext::doing("load").with_meta("config.secret", "abc"));
 
-        let rendered = err.render_redacted(RenderMode::Verbose, &TestPolicy);
+        let rendered = err.render_redacted(&TestPolicy);
         assert!(rendered.contains("<redacted>"));
         assert!(!rendered.contains("abc"));
     }
@@ -1969,7 +1511,7 @@ mod tests {
         let err = StructError::from(TestReason::TestError)
             .with_std_source(std::io::Error::other("https://svc.local?token=abc"));
 
-        let rendered = err.render_redacted(RenderMode::Verbose, &TestPolicy);
+        let rendered = err.render_redacted(&TestPolicy);
 
         assert!(rendered.contains("<redacted>"));
         assert!(!rendered.contains("svc.local"));
@@ -1984,6 +1526,7 @@ mod tests {
             position: None,
             want: None,
             path: None,
+            category: ErrorCategory::Sys,
             context: vec![],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
@@ -2022,6 +1565,7 @@ mod tests {
             position: None,
             want: None,
             path: None,
+            category: ErrorCategory::Sys,
             context: vec![],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
@@ -2053,6 +1597,7 @@ mod tests {
             position: Some("/srv/app/config.toml:10".to_string()),
             want: Some("load /srv/app/config.toml".to_string()),
             path: Some("load /srv/app/config.toml / parse".to_string()),
+            category: ErrorCategory::Sys,
             context: vec![OperationContext::at("/srv/app/config.toml")],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
@@ -2085,7 +1630,7 @@ mod tests {
             }
         }
 
-        let rendered = report.render_redacted(RenderMode::Verbose, &PathPolicy);
+        let rendered = report.render_redacted(&PathPolicy);
         assert!(rendered.contains("<path-redacted>"));
         assert!(!rendered.contains("/srv/app/config.toml"));
     }
@@ -2098,6 +1643,7 @@ mod tests {
             position: None,
             want: None,
             path: None,
+            category: ErrorCategory::Sys,
             context: vec![],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
@@ -2163,54 +1709,12 @@ mod tests {
                 ctx
             });
 
-        let rendered = err.render_redacted(RenderMode::Verbose, &ValueOnlyPolicy);
+        let rendered = err.render_redacted(&ValueOnlyPolicy);
         assert!(rendered.contains("<detail-redacted>"));
         assert!(rendered.contains("<token-redacted>"));
         assert!(rendered.contains("<secret-redacted>"));
         assert!(!rendered.contains("token=abc"));
         assert!(!rendered.contains("token: abc"));
         assert!(!rendered.contains("config.secret\": \"abc"));
-    }
-
-    #[cfg(feature = "serde")]
-    #[test]
-    fn test_report_serialization_supports_structured_export() {
-        let source = StructError::from(TestReason::TestError).with_context(
-            OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
-        );
-        let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
-            .with_context(
-                OperationContext::doing("start engine").with_meta("component.name", "engine"),
-            )
-            .with_struct_source(source);
-
-        let json_value = serde_json::to_value(err.report()).expect("serialize report");
-
-        assert_eq!(json_value["reason"], serde_json::json!("system error"));
-        assert_eq!(
-            json_value["root_metadata"]["component.name"],
-            serde_json::json!("engine")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["metadata"]["config.kind"],
-            serde_json::json!("sink_defaults")
-        );
-    }
-
-    #[cfg(feature = "serde")]
-    #[test]
-    fn test_report_redacted_supports_structured_export() {
-        let err = StructError::from(TestReason::TestError)
-            .with_detail("token=abc")
-            .with_std_source(std::io::Error::other("token=abc"))
-            .with_context(OperationContext::doing("load").with_meta("config.secret", "abc"));
-
-        let json_value =
-            serde_json::to_value(err.report_redacted(&TestPolicy)).expect("serialize redacted");
-
-        let encoded = serde_json::to_string(&json_value).expect("json string");
-        assert!(encoded.contains("<redacted>"));
-        assert!(!encoded.contains("token=abc"));
-        assert!(!encoded.contains("\"abc\""));
     }
 }

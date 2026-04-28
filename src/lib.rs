@@ -7,13 +7,12 @@ extern crate self as orion_error;
 #[cfg(feature = "derive")]
 pub use orion_error_derive::{ErrorCode, ErrorIdentityProvider, OrionError};
 
-pub use core::{DefaultExposurePolicy, OperationContext, StructError, UvsReason};
+pub use core::{DefaultExposurePolicy, DomainReason, OperationContext, StructError, UvsReason};
 pub use traits::{ErrorWith, ErrorWrapAs, IntoAs};
 
 #[doc(hidden)]
 pub use core::{
-    DomainReason, ErrorCategory, ErrorCode, ErrorIdentityProvider, ErrorRenderer, RenderMode,
-    TextDiagnosticRenderer, TextReportRenderer, UvsFrom, Visibility,
+    ErrorCategory, ErrorCode, ErrorIdentityProvider, UvsFrom, Visibility,
 };
 #[doc(hidden)]
 pub use traits::ErrorConv;
@@ -38,14 +37,14 @@ pub mod prelude {
 /// bridge, and conversion surfaces in one place.
 pub mod advanced_prelude {
     pub use crate::core::{
-        DefaultExposurePolicy, DiagnosticReport, ErrorCategory, ErrorCliResponse, ErrorCode,
-        ErrorHttpResponse, ErrorIdentity, ErrorIdentityProvider, ErrorLogResponse, ErrorMetadata,
-        ErrorProtocolSnapshot, ErrorRenderer, ErrorRpcResponse, ErrorSnapshot, ExposureDecision,
-        ExposurePolicy, ExposureView, IntoSourcePayload, OwnedDynStdStructError,
-        OwnedStdStructError, RedactPolicy, RenderMode, SnapshotContextFrame, SnapshotSourceFrame,
+        DefaultExposurePolicy, DiagnosticReport, ErrorCategory, ErrorCode,
+        ErrorIdentity, ErrorIdentityProvider, ErrorMetadata,
+        ErrorProtocolSnapshot, ErrorSnapshot, ExposureDecision,
+        ExposurePolicy, IntoSourcePayload, OwnedDynStdStructError,
+        OwnedStdStructError, RedactPolicy, SnapshotContextFrame, SnapshotSourceFrame,
         SourceFrame, SourcePayload, SourcePayloadKind, SourcePayloadRef, StableErrorSnapshot,
         StableSnapshotContextFrame, StableSnapshotSourceFrame, StdStructRef, StructError,
-        TextDiagnosticRenderer, UvsFrom, UvsReason, Visibility, STABLE_SNAPSHOT_SCHEMA_VERSION,
+        UvsFrom, UvsReason, Visibility, STABLE_SNAPSHOT_SCHEMA_VERSION,
     };
     pub use crate::traits::{
         raw_source, ConvStructError, ErrorConv, ErrorWith, ErrorWrapAs, IntoAs, RawSource,
@@ -59,8 +58,9 @@ pub mod advanced_prelude {
 ///
 /// Use this only when maintaining older `owe(...)` call paths.
 pub mod compat_prelude {
+    #![allow(deprecated)]
     pub use crate::traits::{
-        ErrorOwe, ErrorOweBase, ErrorOweSource, ErrorOweSourceBase, ErrorWrap, WrapStructError,
+        ErrorOwe, ErrorOweBase, ErrorOweSource, ErrorOweSourceBase,
     };
 }
 
@@ -108,16 +108,17 @@ pub mod snapshot {
 /// Report-layer types for rendering and redaction.
 pub mod report {
     pub use crate::core::{
-        DefaultExposurePolicy, DiagnosticReport, ErrorCliResponse, ErrorHttpResponse,
-        ErrorLogResponse, ErrorProtocolSnapshot, ErrorRenderer, ErrorRpcResponse, ExposureDecision,
-        ExposurePolicy, ExposureView, RedactPolicy, RenderMode, TextDiagnosticRenderer, Visibility,
+        DefaultExposurePolicy, DiagnosticReport, ErrorProtocolSnapshot, ExposureDecision,
+        ExposurePolicy, RedactPolicy, Visibility,
     };
+    pub use crate::core::cli::print_error;
 }
 
 /// Reason-layer enums and traits.
 pub mod reason {
     pub use crate::core::{
-        ConfErrReason, ErrorCategory, ErrorCode, ErrorIdentityProvider, UvsFrom, UvsReason,
+        ConfErrReason, DomainReason, ErrorCategory, ErrorCode, ErrorIdentityProvider, UvsFrom,
+        UvsReason,
     };
 }
 
@@ -145,7 +146,8 @@ pub mod traits_ext {
 
 /// Compatibility trait exports for legacy conversion helpers.
 pub mod compat_traits {
+    #![allow(deprecated)]
     pub use crate::traits::{
-        ErrorOwe, ErrorOweBase, ErrorOweSource, ErrorOweSourceBase, ErrorWrap, WrapStructError,
+        ErrorOwe, ErrorOweBase, ErrorOweSource, ErrorOweSourceBase,
     };
 }

@@ -1,7 +1,7 @@
 use derive_more::From;
 use orion_error::{
-    DefaultExposurePolicy, ErrorConv, ErrorWith, OperationContext, OrionError, StructError,
-    UvsReason,
+    report::print_error, DefaultExposurePolicy, ErrorConv, ErrorWith, OperationContext, OrionError,
+    StructError, UvsReason,
 };
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
@@ -179,6 +179,8 @@ fn write_impl(item: &str) -> Result<(), std::io::Error> {
 }
 
 fn print_protocol_views(err: &OrderError) {
+    print_error(err);
+    println!();
     let exposure_policy = DefaultExposurePolicy;
     println!("{}", err.render_user_debug(&exposure_policy));
 }

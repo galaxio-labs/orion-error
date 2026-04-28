@@ -1,11 +1,14 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use derive_more::From;
 use thiserror::Error;
 
 use super::UvsReason;
 
-pub trait DomainReason: PartialEq + Display {}
+pub trait DomainReason:
+    PartialEq + Display + Debug + Send + Sync + 'static
+{
+}
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, Error, From)]
