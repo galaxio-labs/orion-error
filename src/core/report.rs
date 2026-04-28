@@ -13,8 +13,6 @@ pub struct DiagnosticReport {
     pub position: Option<String>,
     pub want: Option<String>,
     pub path: Option<String>,
-    pub category: ErrorCategory,
-    pub code: String,
     pub context: Vec<OperationContext>,
     pub root_metadata: ErrorMetadata,
     pub source_frames: Vec<SourceFrame>,
@@ -125,13 +123,31 @@ pub trait RedactPolicy {
     }
 }
 
-impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
+impl<T: DomainReason> StructError<T> {
     pub fn report(&self) -> DiagnosticReport {
-        self.snapshot().report()
+        DiagnosticReport {
+            reason: self.reason().to_string(),
+            detail: self.detail().clone(),
+            position: self.position().clone(),
+            want: self.target_main(),
+            path: self.target_path(),
+            context: self.contexts().to_vec(),
+            root_metadata: self.context_metadata(),
+            source_frames: self.source_frames().to_vec(),
+        }
     }
 
     pub fn into_report(self) -> DiagnosticReport {
-        self.into_snapshot().into_report()
+        DiagnosticReport {
+            reason: self.reason().to_string(),
+            detail: self.detail().clone(),
+            position: self.position().clone(),
+            want: self.target_main(),
+            path: self.target_path(),
+            context: self.contexts().to_vec(),
+            root_metadata: self.context_metadata(),
+            source_frames: self.source_frames().to_vec(),
+        }
     }
 
     pub fn report_redacted(&self, policy: &impl RedactPolicy) -> DiagnosticReport {
@@ -147,10 +163,7 @@ impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
     }
 }
 
-impl<T> StructError<T>
-where
-    T: DomainReason + ErrorIdentityProvider,
-{
+impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
     pub fn exposure_snapshot(
         &self,
         exposure_policy: &impl ExposurePolicy,
@@ -203,13 +216,13 @@ impl From<ErrorSnapshot> for DiagnosticReport {
     }
 }
 
-impl<T: DomainReason + ErrorIdentityProvider> From<&StructError<T>> for DiagnosticReport {
+impl<T: DomainReason> From<&StructError<T>> for DiagnosticReport {
     fn from(value: &StructError<T>) -> Self {
         value.report()
     }
 }
 
-impl<T: DomainReason + ErrorIdentityProvider> From<StructError<T>> for DiagnosticReport {
+impl<T: DomainReason> From<StructError<T>> for DiagnosticReport {
     fn from(value: StructError<T>) -> Self {
         value.into_report()
     }
@@ -288,8 +301,6 @@ impl DiagnosticReport {
             position: redact_optional_text(Some("position"), self.position.as_deref(), policy),
             want: redact_optional_text(Some("want"), self.want.as_deref(), policy),
             path: redact_optional_text(Some("path"), self.path.as_deref(), policy),
-            category: self.category,
-            code: self.code.clone(),
             context: self
                 .context
                 .iter()
@@ -321,83 +332,19 @@ impl DiagnosticReport {
 
 }
 
-impl DiagnosticReport {
-    pub fn exposure_identity(&self) -> ErrorIdentity {
-        ErrorIdentity {
-            code: self.code.clone(),
-            category: self.category,
-            reason: self.reason.clone(),
-            detail: self.detail.clone(),
-            position: self.position.clone(),
-            want: self.want.clone(),
-            path: self.path.clone(),
-        }
-    }
-
-    pub fn http_status(&self, exposure_policy: &impl ExposurePolicy) -> u16 {
-        exposure_policy.http_status(&self.exposure_identity())
-    }
-
-    pub fn visibility(&self, exposure_policy: &impl ExposurePolicy) -> Visibility {
-        exposure_policy.visibility(&self.exposure_identity())
-    }
-
-    pub fn default_hints(&self, exposure_policy: &impl ExposurePolicy) -> &'static [&'static str] {
-        exposure_policy.default_hints(&self.exposure_identity())
-    }
-
-    pub fn decision(&self, exposure_policy: &impl ExposurePolicy) -> ExposureDecision {
-        exposure_policy.decide(&self.exposure_identity())
-    }
-
-    pub fn exposure_snapshot(
-        &self,
-        exposure_policy: &impl ExposurePolicy,
-    ) -> ErrorProtocolSnapshot {
-        ErrorProtocolSnapshot {
-            identity: self.exposure_identity(),
-            decision: self.decision(exposure_policy),
-            report: self.clone(),
-        }
-    }
-
-    #[cfg(feature = "serde_json")]
-    pub fn to_exposure_snapshot_json(
-        &self,
-        exposure_policy: &impl ExposurePolicy,
-    ) -> serde_json::Result<serde_json::Value> {
-        let snapshot = self.exposure_snapshot(exposure_policy);
-        Ok(serde_json::json!({
-            "identity": {
-                "code": snapshot.identity.code,
-                "category": snapshot.identity.category.as_str(),
-                "reason": snapshot.identity.reason,
-                "detail": snapshot.identity.detail,
-                "position": snapshot.identity.position,
-                "want": snapshot.identity.want,
-                "path": snapshot.identity.path,
-            },
-            "decision": {
-                "http_status": snapshot.decision.http_status,
-                "visibility": snapshot.decision.visibility.as_str(),
-                "default_hints": snapshot.decision.default_hints,
-                "retryable": snapshot.decision.retryable,
-            },
-            "report": {
-                "reason": snapshot.report.reason,
-                "detail": snapshot.report.detail,
-                "position": snapshot.report.position,
-                "want": snapshot.report.want,
-                "path": snapshot.report.path,
-                "root_metadata": snapshot.report.root_metadata,
-                "context": snapshot.report.context,
-                "source_frames": snapshot.report.source_frames,
-            },
-        }))
-    }
-}
-
 impl ErrorProtocolSnapshot {
+    pub fn from_report(
+        report: DiagnosticReport,
+        identity: ErrorIdentity,
+        exposure_policy: &impl ExposurePolicy,
+    ) -> Self {
+        Self {
+            decision: exposure_policy.decide(&identity),
+            identity,
+            report,
+        }
+    }
+
     pub fn render_user_debug(&self) -> String {
         let mut lines = Vec::new();
         lines.push(format!(
@@ -836,8 +783,6 @@ mod tests {
             position: None,
             want: Some("load".to_string()),
             path: Some("load / parse".to_string()),
-            category: ErrorCategory::Sys,
-            code: "test.error".to_string(),
             context: vec![],
             root_metadata: {
                 let mut metadata = ErrorMetadata::new();
@@ -954,15 +899,29 @@ mod tests {
             position: None,
             want: None,
             path: None,
-            category: ErrorCategory::Sys,
-            code: "test.error".to_string(),
             context: vec![],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![],
         };
 
+        let identity = ErrorIdentity {
+            code: "test.error".to_string(),
+            category: ErrorCategory::Sys,
+            reason: "configuration error".to_string(),
+            detail: None,
+            position: None,
+            want: None,
+            path: None,
+        };
+
+        let snapshot = ErrorProtocolSnapshot::from_report(
+            report,
+            identity,
+            &DefaultExposurePolicy,
+        );
+
         assert_eq!(
-            report.decision(&DefaultExposurePolicy),
+            snapshot.decision,
             ExposureDecision {
                 http_status: 500,
                 visibility: Visibility::Internal,
@@ -979,75 +938,27 @@ mod tests {
             .with_detail("engine bootstrap failed")
             .with_context(OperationContext::doing("start engine"));
 
-        let json_value = err
-            .report()
-            .to_exposure_snapshot_json(&DefaultExposurePolicy)
-            .expect("serialize exposure snapshot");
+        let snapshot = err.exposure_snapshot(&DefaultExposurePolicy);
 
-        assert_eq!(
-            json_value["identity"]["code"],
-            serde_json::json!("sys.io_error")
-        );
-        assert_eq!(
-            json_value["decision"]["http_status"],
-            serde_json::json!(500)
-        );
-        assert_eq!(
-            json_value["decision"]["visibility"],
-            serde_json::json!("internal")
-        );
-        assert_eq!(
-            json_value["report"]["reason"],
-            serde_json::json!("system error")
-        );
-        assert_eq!(
-            json_value["report"]["detail"],
-            serde_json::json!("engine bootstrap failed")
-        );
+        assert_eq!(snapshot.identity.code, "sys.io_error");
+        assert_eq!(snapshot.identity.category, ErrorCategory::Sys);
+        assert_eq!(snapshot.decision.http_status, 500);
+        assert_eq!(snapshot.decision.visibility, Visibility::Internal);
+        assert_eq!(snapshot.report.reason, "system error");
+        assert_eq!(snapshot.report.detail, Some("engine bootstrap failed".to_string()));
     }
 
-    #[cfg(feature = "serde_json")]
     #[test]
-    fn test_exposure_snapshot_json_keys_match_expected_shape() {
+    fn test_exposure_snapshot_contains_identity_decision_and_report() {
         let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
             .with_detail("engine bootstrap failed");
 
-        let json_value = err
-            .report()
-            .to_exposure_snapshot_json(&DefaultExposurePolicy)
-            .expect("serialize exposure snapshot");
+        let snapshot = err.exposure_snapshot(&DefaultExposurePolicy);
 
-        let mut top_level = json_value
-            .as_object()
-            .expect("exposure snapshot object")
-            .keys()
-            .cloned()
-            .collect::<Vec<_>>();
-        top_level.sort();
-
-        let mut expected_top_level = ["identity", "decision", "report"]
-            .into_iter()
-            .map(str::to_string)
-            .collect::<Vec<_>>();
-        expected_top_level.sort();
-
-        let mut decision_fields = json_value["decision"]
-            .as_object()
-            .expect("decision object")
-            .keys()
-            .cloned()
-            .collect::<Vec<_>>();
-        decision_fields.sort();
-
-        let mut expected_decision_fields =
-            ["http_status", "visibility", "default_hints", "retryable"]
-                .into_iter()
-                .map(str::to_string)
-                .collect::<Vec<_>>();
-        expected_decision_fields.sort();
-
-        assert_eq!(top_level, expected_top_level);
-        assert_eq!(decision_fields, expected_decision_fields);
+        assert_eq!(snapshot.identity.code, "sys.io_error");
+        assert_eq!(snapshot.identity.category, ErrorCategory::Sys);
+        assert!(snapshot.decision.http_status > 0);
+        assert_eq!(snapshot.report.reason, "system error");
     }
 
     #[cfg(feature = "serde_json")]
@@ -1246,8 +1157,6 @@ mod tests {
                 position: None,
                 want: Some("place_order".to_string()),
                 path: Some("place_order / parse order".to_string()),
-                category: ErrorCategory::Biz,
-                code: "biz.order_invalid".to_string(),
                 context: vec![{
                     let mut ctx = OperationContext::doing("place_order");
                     ctx.record_field("user_id", "42");
@@ -1300,8 +1209,6 @@ mod tests {
                 position: None,
                 want: Some("place_order".to_string()),
                 path: Some("place_order / save order".to_string()),
-                category: ErrorCategory::Sys,
-                code: "sys.storage_full".to_string(),
                 context: vec![],
                 root_metadata: ErrorMetadata::new(),
                 source_frames: vec![SourceFrame {
@@ -1351,8 +1258,6 @@ mod tests {
                 position: None,
                 want: Some("place_order".to_string()),
                 path: Some("place_order / save order".to_string()),
-                category: ErrorCategory::Sys,
-                code: "sys.io_error".to_string(),
                 context: vec![],
                 root_metadata: ErrorMetadata::new(),
                 source_frames: vec![
@@ -1570,8 +1475,6 @@ mod tests {
             position: None,
             want: None,
             path: None,
-            category: ErrorCategory::Sys,
-            code: "test.error".to_string(),
             context: vec![],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
@@ -1610,8 +1513,6 @@ mod tests {
             position: None,
             want: None,
             path: None,
-            category: ErrorCategory::Sys,
-            code: "test.error".to_string(),
             context: vec![],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
@@ -1643,8 +1544,6 @@ mod tests {
             position: Some("/srv/app/config.toml:10".to_string()),
             want: Some("load /srv/app/config.toml".to_string()),
             path: Some("load /srv/app/config.toml / parse".to_string()),
-            category: ErrorCategory::Sys,
-            code: "test.error".to_string(),
             context: vec![OperationContext::at("/srv/app/config.toml")],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
@@ -1690,8 +1589,6 @@ mod tests {
             position: None,
             want: None,
             path: None,
-            category: ErrorCategory::Sys,
-            code: "test.error".to_string(),
             context: vec![],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
