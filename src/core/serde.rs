@@ -370,6 +370,7 @@ mod tests {
                 is_root_cause: true,
             }],
             category: ErrorCategory::Sys,
+            code: "sys.test_error".to_string(),
         };
 
         let stable = snapshot.stable_export();

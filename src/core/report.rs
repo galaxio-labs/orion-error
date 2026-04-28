@@ -14,6 +14,7 @@ pub struct DiagnosticReport {
     pub want: Option<String>,
     pub path: Option<String>,
     pub category: ErrorCategory,
+    pub code: String,
     pub context: Vec<OperationContext>,
     pub root_metadata: ErrorMetadata,
     pub source_frames: Vec<SourceFrame>,
@@ -279,6 +280,7 @@ impl DiagnosticReport {
             want: redact_optional_text(Some("want"), self.want.as_deref(), policy),
             path: redact_optional_text(Some("path"), self.path.as_deref(), policy),
             category: self.category,
+            code: self.code.clone(),
             context: self
                 .context
                 .iter()
@@ -313,7 +315,7 @@ impl DiagnosticReport {
 impl DiagnosticReport {
     pub fn exposure_identity(&self) -> ErrorIdentity {
         ErrorIdentity {
-            code: "report.unclassified".to_string(),
+            code: self.code.clone(),
             category: self.category,
             reason: self.reason.clone(),
             detail: self.detail.clone(),
@@ -779,6 +781,7 @@ mod tests {
                 is_root_cause: true,
             }],
             category: ErrorCategory::Sys,
+            code: "sys.test_error".to_string(),
         };
 
         let via_method = stable.report();
@@ -798,6 +801,7 @@ mod tests {
             want: Some("load".to_string()),
             path: Some("load / parse".to_string()),
             category: ErrorCategory::Sys,
+            code: "test.error".to_string(),
             context: vec![],
             root_metadata: {
                 let mut metadata = ErrorMetadata::new();
@@ -915,6 +919,7 @@ mod tests {
             want: None,
             path: None,
             category: ErrorCategory::Sys,
+            code: "test.error".to_string(),
             context: vec![],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![],
@@ -945,7 +950,7 @@ mod tests {
 
         assert_eq!(
             json_value["identity"]["code"],
-            serde_json::json!("report.unclassified")
+            serde_json::json!("sys.io_error")
         );
         assert_eq!(
             json_value["decision"]["http_status"],
@@ -1206,6 +1211,7 @@ mod tests {
                 want: Some("place_order".to_string()),
                 path: Some("place_order / parse order".to_string()),
                 category: ErrorCategory::Biz,
+                code: "biz.order_invalid".to_string(),
                 context: vec![{
                     let mut ctx = OperationContext::doing("place_order");
                     ctx.record_field("user_id", "42");
@@ -1259,6 +1265,7 @@ mod tests {
                 want: Some("place_order".to_string()),
                 path: Some("place_order / save order".to_string()),
                 category: ErrorCategory::Sys,
+                code: "sys.storage_full".to_string(),
                 context: vec![],
                 root_metadata: ErrorMetadata::new(),
                 source_frames: vec![SourceFrame {
@@ -1309,6 +1316,7 @@ mod tests {
                 want: Some("place_order".to_string()),
                 path: Some("place_order / save order".to_string()),
                 category: ErrorCategory::Sys,
+                code: "sys.io_error".to_string(),
                 context: vec![],
                 root_metadata: ErrorMetadata::new(),
                 source_frames: vec![
@@ -1527,6 +1535,7 @@ mod tests {
             want: None,
             path: None,
             category: ErrorCategory::Sys,
+            code: "test.error".to_string(),
             context: vec![],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
@@ -1566,6 +1575,7 @@ mod tests {
             want: None,
             path: None,
             category: ErrorCategory::Sys,
+            code: "test.error".to_string(),
             context: vec![],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
@@ -1598,6 +1608,7 @@ mod tests {
             want: Some("load /srv/app/config.toml".to_string()),
             path: Some("load /srv/app/config.toml / parse".to_string()),
             category: ErrorCategory::Sys,
+            code: "test.error".to_string(),
             context: vec![OperationContext::at("/srv/app/config.toml")],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {
@@ -1644,6 +1655,7 @@ mod tests {
             want: None,
             path: None,
             category: ErrorCategory::Sys,
+            code: "test.error".to_string(),
             context: vec![],
             root_metadata: ErrorMetadata::new(),
             source_frames: vec![SourceFrame {

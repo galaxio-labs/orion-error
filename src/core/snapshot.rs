@@ -81,6 +81,7 @@ pub struct ErrorSnapshot {
     pub want: Option<String>,
     pub path: Option<String>,
     pub category: ErrorCategory,
+    pub code: String,
     pub context: Vec<SnapshotContextFrame>,
     pub root_metadata: ErrorMetadata,
     pub source_frames: Vec<SnapshotSourceFrame>,
@@ -96,6 +97,7 @@ pub struct StableErrorSnapshot {
     pub want: Option<String>,
     pub path: Option<String>,
     pub category: ErrorCategory,
+    pub code: String,
     pub context: Vec<StableSnapshotContextFrame>,
     pub root_metadata: ErrorMetadata,
     pub source_frames: Vec<StableSnapshotSourceFrame>,
@@ -144,6 +146,7 @@ impl ErrorSnapshot {
             want: self.want,
             path: self.path,
             category: self.category,
+            code: self.code,
             context: self.context.into_iter().map(Into::into).collect(),
             root_metadata: self.root_metadata,
             source_frames: self.source_frames.into_iter().map(Into::into).collect(),
@@ -167,6 +170,7 @@ impl ErrorSnapshot {
             want: self.want,
             path: self.path,
             category: self.category,
+            code: self.code,
             context: self.context.into_iter().map(Into::into).collect(),
             root_metadata: self.root_metadata,
             source_frames: self.source_frames.into_iter().map(Into::into).collect(),
@@ -183,6 +187,7 @@ impl StableErrorSnapshot {
             want: self.want.clone(),
             path: self.path.clone(),
             category: self.category,
+            code: self.code.clone(),
             context: self.context.iter().cloned().map(Into::into).collect(),
             root_metadata: self.root_metadata.clone(),
             source_frames: self.source_frames.iter().cloned().map(Into::into).collect(),
@@ -197,6 +202,7 @@ impl StableErrorSnapshot {
             want: self.want,
             path: self.path,
             category: self.category,
+            code: self.code,
             context: self.context.into_iter().map(Into::into).collect(),
             root_metadata: self.root_metadata,
             source_frames: self.source_frames.into_iter().map(Into::into).collect(),
@@ -409,6 +415,7 @@ where
             want: self.target_main(),
             path: self.target_path(),
             category: self.error_category(),
+            code: self.stable_code().to_string(),
             context: self.contexts().iter().cloned().map(Into::into).collect(),
             root_metadata: self.context_metadata(),
             source_frames: self
@@ -633,6 +640,7 @@ mod tests {
             },
             source_frames: vec![],
             category: ErrorCategory::Sys,
+            code: "sys.test_error".to_string(),
         };
 
         let report = snapshot.report();
@@ -731,6 +739,7 @@ mod tests {
                 is_root_cause: true,
             }],
             category: ErrorCategory::Sys,
+            code: "sys.test_error".to_string(),
         };
 
         let via_borrowed = snapshot.report();
@@ -839,6 +848,7 @@ mod tests {
                 is_root_cause: true,
             }],
             category: ErrorCategory::Sys,
+            code: "sys.test_error".to_string(),
         };
 
         let via_borrowed = snapshot.stable_export();
@@ -944,6 +954,7 @@ mod tests {
                 is_root_cause: true,
             }],
             category: ErrorCategory::Sys,
+            code: "sys.test_error".to_string(),
         };
 
         let via_method = stable.report();
@@ -1102,6 +1113,7 @@ mod tests {
                 is_root_cause: true,
             }],
             category: ErrorCategory::Sys,
+            code: "sys.test_error".to_string(),
         };
 
         let json_value = snapshot.to_stable_snapshot_json().unwrap();
@@ -1159,6 +1171,7 @@ mod tests {
                 is_root_cause: true,
             }],
             category: ErrorCategory::Sys,
+            code: "sys.test_error".to_string(),
         };
 
         let json_value = snapshot.to_stable_snapshot_json().unwrap();
@@ -1176,6 +1189,7 @@ mod tests {
                 "want",
                 "path",
                 "category",
+                "code",
                 "context",
                 "root_metadata",
                 "source_frames",
