@@ -251,7 +251,7 @@ mod tests {
             .as_ref()
             .unwrap()
             .contains("repo layer failed"));
-        assert_eq!(err.source_frames()[0].error_code, Some(1001));
+        assert_eq!(err.source_frames()[0].error_code, None);
         assert_eq!(err.source_frames()[0].reason.as_deref(), Some("test error"));
         assert_eq!(
             err.source_frames()[0].detail.as_deref(),
@@ -318,7 +318,7 @@ mod tests {
         assert_eq!(err.root_cause().unwrap().to_string(), "db unavailable");
         assert_eq!(err.source_chain().len(), 2);
         assert_eq!(err.source_frames()[0].message, "test error");
-        assert_eq!(err.source_frames()[0].error_code, Some(1001));
+        assert_eq!(err.source_frames()[0].error_code, None);
         assert_eq!(
             err.source_frames()[0].detail.as_deref(),
             Some("repo layer failed")

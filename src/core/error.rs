@@ -186,7 +186,7 @@ where
 
 fn collect_struct_error_source_frames<R>(source: &StructError<R>) -> Vec<SourceFrame>
 where
-    R: DomainReason + ErrorCode,
+    R: DomainReason,
 {
     let mut frames = Vec::with_capacity(source.source_frames().len() + 1);
     frames.push(SourceFrame {
@@ -195,7 +195,7 @@ where
         display: Some(source.to_string()),
         debug: format!("{source:?}"),
         type_name: Some(std::any::type_name::<StructError<R>>().to_string()),
-        error_code: Some(source.error_code()),
+        error_code: None,
         reason: Some(source.reason().to_string()),
         want: source.target_main(),
         path: source.target_path(),
@@ -231,7 +231,7 @@ impl InternalSourceState {
 
     fn from_struct<R>(source: StructError<R>) -> Self
     where
-        R: DomainReason + ErrorCode,
+        R: DomainReason,
     {
         let frames = collect_struct_error_source_frames(&source);
         Self {
@@ -349,11 +349,12 @@ where
             .source_payload
             .as_ref()
             .map(InternalSourcePayload::source_arc);
-        let frames = Arc::new(collect_struct_error_source_frames(&value));
+        let mut frames = collect_struct_error_source_frames(&value);
+        frames[0].error_code = Some(value.error_code());
         Self {
             display,
             source,
-            frames,
+            frames: Arc::new(frames),
         }
     }
 }
@@ -713,7 +714,7 @@ impl<T: DomainReason> StructError<T> {
     #[must_use]
     pub(crate) fn with_struct_error_source<R>(mut self, source: StructError<R>) -> Self
     where
-        R: DomainReason + ErrorCode,
+        R: DomainReason,
     {
         self = self.with_internal_source(InternalSourceState::from_struct(source));
         self
