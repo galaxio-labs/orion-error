@@ -285,7 +285,7 @@ where
 
 impl<R> IntoSourcePayload for StructError<R>
 where
-    R: DomainReason + ErrorCode,
+    R: DomainReason,
 {
     fn into_source_payload(self) -> SourcePayload {
         SourcePayload::from_state(InternalSourceState::from_struct(self))
@@ -311,10 +311,7 @@ where
         &self.inner
     }
 
-    pub fn into_boxed(self) -> Box<dyn StdError + Send + Sync + 'static>
-    where
-        R: ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
-    {
+    pub fn into_boxed(self) -> Box<dyn StdError + Send + Sync + 'static> {
         Box::new(self)
     }
 }
@@ -723,7 +720,7 @@ impl<T: DomainReason> StructError<T> {
     #[must_use]
     pub(crate) fn with_struct_source<R>(self, source: StructError<R>) -> Self
     where
-        R: DomainReason + ErrorCode,
+        R: DomainReason,
     {
         self.with_struct_error_source(source)
     }
@@ -733,7 +730,6 @@ impl<T: DomainReason> StructError<T> {
     #[must_use]
     pub(crate) fn wrap<R2>(self, reason: R2) -> StructError<R2>
     where
-        T: ErrorCode,
         R2: DomainReason,
     {
         StructError::from(reason).with_struct_source(self)
@@ -800,17 +796,11 @@ impl<T: DomainReason> StructError<T> {
             .unwrap_or_default()
     }
 
-    pub fn into_std(self) -> OwnedStdStructError<T>
-    where
-        T: ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
-    {
+    pub fn into_std(self) -> OwnedStdStructError<T> {
         self.into()
     }
 
-    pub fn into_boxed_std(self) -> Box<dyn StdError + Send + Sync + 'static>
-    where
-        T: ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
-    {
+    pub fn into_boxed_std(self) -> Box<dyn StdError + Send + Sync + 'static> {
         self.into_std().into_boxed()
     }
 
@@ -821,10 +811,7 @@ impl<T: DomainReason> StructError<T> {
         self.into()
     }
 
-    pub fn as_std(&self) -> StdStructRef<'_, T>
-    where
-        T: ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
-    {
+    pub fn as_std(&self) -> StdStructRef<'_, T> {
         self.into()
     }
 

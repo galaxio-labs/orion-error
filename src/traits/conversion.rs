@@ -1,4 +1,4 @@
-use crate::{core::convert_error, core::DomainReason, ErrorCode, StructError};
+use crate::{core::convert_error, core::DomainReason, StructError};
 
 pub trait ErrorConv<T, R: DomainReason>: Sized {
     fn err_conv(self) -> Result<T, StructError<R>>;
@@ -43,7 +43,7 @@ where
 
 impl<T, R1, R2> ErrorWrapAs<T, R2> for Result<T, StructError<R1>>
 where
-    R1: DomainReason + ErrorCode,
+    R1: DomainReason,
     R2: DomainReason,
 {
     fn wrap_as(self, reason: R2, detail: impl Into<String>) -> Result<T, StructError<R2>> {
@@ -54,7 +54,7 @@ where
 
 impl<R1, R2> WrapStructErrorAs<R2> for StructError<R1>
 where
-    R1: DomainReason + ErrorCode,
+    R1: DomainReason,
     R2: DomainReason,
 {
     fn wrap_as(self, reason: R2, detail: impl Into<String>) -> StructError<R2> {

@@ -366,7 +366,34 @@ impl DiagnosticReport {
         &self,
         exposure_policy: &impl ExposurePolicy,
     ) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self.exposure_snapshot(exposure_policy))
+        let snapshot = self.exposure_snapshot(exposure_policy);
+        Ok(serde_json::json!({
+            "identity": {
+                "code": snapshot.identity.code,
+                "category": snapshot.identity.category.as_str(),
+                "reason": snapshot.identity.reason,
+                "detail": snapshot.identity.detail,
+                "position": snapshot.identity.position,
+                "want": snapshot.identity.want,
+                "path": snapshot.identity.path,
+            },
+            "decision": {
+                "http_status": snapshot.decision.http_status,
+                "visibility": snapshot.decision.visibility.as_str(),
+                "default_hints": snapshot.decision.default_hints,
+                "retryable": snapshot.decision.retryable,
+            },
+            "report": {
+                "reason": snapshot.report.reason,
+                "detail": snapshot.report.detail,
+                "position": snapshot.report.position,
+                "want": snapshot.report.want,
+                "path": snapshot.report.path,
+                "root_metadata": snapshot.report.root_metadata,
+                "context": snapshot.report.context,
+                "source_frames": snapshot.report.source_frames,
+            },
+        }))
     }
 }
 
@@ -967,7 +994,7 @@ mod tests {
         );
         assert_eq!(
             json_value["decision"]["visibility"],
-            serde_json::json!("Internal")
+            serde_json::json!("internal")
         );
         assert_eq!(
             json_value["report"]["reason"],
