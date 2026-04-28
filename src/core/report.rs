@@ -27,6 +27,15 @@ pub enum Visibility {
     Internal,
 }
 
+impl Visibility {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Public => "public",
+            Self::Internal => "internal",
+        }
+    }
+}
+
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExposureDecision {
@@ -421,13 +430,13 @@ impl ErrorProtocolSnapshot {
         Ok(serde_json::json!({
             "status": self.decision.http_status,
             "code": self.identity.code,
-            "category": format!("{:?}", self.identity.category),
+            "category": self.identity.category.as_str(),
             "message": match self.decision.visibility {
                 Visibility::Public => self.report.detail.clone()
                     .unwrap_or_else(|| self.identity.reason.clone()),
                 Visibility::Internal => self.identity.reason.clone(),
             },
-            "visibility": format!("{:?}", self.decision.visibility),
+            "visibility": self.decision.visibility.as_str(),
             "hints": self.decision.default_hints,
         }))
     }
@@ -436,10 +445,10 @@ impl ErrorProtocolSnapshot {
     pub fn to_cli_error_json(&self) -> serde_json::Result<serde_json::Value> {
         Ok(serde_json::json!({
             "code": self.identity.code,
-            "category": format!("{:?}", self.identity.category),
+            "category": self.identity.category.as_str(),
             "summary": self.report.render_compact(),
             "detail": self.report.render(),
-            "visibility": format!("{:?}", self.decision.visibility),
+            "visibility": self.decision.visibility.as_str(),
             "hints": self.decision.default_hints,
         }))
     }
@@ -448,12 +457,12 @@ impl ErrorProtocolSnapshot {
     pub fn to_log_error_json(&self) -> serde_json::Result<serde_json::Value> {
         Ok(serde_json::json!({
             "code": self.identity.code,
-            "category": format!("{:?}", self.identity.category),
+            "category": self.identity.category.as_str(),
             "reason": self.identity.reason,
             "detail": self.report.detail,
             "operation": self.report.want,
             "path": self.report.path,
-            "visibility": format!("{:?}", self.decision.visibility),
+            "visibility": self.decision.visibility.as_str(),
             "hints": self.decision.default_hints,
             "root_metadata": self.report.root_metadata,
             "context": self.report.context,
@@ -466,13 +475,13 @@ impl ErrorProtocolSnapshot {
         Ok(serde_json::json!({
             "status": self.decision.http_status,
             "code": self.identity.code,
-            "category": format!("{:?}", self.identity.category),
+            "category": self.identity.category.as_str(),
             "reason": self.identity.reason,
             "detail": match self.decision.visibility {
                 Visibility::Public => self.report.detail.clone(),
                 Visibility::Internal => None,
             },
-            "visibility": format!("{:?}", self.decision.visibility),
+            "visibility": self.decision.visibility.as_str(),
             "hints": self.decision.default_hints,
             "retryable": self.decision.retryable,
         }))
@@ -1026,9 +1035,9 @@ mod tests {
 
         assert_eq!(json["status"], serde_json::json!(400));
         assert_eq!(json["code"], serde_json::json!("biz.business_error"));
-        assert_eq!(json["category"], serde_json::json!("Biz"));
+        assert_eq!(json["category"], serde_json::json!("biz"));
         assert_eq!(json["message"], serde_json::json!("order state invalid"));
-        assert_eq!(json["visibility"], serde_json::json!("Public"));
+        assert_eq!(json["visibility"], serde_json::json!("public"));
         assert_eq!(json["hints"], serde_json::json!([]));
     }
 
@@ -1044,9 +1053,9 @@ mod tests {
 
         assert_eq!(json["status"], serde_json::json!(500));
         assert_eq!(json["code"], serde_json::json!("sys.io_error"));
-        assert_eq!(json["category"], serde_json::json!("Sys"));
+        assert_eq!(json["category"], serde_json::json!("sys"));
         assert_eq!(json["message"], serde_json::json!("system error"));
-        assert_eq!(json["visibility"], serde_json::json!("Internal"));
+        assert_eq!(json["visibility"], serde_json::json!("internal"));
         assert_eq!(
             json["hints"],
             serde_json::json!(["check filesystem state", "verify file permissions"])
@@ -1102,13 +1111,13 @@ mod tests {
             .unwrap();
 
         assert_eq!(json["code"], serde_json::json!("sys.io_error"));
-        assert_eq!(json["category"], serde_json::json!("Sys"));
+        assert_eq!(json["category"], serde_json::json!("sys"));
         assert_eq!(json["summary"], serde_json::json!("system error: disk offline"));
         assert_eq!(
             json["detail"],
             serde_json::json!("reason: system error\ndetail: disk offline")
         );
-        assert_eq!(json["visibility"], serde_json::json!("Internal"));
+        assert_eq!(json["visibility"], serde_json::json!("internal"));
         assert_eq!(
             json["hints"],
             serde_json::json!(["check filesystem state", "verify file permissions"])
@@ -1129,12 +1138,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(json["code"], serde_json::json!("sys.io_error"));
-        assert_eq!(json["category"], serde_json::json!("Sys"));
+        assert_eq!(json["category"], serde_json::json!("sys"));
         assert_eq!(json["reason"], serde_json::json!("system error"));
         assert_eq!(json["detail"], serde_json::json!("disk offline"));
         assert_eq!(json["operation"], serde_json::json!("load config"));
         assert_eq!(json["path"], serde_json::json!("load config"));
-        assert_eq!(json["visibility"], serde_json::json!("Internal"));
+        assert_eq!(json["visibility"], serde_json::json!("internal"));
         assert_eq!(
             json["hints"],
             serde_json::json!(["check filesystem state", "verify file permissions"])
@@ -1155,10 +1164,10 @@ mod tests {
 
         assert_eq!(json["status"], serde_json::json!(500));
         assert_eq!(json["code"], serde_json::json!("sys.timeout"));
-        assert_eq!(json["category"], serde_json::json!("Sys"));
+        assert_eq!(json["category"], serde_json::json!("sys"));
         assert_eq!(json["reason"], serde_json::json!("timeout error"));
         assert_eq!(json["detail"], serde_json::json!(null));
-        assert_eq!(json["visibility"], serde_json::json!("Internal"));
+        assert_eq!(json["visibility"], serde_json::json!("internal"));
         assert_eq!(
             json["hints"],
             serde_json::json!(["retry later", "inspect downstream service latency"])
@@ -1178,10 +1187,10 @@ mod tests {
 
         assert_eq!(json["status"], serde_json::json!(400));
         assert_eq!(json["code"], serde_json::json!("biz.business_error"));
-        assert_eq!(json["category"], serde_json::json!("Biz"));
+        assert_eq!(json["category"], serde_json::json!("biz"));
         assert_eq!(json["reason"], serde_json::json!("business logic error"));
         assert_eq!(json["detail"], serde_json::json!("order state invalid"));
-        assert_eq!(json["visibility"], serde_json::json!("Public"));
+        assert_eq!(json["visibility"], serde_json::json!("public"));
         assert_eq!(json["hints"], serde_json::json!([]));
         assert_eq!(json["retryable"], serde_json::json!(false));
     }

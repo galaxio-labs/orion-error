@@ -96,7 +96,9 @@ pub struct StableErrorSnapshot {
     pub position: Option<String>,
     pub want: Option<String>,
     pub path: Option<String>,
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub category: ErrorCategory,
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub code: String,
     pub context: Vec<StableSnapshotContextFrame>,
     pub root_metadata: ErrorMetadata,
@@ -1188,8 +1190,6 @@ mod tests {
                 "position",
                 "want",
                 "path",
-                "category",
-                "code",
                 "context",
                 "root_metadata",
                 "source_frames",
