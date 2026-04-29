@@ -373,14 +373,6 @@ impl OperationContext {
             .items
             .push((key.into(), format!("{}", val.into().display())));
     }
-
-    #[deprecated(
-        since = "0.7.0",
-        note = "use with_doing(...) for action path segments; use with_at(...) for locator segments"
-    )]
-    pub fn with_want<S: Into<String>>(&mut self, target: S) {
-        self.push_target_segment(target.into());
-    }
     pub fn with_doing<S: Into<String>>(&mut self, action: S) {
         let action = action.into();
         if action.is_empty() {
@@ -1043,35 +1035,12 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
-    fn test_withcontext_with_want() {
+    fn test_withcontext_with_doing_sets_action_and_path() {
         let mut ctx = OperationContext::new();
-        ctx.with_want("new_target");
+        ctx.with_doing("start engine");
 
-        assert_eq!(*ctx.target(), Some("new_target".to_string()));
-        assert_eq!(ctx.path(), &["new_target".to_string()]);
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_withcontext_with_want_appends_path() {
-        let mut ctx = OperationContext::want("place_order");
-        ctx.with_want("read_order_payload");
-        ctx.with_want("parse_order");
-
-        assert_eq!(*ctx.target(), Some("place_order".to_string()));
-        assert_eq!(
-            ctx.path(),
-            &[
-                "place_order".to_string(),
-                "read_order_payload".to_string(),
-                "parse_order".to_string()
-            ]
-        );
-        assert_eq!(
-            ctx.path_string().as_deref(),
-            Some("place_order / read_order_payload / parse_order")
-        );
+        assert_eq!(ctx.action.as_deref(), Some("start engine"));
+        assert_eq!(ctx.path_string().as_deref(), Some("start engine"));
     }
 
     #[test]

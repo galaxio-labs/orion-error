@@ -1,7 +1,7 @@
 use derive_more::From;
 use orion_error::{
-    report::print_error, DefaultExposurePolicy, ErrorConv, ErrorWith, OperationContext, OrionError,
-    StructError, UvsReason,
+    conversion::ErrorConv, report::print_error, DefaultExposurePolicy, ErrorWith, OperationContext,
+    OrionError, StructError, UvsReason,
 };
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]

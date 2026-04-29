@@ -1,33 +1,8 @@
 use crate::core::OperationContext;
 
 pub trait ErrorWith {
-    #[deprecated(
-        since = "0.7.0",
-        note = "use doing(...) for action contexts; use at(...) for locator/resource contexts"
-    )]
-    fn want<S: Into<String>>(self, desc: S) -> Self;
     fn position<S: Into<String>>(self, desc: S) -> Self;
     fn with_context<C: Into<OperationContext>>(self, ctx: C) -> Self;
-    #[deprecated(
-        since = "0.7.0",
-        note = "use with_context(...) for full context frames; use doing(...) / at(...) for semantic context helpers"
-    )]
-    fn attach_context<C: Into<OperationContext>>(self, ctx: C) -> Self
-    where
-        Self: Sized,
-    {
-        self.with_context(ctx)
-    }
-    #[deprecated(
-        since = "0.7.0",
-        note = "use with_context(...) for full context frames; use at(...) / doing(...) for semantic context helpers"
-    )]
-    fn with<C: Into<OperationContext>>(self, ctx: C) -> Self
-    where
-        Self: Sized,
-    {
-        self.with_context(ctx)
-    }
     fn doing<S: Into<String>>(self, desc: S) -> Self
     where
         Self: Sized,
@@ -43,10 +18,6 @@ pub trait ErrorWith {
 }
 
 impl<T, E: ErrorWith> ErrorWith for Result<T, E> {
-    #[allow(deprecated)]
-    fn want<S: Into<String>>(self, desc: S) -> Self {
-        self.map_err(|e| e.want(desc))
-    }
     fn position<S: Into<String>>(self, desc: S) -> Self {
         self.map_err(|e| e.position(desc))
     }

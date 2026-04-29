@@ -1,6 +1,6 @@
 [package]
 name = "orion-error"
-version = "0.7.2" #@gxl:set(version)
+version = "0.8.0" #@gxl:set(version)
 edition = "2021"
 authors = ["wukong <sec-wukong@outlook.com>"]
 description = "Struct Error for Large Project"
@@ -23,7 +23,7 @@ serde_json = ["dep:serde_json"]
 toml = ["dep:toml"]
 
 [dependencies]
-orion-error-derive = { version = "0.7.0", path = "orion-error-derive", optional = true }
+orion-error-derive = { version = "0.8.0", path = "orion-error-derive", optional = true }
 thiserror = "2.0"
 serde = { version = "1.0", features = ["derive", "rc"], optional = true }
 derive_more = { version = "2.1", features = ["from"] }

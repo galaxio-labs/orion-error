@@ -52,11 +52,8 @@ pub use traits::{ErrorWith, ErrorWrapAs, IntoAs};
 
 #[doc(hidden)]
 pub use core::{
-    ErrorCategory, ErrorCode, ErrorIdentityProvider, UvsFrom, Visibility,
+    ErrorCategory, ErrorCode, ErrorIdentityProvider,
 };
-#[doc(hidden)]
-pub use traits::ErrorConv;
-
 /// Primary-path traits and types for convenient wildcard imports.
 ///
 /// # Example
@@ -92,16 +89,6 @@ pub mod advanced_prelude {
     };
     #[cfg(feature = "derive")]
     pub use crate::OrionError;
-}
-
-/// Compatibility wildcard imports for legacy conversion APIs.
-///
-/// Use this only when maintaining older `owe(...)` call paths.
-pub mod compat_prelude {
-    #![allow(deprecated)]
-    pub use crate::traits::{
-        ErrorOwe, ErrorOweBase, ErrorOweSource, ErrorOweSourceBase,
-    };
 }
 
 /// Shared data carriers and enums that are still convenient outside the
@@ -157,7 +144,7 @@ pub mod report {
 /// Reason-layer enums and traits.
 pub mod reason {
     pub use crate::core::{
-        ConfErrReason, DomainReason, ErrorCategory, ErrorCode, ErrorIdentityProvider, UvsFrom,
+        ConfErrReason, DomainReason, ErrorCategory, ErrorCode, ErrorIdentityProvider,
         UvsReason,
     };
 }
@@ -181,13 +168,5 @@ pub mod traits_ext {
         ConvStructError, ErrorConv, ErrorWith, ErrorWrapAs, IntoAs, ToStructError,
         WrapStructErrorAs,
     };
-    pub use crate::{ErrorCode, UvsFrom};
-}
-
-/// Compatibility trait exports for legacy conversion helpers.
-pub mod compat_traits {
-    #![allow(deprecated)]
-    pub use crate::traits::{
-        ErrorOwe, ErrorOweBase, ErrorOweSource, ErrorOweSourceBase,
-    };
+    pub use crate::ErrorCode;
 }

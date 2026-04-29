@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.8.0
+
+本版是 API 收口版本：删除所有 `0.7.x` 已废弃（deprecated）的兼容路径，缩减根导出，清理公开模块。
+
+### Removed
+
+- **完整删除 `compat_prelude` / `compat_traits` 模块**
+- **完整删除 ErrorOwe 系列 trait**：
+  - `ErrorOwe` / `ErrorOweBase` / `ErrorOweSource` / `ErrorOweSourceBase`
+  - `.owe()` / `.owe_source()` / `.owe_logic()` / `.owe_biz()` / `.owe_rule()` / `.owe_validation()` / `.owe_data()` / `.owe_conf()` / `.owe_res()` / `.owe_net()` / `.owe_timeout()` / `.owe_sys()` 及对应的 `*_source()` 变体
+- **删除 `ErrorWith` 上的废弃方法**：
+  - `.want()` / `.attach_context()` / `.with()`
+- **删除 `OperationContext::with_want()`**
+- **删除根 `#[doc(hidden)]` 导出**：
+  - `UvsFrom` / `Visibility` / `ErrorConv`（derive 不依赖这三个名字）
+- **删除测试文件 `test_error_owe.rs`**
+
+### Changed
+
+- **版本升级**：`0.7.2` → `0.8.0`（breaking change）
+- `examples/order_case.rs` 改用 `conversion::ErrorConv` 代替根导入
+
 ## 0.7.2
 
 本版是 identity-first 架构收口：将 identity 从诊断层解耦到 exposure 层，清除 `ErrorCode` 在主路径上的残留 bound。

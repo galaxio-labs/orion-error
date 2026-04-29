@@ -84,9 +84,8 @@ fn test_advanced_prelude_exports_cli_projection_types() {
     assert_eq!(cli["code"], serde_json::json!("sys.io_error"));
 }
 
-#[allow(deprecated)]
 #[test]
-fn test_root_prelude_and_compat_imports_compile() {
+fn test_root_prelude_imports_compile() {
     fn build_with_prelude() -> Result<(), orion_error::StructError<UvsReason>> {
         use orion_error::prelude::*;
         use orion_error::reason::UvsReason;
@@ -102,18 +101,6 @@ fn test_root_prelude_and_compat_imports_compile() {
             .map(|_| ())
     }
 
-    fn build_with_compat() -> Result<(), orion_error::StructError<UvsReason>> {
-        // Compat coverage is intentional here: legacy helpers remain available
-        // only from explicit compat modules, not from a versioned namespace.
-        use orion_error::compat_prelude::*;
-
-        let legacy: Result<(), &str> = Err("legacy failure");
-        legacy.owe(UvsReason::business_error())
-    }
-
     let err = build_with_prelude().unwrap_err();
     assert_eq!(err.reason().error_code(), UvsReason::system_error().error_code());
-
-    let err = build_with_compat().unwrap_err();
-    assert_eq!(err.reason().error_code(), UvsReason::business_error().error_code());
 }

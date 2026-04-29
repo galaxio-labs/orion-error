@@ -1,5 +1,5 @@
 use orion_error::ErrorWith;
-use orion_error::{bridge, compat_prelude, conversion, reason, report, runtime, snapshot};
+use orion_error::{bridge, conversion, reason, report, runtime, snapshot};
 
 #[test]
 fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interoperate() {
@@ -32,15 +32,6 @@ fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interopera
     );
     assert!(std::error::Error::source(&bridge_view).is_none());
     assert_eq!(owned_bridge.into_struct(), err);
-
-    let legacy: Result<(), &str> = Err("legacy failure");
-    let compat_result: Result<(), runtime::StructError<reason::UvsReason>> =
-        compat_prelude::ErrorOweBase::owe(legacy, reason::UvsReason::business_error());
-
-    assert_eq!(
-        reason::ErrorCode::error_code(compat_result.unwrap_err().reason()),
-        reason::ErrorCode::error_code(&reason::UvsReason::business_error())
-    );
 
     let io_result: Result<(), std::io::Error> = Err(std::io::Error::other("disk offline"));
     let structured = conversion::IntoAs::into_as(

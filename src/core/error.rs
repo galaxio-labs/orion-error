@@ -1099,16 +1099,6 @@ impl<T: DomainReason> StructErrorBuilder<T> {
 }
 
 impl<T: DomainReason> ErrorWith for StructError<T> {
-    fn want<S: Into<String>>(mut self, desc: S) -> Self {
-        let desc = desc.into();
-        let ctx_stack = Arc::make_mut(&mut self.imp.context);
-        if ctx_stack.is_empty() {
-            ctx_stack.push(OperationContext::from_target(desc));
-        } else if let Some(x) = ctx_stack.last_mut() {
-            x.push_target_segment(desc);
-        }
-        self
-    }
     fn position<S: Into<String>>(mut self, pos: S) -> Self {
         self.imp.position = Some(pos.into());
         self
@@ -1866,17 +1856,6 @@ mod tests {
         let display_output = format!("{error}");
         assert!(!display_output.contains("config.kind"));
         assert!(!display_output.contains("sink_defaults"));
-    }
-
-    #[allow(deprecated)]
-    #[test]
-    fn test_attach_context_deprecated_alias_matches_with_context() {
-        let ctx = OperationContext::doing("load config").with_meta("tenant", "acme");
-        let via_new = StructError::from(TestDomainReason::TestError).with_context(ctx.clone());
-        let via_old = StructError::from(TestDomainReason::TestError).attach_context(ctx);
-
-        assert_eq!(via_old.contexts(), via_new.contexts());
-        assert_eq!(via_old.context_metadata(), via_new.context_metadata());
     }
 
     #[test]
