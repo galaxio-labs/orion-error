@@ -133,19 +133,21 @@ impl Drop for OperationContext {
 
 impl Display for OperationContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let target = self.compat_target();
+
         if let Some(action) = &self.action {
             writeln!(f, "doing: {action}")?;
         }
         if let Some(locator) = &self.locator {
             writeln!(f, "at: {locator}")?;
         }
-        if let Some(target) = &self.target {
+        if let Some(target) = target.as_ref() {
             if self.action.as_deref() != Some(target.as_str()) {
                 writeln!(f, "want: {target}")?;
             }
         }
         if let Some(path) = self.normalized_path_string() {
-            if self.target.as_deref() != Some(path.as_str()) {
+            if target.as_deref() != Some(path.as_str()) {
                 writeln!(f, "path: {path}")?;
             }
         }
@@ -216,6 +218,46 @@ where
 }
 
 impl OperationContext {
+    fn ensure_path_root(&mut self, root: &str) {
+        if root.is_empty() {
+            return;
+        }
+
+        if self.path.is_empty() {
+            self.path.push(root.to_string());
+        } else if self.path.first().map(String::as_str) != Some(root) {
+            self.path.insert(0, root.to_string());
+        }
+    }
+
+    fn push_path_segment(&mut self, segment: String) {
+        if segment.is_empty() {
+            return;
+        }
+
+        let locator_at_end = self
+            .locator
+            .as_ref()
+            .is_some_and(|locator| self.path.last() == Some(locator));
+
+        let insert_index = if locator_at_end {
+            self.path.len().saturating_sub(1)
+        } else {
+            self.path.len()
+        };
+        let prev = insert_index
+            .checked_sub(1)
+            .and_then(|idx| self.path.get(idx));
+        let current = self.path.get(insert_index);
+        if prev != Some(&segment) && current != Some(&segment) {
+            self.path.insert(insert_index, segment);
+        }
+    }
+
+    pub(crate) fn compat_target(&self) -> Option<String> {
+        self.target.clone().or_else(|| self.action.clone())
+    }
+
     pub(crate) fn from_target(target: String) -> Self {
         Self {
             action: None,
@@ -235,42 +277,19 @@ impl OperationContext {
             return;
         }
 
-        let locator_at_end = self
-            .locator
-            .as_ref()
-            .is_some_and(|locator| self.path.last() == Some(locator));
-
         if self.target.is_none() {
             self.target = Some(target.clone());
-            if self.path.is_empty() {
-                self.path.push(target);
-                return;
-            }
-            if self.path.first() != Some(&target) {
-                self.path.insert(0, target);
-            }
-        } else {
-            let root = self.target.clone().expect("checked above");
-            if self.path.is_empty() {
-                self.path.push(root.clone());
-            }
-            if self.path.first() != Some(&root) {
-                self.path.insert(0, root);
-            }
-
-            let insert_index = if locator_at_end {
-                self.path.len().saturating_sub(1)
-            } else {
-                self.path.len()
-            };
-            let prev = insert_index
-                .checked_sub(1)
-                .and_then(|idx| self.path.get(idx));
-            let current = self.path.get(insert_index);
-            if prev != Some(&target) && current != Some(&target) {
-                self.path.insert(insert_index, target);
-            }
+            self.ensure_path_root(&target);
+            return;
         }
+
+        let root = self.target.clone().expect("checked above");
+        self.ensure_path_root(&root);
+        if root == target {
+            return;
+        }
+
+        self.push_path_segment(target);
     }
 
     pub fn context(&self) -> &CallContext {
@@ -289,8 +308,8 @@ impl OperationContext {
         &self.mod_path
     }
 
-    pub fn target(&self) -> &Option<String> {
-        &self.target
+    pub fn target(&self) -> Option<String> {
+        self.compat_target()
     }
 
     pub fn action(&self) -> &Option<String> {
@@ -322,18 +341,19 @@ impl OperationContext {
             metadata: ErrorMetadata::default(),
         }
     }
-    #[deprecated(
-        since = "0.7.0",
-        note = "use doing(...) for action contexts; use at(...) for locator/resource contexts"
-    )]
-    pub fn want<S: Into<String>>(target: S) -> Self {
-        Self::from_target(target.into())
-    }
     pub fn doing<S: Into<String>>(action: S) -> Self {
         let action = action.into();
-        let mut ctx = Self::from_target(action.clone());
-        ctx.action = Some(action);
-        ctx
+        Self {
+            target: None,
+            action: Some(action.clone()),
+            locator: None,
+            path: vec![action],
+            context: CallContext::default(),
+            result: OperationResult::Fail,
+            exit_log: false,
+            mod_path: DEFAULT_MOD_PATH.into(),
+            metadata: ErrorMetadata::default(),
+        }
     }
     pub fn at<S: Into<String>>(locator: S) -> Self {
         let locator = locator.into();
@@ -349,11 +369,6 @@ impl OperationContext {
             metadata: ErrorMetadata::default(),
         }
     }
-    #[deprecated(since = "0.5.4", note = "use with_auto_log")]
-    pub fn with_exit_log(mut self) -> Self {
-        self.exit_log = true;
-        self
-    }
     pub fn with_auto_log(mut self) -> Self {
         self.exit_log = true;
         self
@@ -361,17 +376,6 @@ impl OperationContext {
     pub fn with_mod_path<S: Into<String>>(mut self, path: S) -> Self {
         self.mod_path = path.into();
         self
-    }
-    #[deprecated(since = "0.5.4", note = "use record")]
-    pub fn with<S1: Into<String>, S2: Into<String>>(&mut self, key: S1, val: S2) {
-        self.context.items.push((key.into(), val.into()));
-    }
-
-    #[deprecated(since = "0.5.4", note = "use record")]
-    pub fn with_path<S1: Into<String>, S2: Into<PathBuf>>(&mut self, key: S1, val: S2) {
-        self.context
-            .items
-            .push((key.into(), format!("{}", val.into().display())));
     }
     pub fn with_doing<S: Into<String>>(&mut self, action: S) {
         let action = action.into();
@@ -381,7 +385,7 @@ impl OperationContext {
         if self.action.is_none() {
             self.action = Some(action.clone());
         }
-        self.push_target_segment(action)
+        self.push_path_segment(action)
     }
     pub fn with_at<S: Into<String>>(&mut self, locator: S) {
         let locator = locator.into();
@@ -404,8 +408,9 @@ impl OperationContext {
 
     pub(crate) fn normalized_path_segments(&self) -> Vec<String> {
         let mut path = Vec::new();
+        let target = self.compat_target();
 
-        match (&self.action, &self.target) {
+        match (&self.action, target.as_ref()) {
             (Some(action), Some(target)) => {
                 path.push(target.clone());
                 for segment in self.path.iter().skip(1) {
@@ -448,7 +453,7 @@ impl OperationContext {
     }
 
     pub(crate) fn into_at_context(mut self) -> Self {
-        if self.locator.is_none() && self.target.is_none() {
+        if self.locator.is_none() && self.compat_target().is_none() {
             if self.path.len() == 1 {
                 self.locator = self.path.first().cloned();
             } else if self.context.items.len() == 1 {
@@ -528,7 +533,7 @@ impl OperationContext {
     /// 格式化上下文信息，用于日志输出
     #[cfg_attr(not(any(feature = "log", feature = "tracing")), allow(dead_code))]
     fn format_context(&self) -> String {
-        let want = self.target.clone().unwrap_or_default();
+        let want = self.compat_target().unwrap_or_default();
         let path = self.normalized_path_string().unwrap_or_default();
         let action = self.action.clone().unwrap_or_default();
         let locator = self.locator.clone().unwrap_or_default();
@@ -969,7 +974,7 @@ mod tests {
     #[test]
     fn test_op_context_macro_sets_callsite_mod_path() {
         let ctx = crate::op_context!("macro_target");
-        assert_eq!(*ctx.target(), Some("macro_target".to_string()));
+        assert_eq!(ctx.target(), Some("macro_target".to_string()));
         assert_eq!(ctx.mod_path().as_str(), module_path!());
     }
 
@@ -977,15 +982,6 @@ mod tests {
     fn test_withcontext_new() {
         let ctx = OperationContext::new();
         assert!(ctx.target.is_none());
-        assert_eq!(ctx.context().items.len(), 0);
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_withcontext_want() {
-        let ctx = OperationContext::want("test_target");
-        assert_eq!(*ctx.target(), Some("test_target".to_string()));
-        assert_eq!(ctx.path(), &["test_target".to_string()]);
         assert_eq!(ctx.context().items.len(), 0);
     }
 
@@ -1025,7 +1021,7 @@ mod tests {
     }
 
     #[test]
-    fn test_withcontext_with_path() {
+    fn test_record_path_value() {
         let mut ctx = OperationContext::new();
         let path = PathBuf::from("/test/path");
         ctx.record("file_path", &path);
@@ -1229,7 +1225,7 @@ mod tests {
         ctx1.record("key1", "value1");
         ctx1.with_doing("step1");
         let ctx2 = OperationContext::from(&ctx1);
-        assert_eq!(*ctx2.target(), Some("target1".to_string()));
+        assert_eq!(ctx2.target(), Some("target1".to_string()));
         assert_eq!(ctx2.path(), &["target1".to_string(), "step1".to_string()]);
         assert_eq!(ctx2.context().items.len(), 1);
         assert_eq!(
@@ -1329,13 +1325,13 @@ mod tests {
     }
 
     #[test]
-    fn test_with_exit_log() {
+    fn test_with_auto_log() {
         let ctx = OperationContext::new().with_auto_log();
         assert!(ctx.exit_log);
 
         let ctx2 = OperationContext::doing("test").with_auto_log();
         assert!(ctx2.exit_log);
-        assert_eq!(*ctx2.target(), Some("test".to_string()));
+        assert_eq!(ctx2.target(), Some("test".to_string()));
     }
 
     #[test]
@@ -1537,7 +1533,7 @@ mod tests {
         // 验证上下文状态
         assert!(ctx.result == OperationResult::Suc);
         assert!(ctx.exit_log);
-        assert_eq!(*ctx.target(), Some("user_registration".to_string()));
+        assert_eq!(ctx.target(), Some("user_registration".to_string()));
         assert_eq!(ctx.context().items.len(), 3);
 
         // 验证format_context输出
@@ -1586,7 +1582,7 @@ mod tests {
         // 测试构建器模式的使用
         let ctx = OperationContext::doing("builder_test").with_auto_log();
 
-        assert_eq!(*ctx.target(), Some("builder_test".to_string()));
+        assert_eq!(ctx.target(), Some("builder_test".to_string()));
         assert_eq!(ctx.path(), &["builder_test".to_string()]);
         assert!(ctx.exit_log);
     }

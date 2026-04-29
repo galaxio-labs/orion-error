@@ -7,8 +7,9 @@ mod tests {
     use crate::{
         core::{context::ContextRecord, convert_error},
         testcase::TestAssertWithMsg,
-        DomainReason, ErrorCode, ErrorWith, OperationContext, StructError, UvsReason,
+        ErrorWith, OperationContext, StructError, UvsReason,
     };
+    use crate::reason::{DomainReason, ErrorCode};
 
     // 测试用领域原因类型
     #[derive(Debug, PartialEq, Clone, Error, From)]

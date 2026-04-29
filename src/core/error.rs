@@ -664,12 +664,12 @@ impl<T: DomainReason> StructError<T> {
     }
 
     #[must_use]
-    /// Attach any source that can be converted into the dual-channel source
-    /// payload model.
+    /// Route any supported source into the internal std/struct source split.
     ///
-    /// Ordinary `StdError` values attach as `SourcePayloadKind::Std`, while
-    /// `StructError<_>` attaches as `SourcePayloadKind::Struct`.
-    pub fn attach_source<S>(self, source: S) -> Self
+    /// Prefer [`with_source`](Self::with_source) for normal application code.
+    /// This lower-level entry point stays internal so the public source story
+    /// remains centered on `with_source(...)`.
+    pub(crate) fn attach_source<S>(self, source: S) -> Self
     where
         S: IntoSourcePayload,
     {
@@ -677,7 +677,11 @@ impl<T: DomainReason> StructError<T> {
     }
 
     #[must_use]
-    pub(crate) fn with_std_source<E>(self, source: E) -> Self
+    /// Attach a non-structured source error explicitly.
+    ///
+    /// Prefer [`with_source`](Self::with_source) unless the call site needs to
+    /// make the source channel explicit.
+    pub fn with_std_source<E>(self, source: E) -> Self
     where
         E: StdError + Send + Sync + 'static,
     {
@@ -685,15 +689,15 @@ impl<T: DomainReason> StructError<T> {
     }
 
     #[must_use]
-    /// Auto-route a source error through the dual-channel source model.
+    /// Auto-route a source error through the internal std/struct source split.
     ///
     /// This is the recommended public entry point for attaching sources. It
     /// accepts both standard `StdError` values and `StructError<_>` values,
-    /// automatically routing through the correct internal channel via the
-    /// [`IntoSourcePayload`] trait.
+    /// automatically routing through the correct internal channel.
     ///
-    /// For call sites that need to explicitly choose the source kind, use
-    /// [`attach_source`](Self::attach_source) instead.
+    /// Use [`with_std_source`](Self::with_std_source) or
+    /// [`with_struct_source`](Self::with_struct_source) only when the call site
+    /// intentionally wants to make that distinction explicit.
     pub fn with_source<S>(self, source: S) -> Self
     where
         S: IntoSourcePayload,
@@ -711,7 +715,11 @@ impl<T: DomainReason> StructError<T> {
     }
 
     #[must_use]
-    pub(crate) fn with_struct_source<R>(self, source: StructError<R>) -> Self
+    /// Attach another `StructError<_>` explicitly as the structured source.
+    ///
+    /// Prefer [`with_source`](Self::with_source) unless the call site wants to
+    /// make structured-source preservation explicit.
+    pub fn with_struct_source<R>(self, source: StructError<R>) -> Self
     where
         R: DomainReason,
     {
@@ -719,7 +727,7 @@ impl<T: DomainReason> StructError<T> {
     }
 
     /// Internal helper: creates a new `StructError<R2>` wrapping `self` as the
-    /// structured source. Used by [`WrapStructErrorAs`](crate::traits::WrapStructErrorAs).
+    /// structured source.
     #[must_use]
     pub(crate) fn wrap<R2>(self, reason: R2) -> StructError<R2>
     where
@@ -873,10 +881,7 @@ impl<T: DomainReason> StructError<T> {
         Err(self)
     }
     pub fn target_main(&self) -> Option<String> {
-        self.imp.context
-            .iter()
-            .rev()
-            .find_map(|ctx| ctx.target().clone())
+        self.imp.context.iter().rev().find_map(OperationContext::target)
     }
 
     pub fn action_main(&self) -> Option<String> {
@@ -906,7 +911,7 @@ impl<T: DomainReason> StructError<T> {
 
         for ctx in self.imp.context.iter().rev() {
             let locator_only = ctx.action().is_none()
-                && ctx.target().is_none()
+                && ctx.compat_target().is_none()
                 && ctx.locator().is_some()
                 && ctx.path().len() <= 1;
 
@@ -1029,7 +1034,7 @@ impl<T: DomainReason> StructErrorBuilder<T> {
         self
     }
 
-    pub fn attach_source<S>(self, source: S) -> Self
+    pub(crate) fn attach_source<S>(self, source: S) -> Self
     where
         S: IntoSourcePayload,
     {
@@ -1056,10 +1061,10 @@ impl<T: DomainReason> StructErrorBuilder<T> {
         self
     }
 
-    /// Attach a non-structured source error.
+    /// Attach a non-structured source error explicitly.
     ///
-    /// For `StructError<_>` sources, use `source_struct(...)` so metadata and
-    /// structured source frames are preserved.
+    /// Prefer [`source`](Self::source) unless the builder call site needs to
+    /// make the source channel explicit.
     pub fn source_std<E>(self, source: E) -> Self
     where
         E: StdError + Send + Sync + 'static,
@@ -1068,10 +1073,11 @@ impl<T: DomainReason> StructErrorBuilder<T> {
     }
 
     /// Convenience sugar that auto-routes either a standard source error or an
-    /// existing `StructError<_>` through the dual-channel source model.
+    /// existing `StructError<_>` through the internal std/struct source split.
     ///
-    /// Prefer `source_std(...)` / `source_struct(...)` when you want the call
-    /// site to make the source kind explicit.
+    /// This is the recommended builder entry point for attaching sources.
+    /// Prefer `source_std(...)` / `source_struct(...)` only when the builder
+    /// call site wants to make the source kind explicit.
     pub fn source<S>(self, source: S) -> Self
     where
         S: IntoSourcePayload,
@@ -1117,7 +1123,8 @@ mod tests {
 
     use crate::{
         core::context::{CallContext, ContextRecord},
-        DomainReason, ErrorCode, UvsReason,
+        reason::{DomainReason, ErrorCode},
+        UvsReason,
     };
 
     use super::*;
@@ -1591,9 +1598,9 @@ mod tests {
     }
 
     #[test]
-    fn test_attach_source_routes_std_source_payload() {
+    fn test_with_source_routes_std_source_payload() {
         let error = StructError::from(TestDomainReason::TestError)
-            .attach_source(std::io::Error::other("disk offline"));
+            .with_source(std::io::Error::other("disk offline"));
 
         assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Std));
         assert_eq!(error.source_ref().unwrap().to_string(), "disk offline");
@@ -1601,12 +1608,12 @@ mod tests {
     }
 
     #[test]
-    fn test_attach_source_routes_struct_source_payload() {
+    fn test_with_source_routes_struct_source_payload() {
         let source = StructError::from(TestDomainReason::TestError)
             .with_detail("repo layer failed")
             .with_std_source(std::io::Error::other("db unavailable"));
         let error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
-            .attach_source(source);
+            .with_source(source);
 
         assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Struct));
         assert_eq!(
@@ -1617,9 +1624,9 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_attach_source_routes_std_source_payload() {
+    fn test_builder_source_routes_std_source_payload() {
         let error = StructError::builder(TestDomainReason::TestError)
-            .attach_source(std::io::Error::other("disk offline"))
+            .source(std::io::Error::other("disk offline"))
             .finish();
 
         assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Std));

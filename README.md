@@ -52,7 +52,7 @@ In short:
 
 ```toml
 [dependencies]
-orion-error = "0.7"
+orion-error = "0.8"
 ```
 
 Default features include `derive` and `log`.
@@ -61,11 +61,11 @@ Common optional features:
 
 ```toml
 [dependencies]
-orion-error = { version = "0.7", features = ["serde"] }
-orion-error = { version = "0.7", features = ["serde_json"] }
-orion-error = { version = "0.7", features = ["tracing"] }
-orion-error = { version = "0.7", features = ["anyhow"] }
-orion-error = { version = "0.7", features = ["toml"] }
+orion-error = { version = "0.8", features = ["serde"] }
+orion-error = { version = "0.8", features = ["serde_json"] }
+orion-error = { version = "0.8", features = ["tracing"] }
+orion-error = { version = "0.8", features = ["anyhow"] }
+orion-error = { version = "0.8", features = ["toml"] }
 ```
 
 ## Quick Start
@@ -104,8 +104,7 @@ What happens here:
 - `into_as(...)` converts a normal Rust error into the structured system
 - `doing(...)` and `with_context(...)` add operation context
 
-For new code, treat `doing(...)` as the standard operation verb. `want(...)`
-only exists as a compatibility path for older code.
+For new code, treat `doing(...)` as the standard operation verb.
 
 ## The 4 APIs To Learn First
 
@@ -163,9 +162,19 @@ That matters because large systems usually fail at the boundary:
 Use the explicit bridge APIs when you need that ecosystem:
 
 ```rust
-let borrowed_std = err.as_std();
-let owned_std = err.clone().into_std();
-let boxed_std = err.into_boxed_std();
+use orion_error::{StructError, UvsReason};
+
+let borrowed_err = StructError::from(UvsReason::system_error());
+let owned_err = StructError::from(UvsReason::system_error());
+let boxed_err = StructError::from(UvsReason::system_error());
+
+let borrowed_std = borrowed_err.as_std();
+let owned_std = owned_err.into_std();
+let boxed_std = boxed_err.into_boxed_std();
+
+assert!(std::error::Error::source(&borrowed_std).is_none());
+assert!(std::error::Error::source(&owned_std).is_none());
+assert!(std::error::Error::source(boxed_std.as_ref()).is_none());
 ```
 
 ## Recommended Imports

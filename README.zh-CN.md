@@ -27,7 +27,7 @@
 - 用 `StructError<R>` 作为统一运行时载体
 - 普通错误第一次进入系统时，用 `into_as(...)`
 - 已经结构化的错误跨层时，用 `err_conv()` 或 `wrap_as(...)`
-- 到边界时，再做 `report()` / `snapshot()` / `http_response(...)`
+- 到边界时，再做 `report()` / `snapshot()` / `exposure_snapshot(...)`
 
 [![CI](https://github.com/galaxio-labs/orion-error/workflows/CI/badge.svg)](https://github.com/galaxio-labs/orion-error/actions)
 [![Coverage Status](https://codecov.io/gh/galaxio-labs/orion-error/branch/main/graph/badge.svg)](https://codecov.io/gh/galaxio-labs/orion-error)
@@ -57,7 +57,7 @@
 
 ```toml
 [dependencies]
-orion-error = "0.7"
+orion-error = "0.8"
 ```
 
 默认 feature 包含 `derive` 和 `log`。
@@ -66,11 +66,11 @@ orion-error = "0.7"
 
 ```toml
 [dependencies]
-orion-error = { version = "0.7", features = ["serde"] }
-orion-error = { version = "0.7", features = ["serde_json"] }
-orion-error = { version = "0.7", features = ["tracing"] }
-orion-error = { version = "0.7", features = ["anyhow"] }
-orion-error = { version = "0.7", features = ["toml"] }
+orion-error = { version = "0.8", features = ["serde"] }
+orion-error = { version = "0.8", features = ["serde_json"] }
+orion-error = { version = "0.8", features = ["tracing"] }
+orion-error = { version = "0.8", features = ["anyhow"] }
+orion-error = { version = "0.8", features = ["toml"] }
 ```
 
 ## 5 分钟上手
@@ -109,7 +109,7 @@ fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
 - `into_as(...)` 把普通 Rust 错误接进结构化体系
 - `doing(...)` / `with_context(...)` 把操作上下文补进去
 
-对新代码来说，操作语义统一使用 `doing(...)`。`want(...)` 只作为兼容旧代码的路径存在。
+对新代码来说，操作语义统一使用 `doing(...)`。
 
 ## 新用户先学这 4 个 API
 
@@ -130,7 +130,7 @@ std::io::Error
 StructError<RepoReason>
   -> err_conv() 或 wrap_as(...)
 StructError<ServiceReason>
-  -> report() / snapshot() / http_response(...)
+  -> report() / snapshot().stable_export() / exposure_snapshot(...)
 ```
 
 这张图背后的价值是：
@@ -146,10 +146,6 @@ StructError<ServiceReason>
 
 - `report()`：人看的诊断信息
 - `snapshot().stable_export()`：稳定机器导出
-- `http_response(...)`
-- `rpc_response(...)`
-- `cli_response(...)`
-- `log_response(...)`
 - `exposure_snapshot(...)`
 
 当前协议命名已经统一为 `Exposure*`，不是旧的 `ErrorPolicy*`。
@@ -169,10 +165,53 @@ StructError<ServiceReason>
 如果某个边界必须进入标准错误生态，走 bridge API：
 
 ```rust
-let borrowed_std = err.as_std();
-let owned_std = err.clone().into_std();
-let boxed_std = err.into_boxed_std();
+use orion_error::{StructError, UvsReason};
+
+let borrowed_err = StructError::from(UvsReason::system_error());
+let owned_err = StructError::from(UvsReason::system_error());
+let boxed_err = StructError::from(UvsReason::system_error());
+
+let borrowed_std = borrowed_err.as_std();
+let owned_std = owned_err.into_std();
+let boxed_std = boxed_err.into_boxed_std();
+
+assert!(std::error::Error::source(&borrowed_std).is_none());
+assert!(std::error::Error::source(&owned_std).is_none());
+assert!(std::error::Error::source(boxed_std.as_ref()).is_none());
 ```
+*** Add File: /Users/zuowenjian/devspace/wp-labs/orion-crates/orion-error/scripts/check-doc-code.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$repo_root"
+
+ORION_LIB="$(find target/debug/deps -name 'liborion_error-*.rlib' | head -n 1)"
+DERIVE_MORE_LIB="$(find target/debug/deps \( -name 'libderive_more-*.so' -o -name 'libderive_more-*.dylib' -o -name 'libderive_more-*.rlib' \) | head -n 1)"
+
+if [[ -z "${ORION_LIB:-}" || -z "${DERIVE_MORE_LIB:-}" ]]; then
+  echo "[doc-code] missing built dependencies in target/debug/deps"
+  echo "[doc-code] run cargo test --all-features first"
+  exit 1
+fi
+
+run_doc_test() {
+  local label="$1"
+  local file="$2"
+
+  echo "[doc-code] $label"
+  rustdoc \
+    --edition=2021 \
+    --test "$file" \
+    -L dependency=target/debug/deps \
+    --extern orion_error="$ORION_LIB" \
+    --extern derive_more="$DERIVE_MORE_LIB"
+}
+
+run_doc_test "README.md" README.md
+run_doc_test "README.zh-CN.md" README.zh-CN.md
+run_doc_test "docs/tutorial.md" docs/tutorial.md
+run_doc_test "docs/reason-identity-guide.md" docs/reason-identity-guide.md
 
 这样做的好处是：边界更清楚，不会在业务层里无意间退化成普通错误链。
 

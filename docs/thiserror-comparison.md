@@ -103,18 +103,20 @@ let err = std::fs::read_to_string("config.toml")
 如果上游已经是 `StructError<_>`，不要再回退到：
 
 - `.into_as(...)`
-- `owe(...)`
 
 ## 7. source 建议
 
 如果你已经在 `StructError` 世界里，推荐优先使用当前 source API：
 
+- `with_source(...)`
+- `builder.source(...)`
+
+当你想在 call site 明确写出 source 通道时，也可以使用：
+
 - `with_std_source(...)`
 - `with_struct_source(...)`
 - `builder.source_std(...)`
 - `builder.source_struct(...)`
-
-`with_source(...)` / `builder.source(...)` 仍可用，但属于自动分流兼容入口；新代码优先显式 API。
 
 ## 8. 实践建议
 

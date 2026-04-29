@@ -97,8 +97,8 @@ let stable = StableErrorSnapshot::from(&err);
 - `root_metadata`
 - `source_frames`
 
-这里的 `want` 仍是稳定导出的一部分，但它不代表新代码应继续使用
-`want(...)` 作为主路径 API。
+这里的 `want` 仍是稳定导出的一部分，但它不代表当前 API 里还保留
+`want(...)` 这一构造入口。
 
 ## 5. Stable Context Frame
 

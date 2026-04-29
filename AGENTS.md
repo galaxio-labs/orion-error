@@ -10,6 +10,9 @@
 ## Build, Test, and Development Commands
 - `cargo build` — compile the library with default features.
 - `cargo test --all-features -- --test-threads=1` — execute the full suite in the same mode as CI.
+- `bash scripts/check-feature-matrix.sh` — verify the supported feature combinations (`default`, `serde`, `serde_json`, `tracing`, `all-features`).
+- `bash scripts/check-doc-code.sh` — rustdoc-test the main docs (`README`, tutorial, reason guide) against the built crate artifacts.
+- `bash scripts/check-v3-policy.sh` — scan for deprecated/compat drift and `Result<T, String>` regressions.
 - `cargo fmt --all` and `cargo fmt --all -- --check` — format code or verify formatting.
 - `cargo clippy --all-targets --all-features -- -D warnings` — lint with warnings treated as errors.
 - `cargo run --example order_case` and `cargo run --example logging_example --features log` — validate examples; swap `log` for `tracing` as needed.
@@ -22,6 +25,8 @@
 ## Testing Guidelines
 - Place unit tests beside implementations; integration tests live in `tests/` and follow the `test_*.rs` naming.
 - Assert semantic behavior: `ErrorCode`, `StructError`, `detail()`, `context()` expectations.
+- Keep `src/lib.rs` compile-fail guards and export regression tests aligned with any public-surface change.
+- When docs or examples change, rerun `bash scripts/check-doc-code.sh` so snippets stay source-accurate.
 - Optional coverage: `cargo llvm-cov --all-features --workspace --html` for local reports.
 
 ## Commit & Pull Request Guidelines

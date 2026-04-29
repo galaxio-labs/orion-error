@@ -18,8 +18,8 @@
 
 当前 `DomainReason` 很薄，只要求：
 
-```rust
-pub trait DomainReason: PartialEq + Display {}
+```rust,ignore
+pub trait DomainReason: PartialEq + Display + Debug + Send + Sync + 'static {}
 ```
 
 它只负责说明：
@@ -102,6 +102,8 @@ enum AppReason {
 ### 4.1 最常用写法
 
 ```rust
+use orion_error::OrionError;
+
 #[derive(Debug, Clone, PartialEq, OrionError)]
 enum AppReason {
     #[orion_error(identity = "biz.order_not_found")]
@@ -119,6 +121,8 @@ enum AppReason {
 ### 4.2 显式指定 message / code / category
 
 ```rust
+use orion_error::OrionError;
+
 #[derive(Debug, Clone, PartialEq, OrionError)]
 enum AppReason {
     #[orion_error(
@@ -141,6 +145,8 @@ enum AppReason {
 ### 4.3 `transparent`
 
 ```rust
+use orion_error::{OrionError, UvsReason};
+
 #[derive(Debug, Clone, PartialEq, OrionError)]
 enum AppReason {
     #[orion_error(transparent)]

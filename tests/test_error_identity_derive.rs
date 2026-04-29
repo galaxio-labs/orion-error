@@ -1,7 +1,8 @@
 #![cfg(feature = "derive")]
 
 use derive_more::From;
-use orion_error::{ErrorCategory, ErrorCode, ErrorIdentityProvider, OrionError, UvsReason};
+use orion_error::{ErrorCode as ErrorCodeDerive, ErrorIdentityProvider as ErrorIdentityProviderDerive, OrionError, UvsReason};
+use orion_error::reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum DerivedReason {
@@ -88,13 +89,13 @@ mod prelude_import {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, ErrorCode)]
+#[derive(Debug, Clone, PartialEq, ErrorCodeDerive)]
 enum CodeOnlyReason {
     #[orion_error(code = 4100)]
     CodeOnly,
 }
 
-#[derive(Debug, Clone, PartialEq, ErrorIdentityProvider)]
+#[derive(Debug, Clone, PartialEq, ErrorIdentityProviderDerive)]
 enum IdentityOnlyReason {
     #[orion_error(identity = "logic.identity_only", category = "logic")]
     IdentityOnly,

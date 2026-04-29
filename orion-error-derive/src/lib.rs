@@ -70,7 +70,7 @@ fn impl_domain_reason(input: DeriveInput) -> Result<TokenStream2> {
 
     match input.data {
         Data::Enum(_) | Data::Struct(_) => Ok(quote! {
-            impl #impl_generics ::orion_error::DomainReason for #ident #ty_generics #where_clause {}
+            impl #impl_generics ::orion_error::reason::DomainReason for #ident #ty_generics #where_clause {}
         }),
         Data::Union(_) => Err(Error::new(
             ident.span(),
@@ -173,7 +173,7 @@ fn impl_error_code(input: DeriveInput, missing_code: MissingCode) -> Result<Toke
                     if args.transparent {
                         let (pattern, inner) = transparent_variant_pattern(variant)?;
                         Ok(quote! {
-                            #pattern => ::orion_error::ErrorCode::error_code(#inner)
+                            #pattern => ::orion_error::reason::ErrorCode::error_code(#inner)
                         })
                     } else if let Some(code) = args.code {
                         let pattern = variant_pattern(variant);
@@ -195,7 +195,7 @@ fn impl_error_code(input: DeriveInput, missing_code: MissingCode) -> Result<Toke
                 .collect::<Result<Vec<_>>>()?;
 
             Ok(quote! {
-                impl #impl_generics ::orion_error::ErrorCode for #ident #ty_generics #where_clause {
+                impl #impl_generics ::orion_error::reason::ErrorCode for #ident #ty_generics #where_clause {
                     fn error_code(&self) -> i32 {
                         match self {
                             #(#arms,)*
@@ -211,7 +211,7 @@ fn impl_error_code(input: DeriveInput, missing_code: MissingCode) -> Result<Toke
                 let pattern = struct_pattern(&ident, &data.fields);
                 quote! {
                     match self {
-                        #pattern => ::orion_error::ErrorCode::error_code(#inner),
+                        #pattern => ::orion_error::reason::ErrorCode::error_code(#inner),
                     }
                 }
             } else if let Some(code) = args.code {
@@ -226,7 +226,7 @@ fn impl_error_code(input: DeriveInput, missing_code: MissingCode) -> Result<Toke
             };
 
             Ok(quote! {
-                impl #impl_generics ::orion_error::ErrorCode for #ident #ty_generics #where_clause {
+                impl #impl_generics ::orion_error::reason::ErrorCode for #ident #ty_generics #where_clause {
                     fn error_code(&self) -> i32 {
                         #body
                     }
@@ -254,7 +254,7 @@ fn impl_error_identity_provider(input: DeriveInput) -> Result<TokenStream2> {
                     if args.transparent {
                         let (pattern, inner) = transparent_variant_pattern(variant)?;
                         Ok(quote! {
-                            #pattern => ::orion_error::ErrorIdentityProvider::stable_code(#inner)
+                            #pattern => ::orion_error::reason::ErrorIdentityProvider::stable_code(#inner)
                         })
                     } else if let Some(identity) = args.identity {
                         let pattern = variant_pattern(variant);
@@ -278,7 +278,7 @@ fn impl_error_identity_provider(input: DeriveInput) -> Result<TokenStream2> {
                     if args.transparent {
                         let (pattern, inner) = transparent_variant_pattern(variant)?;
                         Ok(quote! {
-                            #pattern => ::orion_error::ErrorIdentityProvider::error_category(#inner)
+                            #pattern => ::orion_error::reason::ErrorIdentityProvider::error_category(#inner)
                         })
                     } else if let Some(category) = args.error_category()? {
                         let pattern = variant_pattern(variant);
@@ -295,14 +295,14 @@ fn impl_error_identity_provider(input: DeriveInput) -> Result<TokenStream2> {
                 .collect::<Result<Vec<_>>>()?;
 
             Ok(quote! {
-                impl #impl_generics ::orion_error::ErrorIdentityProvider for #ident #ty_generics #where_clause {
+                impl #impl_generics ::orion_error::reason::ErrorIdentityProvider for #ident #ty_generics #where_clause {
                     fn stable_code(&self) -> &'static str {
                         match self {
                             #(#stable_arms,)*
                         }
                     }
 
-                    fn error_category(&self) -> ::orion_error::ErrorCategory {
+                    fn error_category(&self) -> ::orion_error::reason::ErrorCategory {
                         match self {
                             #(#category_arms,)*
                         }
@@ -318,12 +318,12 @@ fn impl_error_identity_provider(input: DeriveInput) -> Result<TokenStream2> {
                 (
                     quote! {
                         match self {
-                            #pattern => ::orion_error::ErrorIdentityProvider::stable_code(#inner),
+                            #pattern => ::orion_error::reason::ErrorIdentityProvider::stable_code(#inner),
                         }
                     },
                     quote! {
                         match self {
-                            #pattern => ::orion_error::ErrorIdentityProvider::error_category(#inner),
+                            #pattern => ::orion_error::reason::ErrorIdentityProvider::error_category(#inner),
                         }
                     },
                 )
@@ -344,12 +344,12 @@ fn impl_error_identity_provider(input: DeriveInput) -> Result<TokenStream2> {
             };
 
             Ok(quote! {
-                impl #impl_generics ::orion_error::ErrorIdentityProvider for #ident #ty_generics #where_clause {
+                impl #impl_generics ::orion_error::reason::ErrorIdentityProvider for #ident #ty_generics #where_clause {
                     fn stable_code(&self) -> &'static str {
                         #stable_body
                     }
 
-                    fn error_category(&self) -> ::orion_error::ErrorCategory {
+                    fn error_category(&self) -> ::orion_error::reason::ErrorCategory {
                         #category_body
                     }
                 }
@@ -461,10 +461,10 @@ fn identity_category(identity: &LitStr) -> Option<Result<TokenStream2>> {
     let value = identity.value();
     let prefix = value.split('.').next().unwrap_or_default();
     match prefix {
-        "conf" => Some(Ok(quote! { ::orion_error::ErrorCategory::Conf })),
-        "biz" => Some(Ok(quote! { ::orion_error::ErrorCategory::Biz })),
-        "logic" => Some(Ok(quote! { ::orion_error::ErrorCategory::Logic })),
-        "sys" => Some(Ok(quote! { ::orion_error::ErrorCategory::Sys })),
+        "conf" => Some(Ok(quote! { ::orion_error::reason::ErrorCategory::Conf })),
+        "biz" => Some(Ok(quote! { ::orion_error::reason::ErrorCategory::Biz })),
+        "logic" => Some(Ok(quote! { ::orion_error::reason::ErrorCategory::Logic })),
+        "sys" => Some(Ok(quote! { ::orion_error::reason::ErrorCategory::Sys })),
         value => Some(Err(Error::new(
             identity.span(),
             format!(
@@ -479,10 +479,10 @@ fn category_expr(expr: Expr) -> Result<TokenStream2> {
         Expr::Lit(ExprLit {
             lit: Lit::Str(lit), ..
         }) => match lit.value().as_str() {
-            "conf" => Ok(quote! { ::orion_error::ErrorCategory::Conf }),
-            "biz" => Ok(quote! { ::orion_error::ErrorCategory::Biz }),
-            "logic" => Ok(quote! { ::orion_error::ErrorCategory::Logic }),
-            "sys" => Ok(quote! { ::orion_error::ErrorCategory::Sys }),
+            "conf" => Ok(quote! { ::orion_error::reason::ErrorCategory::Conf }),
+            "biz" => Ok(quote! { ::orion_error::reason::ErrorCategory::Biz }),
+            "logic" => Ok(quote! { ::orion_error::reason::ErrorCategory::Logic }),
+            "sys" => Ok(quote! { ::orion_error::reason::ErrorCategory::Sys }),
             value => Err(Error::new(
                 lit.span(),
                 format!("unknown error category `{value}`; expected one of: conf, biz, logic, sys"),
@@ -493,10 +493,10 @@ fn category_expr(expr: Expr) -> Result<TokenStream2> {
         {
             let ident = &path.segments[0].ident;
             match ident.to_string().as_str() {
-                "Conf" => Ok(quote! { ::orion_error::ErrorCategory::Conf }),
-                "Biz" => Ok(quote! { ::orion_error::ErrorCategory::Biz }),
-                "Logic" => Ok(quote! { ::orion_error::ErrorCategory::Logic }),
-                "Sys" => Ok(quote! { ::orion_error::ErrorCategory::Sys }),
+                "Conf" => Ok(quote! { ::orion_error::reason::ErrorCategory::Conf }),
+                "Biz" => Ok(quote! { ::orion_error::reason::ErrorCategory::Biz }),
+                "Logic" => Ok(quote! { ::orion_error::reason::ErrorCategory::Logic }),
+                "Sys" => Ok(quote! { ::orion_error::reason::ErrorCategory::Sys }),
                 _ => Ok(path.to_token_stream()),
             }
         }

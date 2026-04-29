@@ -6,9 +6,9 @@
 
 ```toml
 [dependencies]
-orion-error = { version = "0.7.0", features = ["log"] }
+orion-error = { version = "0.8.0", features = ["log"] }
 # 或
-orion-error = { version = "0.7.0", features = ["tracing"] }
+orion-error = { version = "0.8.0", features = ["tracing"] }
 ```
 
 默认 feature 已包含 `log`。
@@ -64,10 +64,6 @@ ctx.mark_suc();
 - `mark_cancel()`
 
 那么 `Drop` 时会输出失败日志。
-
-兼容旧名：
-
-- `with_exit_log()` 已废弃，当前请使用 `with_auto_log()`
 
 ## 4. `OperationScope`
 

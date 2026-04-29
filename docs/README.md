@@ -1,6 +1,6 @@
 # 文档导航
 
-这组文档只描述 `orion-error 0.7.x` 当前已经落地的设计和用法。
+这组文档只描述 `orion-error 0.8.x` 当前已经落地的设计和用法。
 
 如果文档和实现冲突，以 `src/`、`tests/`、`examples/` 为准。
 
@@ -17,11 +17,33 @@
 9. [日志说明](./LOGGING.md)
 10. [与 thiserror 的关系](./thiserror-comparison.md)
 11. [0.8 Breaking Plan](./0.8-breaking-plan.md)
-12. [Release Checklist](./release-checklist.md)
+12. [0.9 Design Plan](./0.9-design-plan.md)
+13. [Release Checklist](./release-checklist.md)
+
+## 当前质量锁
+
+当前仓库已经把下面这些边界收成固定检查：
+
+- root surface compile-fail guard
+  - 锁住 root 不再重新暴露 `DomainReason`
+  - 锁住 root 不再重新暴露 trait 形态 `ErrorCode`
+  - 锁住 root 不再重新暴露 trait 形态 `ErrorIdentityProvider`
+- layered export regression tests
+  - 锁住 root / `prelude` / `runtime` / `conversion` / `snapshot` / `report` /
+    `bridge` / `reason` 的当前职责边界
+- feature matrix
+  - `bash scripts/check-feature-matrix.sh`
+- docs code compile
+  - `bash scripts/check-doc-code.sh`
+- policy scan
+  - `bash scripts/check-v3-policy.sh`
+
+如果后续 public surface、feature、文档主路径发生变化，需要同步更新这些锁，
+而不是只改实现或只改 README。
 
 ## crates.io 发布顺序
 
-如果发布 `0.7.x` 当前这一组 crate：
+如果发布 `0.8.x` 当前这一组 crate：
 
 1. 先发布 `orion-error-derive`
 2. 等 crates.io 索引传播完成
@@ -51,9 +73,6 @@
   - `orion_error::report::*`
   - `orion_error::bridge::*`
   - `orion_error::reason::*`
-- 兼容旧代码时才使用：
-  - `orion_error::compat_prelude::*`
-  - `orion_error::compat_traits::*`
 
 ## 分层导入边界
 
@@ -71,10 +90,10 @@
   进入标准错误生态的显式 bridge 类型。
 - `orion_error::reason::*`
   reason trait、`UvsReason`、category 与 stable identity 相关能力。
-- `orion_error::types::*`
-  仅保留少量跨层都常见的共享数据载体，不再承担 report/runtime/bridge 的重复导出。
 - `orion_error::advanced_prelude::*`
-  只建议用于协议/schema 测试、迁移验证和大范围编译覆盖，不建议业务代码使用。
+  只建议用于协议/schema 测试、迁移验证和大范围编译覆盖。
+  当前主要覆盖 snapshot/report/projection 相关表面，不再承担
+  bridge/reason/runtime/conversion 的宽导出。
 
 ## 设计边界
 

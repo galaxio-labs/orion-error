@@ -149,67 +149,6 @@ impl UvsReason {
     }
 }
 
-/// Unified constructor helpers for types that can be converted from `UvsReason`.
-pub trait UvsFrom: From<UvsReason> + Sized {
-    fn from_conf() -> Self {
-        Self::from(UvsReason::core_conf())
-    }
-
-    fn from_conf_reason(reason: ConfErrReason) -> Self {
-        Self::from(UvsReason::ConfigError(reason))
-    }
-
-    fn from_data() -> Self {
-        Self::from(UvsReason::data_error())
-    }
-
-    fn from_sys() -> Self {
-        Self::from(UvsReason::system_error())
-    }
-
-    fn from_biz() -> Self {
-        Self::from(UvsReason::business_error())
-    }
-
-    fn from_logic() -> Self {
-        Self::from(UvsReason::logic_error())
-    }
-
-    fn from_rule() -> Self {
-        Self::from(UvsReason::rule_error())
-    }
-
-    fn from_res() -> Self {
-        Self::from(UvsReason::resource_error())
-    }
-
-    fn from_net() -> Self {
-        Self::from(UvsReason::network_error())
-    }
-
-    fn from_timeout() -> Self {
-        Self::from(UvsReason::timeout_error())
-    }
-
-    fn from_validation() -> Self {
-        Self::from(UvsReason::validation_error())
-    }
-
-    fn from_not_found() -> Self {
-        Self::from(UvsReason::not_found_error())
-    }
-
-    fn from_permission() -> Self {
-        Self::from(UvsReason::permission_error())
-    }
-
-    fn from_external() -> Self {
-        Self::from(UvsReason::external_error())
-    }
-}
-
-impl<T> UvsFrom for T where T: From<UvsReason> {}
-
 impl ErrorCode for UvsReason {
     fn error_code(&self) -> i32 {
         match self {
@@ -417,13 +356,13 @@ mod tests {
 
     #[test]
     fn test_trait_implementations() {
-        let reason: UvsReason = <UvsReason as UvsFrom>::from_net();
+        let reason = UvsReason::network_error();
         assert_eq!(reason.error_code(), 202);
 
-        let reason: UvsReason = <UvsReason as UvsFrom>::from_validation();
+        let reason = UvsReason::validation_error();
         assert_eq!(reason.error_code(), 100);
 
-        let reason: UvsReason = <UvsReason as UvsFrom>::from_external();
+        let reason = UvsReason::external_error();
         assert_eq!(reason.error_code(), 301);
         assert_eq!(reason.error_category(), ErrorCategory::Sys);
     }

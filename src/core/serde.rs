@@ -57,7 +57,8 @@ mod tests {
         StableErrorSnapshot, StructError, STABLE_SNAPSHOT_SCHEMA_VERSION,
     };
     use crate::report::RedactPolicy;
-    use crate::{ErrorCode, ErrorIdentityProvider, UvsReason};
+    use crate::reason::{ErrorCode, ErrorIdentityProvider};
+    use crate::UvsReason;
 
     // ── Test types ──
 

@@ -13,10 +13,6 @@ pub trait ErrorWrapAs<T, R: DomainReason>: Sized {
     fn wrap_as(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>>;
 }
 
-pub trait WrapStructErrorAs<R: DomainReason>: Sized {
-    fn wrap_as(self, reason: R, detail: impl Into<String>) -> StructError<R>;
-}
-
 impl<T, R1, R2> ErrorConv<T, R2> for Result<T, StructError<R1>>
 where
     R1: DomainReason,
@@ -48,17 +44,7 @@ where
 {
     fn wrap_as(self, reason: R2, detail: impl Into<String>) -> Result<T, StructError<R2>> {
         let detail = detail.into();
-        self.map_err(|e| e.wrap_as(reason, detail))
-    }
-}
-
-impl<R1, R2> WrapStructErrorAs<R2> for StructError<R1>
-where
-    R1: DomainReason,
-    R2: DomainReason,
-{
-    fn wrap_as(self, reason: R2, detail: impl Into<String>) -> StructError<R2> {
-        self.wrap(reason).with_detail(detail)
+        self.map_err(|e| e.wrap(reason).with_detail(detail))
     }
 }
 
@@ -84,7 +70,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{core::DomainReason, ErrorCode, OperationContext, StructError, UvsReason};
+    use crate::{core::DomainReason, OperationContext, StructError, UvsReason};
+    use crate::reason::ErrorCode;
 
     // 定义测试用的 DomainReason
     #[derive(Debug, Clone, PartialEq, thiserror::Error)]

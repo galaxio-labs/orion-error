@@ -6,18 +6,18 @@
 
 ```toml
 [dependencies]
-orion-error = "0.7.0"
+orion-error = "0.8.0"
 ```
 
 常见可选 feature：
 
 ```toml
 [dependencies]
-orion-error = { version = "0.7.0", features = ["serde"] }
+orion-error = { version = "0.8.0", features = ["serde"] }
 # 或
-orion-error = { version = "0.7.0", features = ["tracing"] }
+orion-error = { version = "0.8.0", features = ["tracing"] }
 # 或
-orion-error = { version = "0.7.0", features = ["serde_json"] }
+orion-error = { version = "0.8.0", features = ["serde_json"] }
 ```
 
 默认 feature 包含：
@@ -48,7 +48,6 @@ use orion_error::runtime::OperationContext;
 
 - `prelude::*` 只导出主路径：`OrionError`、`StructError`、`IntoAs`、`ErrorWith`、`ErrorWrapAs`、`DefaultExposurePolicy`
 - 需要更明确边界时，再按职责补 `runtime` / `conversion` / `snapshot` / `report` / `bridge` / `reason`
-- 旧 `owe(...)` 路径只从 `compat_prelude::*` 或 `compat_traits::*` 导入
 
 ## 一分钟上手
 
@@ -173,28 +172,44 @@ let err = StructError::builder(UvsReason::validation_error())
 已有 `StructError` 时：
 
 ```rust
+use orion_error::{StructError, UvsReason};
+
 let err = StructError::from(UvsReason::system_error())
     .with_detail("read config failed")
-    .with_std_source(std::io::Error::other("disk offline"));
+    .with_source(std::io::Error::other("disk offline"));
+
+assert_eq!(err.source_ref().unwrap().to_string(), "disk offline");
 ```
 
 Builder 时：
 
 ```rust
+use orion_error::{StructError, UvsReason};
+
 let err = StructError::builder(UvsReason::system_error())
     .detail("read config failed")
-    .source_std(std::io::Error::other("disk offline"))
+    .source(std::io::Error::other("disk offline"))
     .finish();
+
+assert_eq!(err.source_ref().unwrap().to_string(), "disk offline");
 ```
 
-新代码建议优先显式写：
+主路径建议优先使用：
+
+- `with_source(...)`
+- `source(...)`
+
+它们会自动处理：
+
+- 普通 `StdError`
+- 已结构化的 `StructError<_>`
+
+如果你在少数场景下希望把 source 通道写得更显式，再使用：
 
 - `with_std_source(...)`
 - `with_struct_source(...)`
 - `source_std(...)`
 - `source_struct(...)`
-
-`with_source(...)` / `source(...)` 仍可用，但更适合兼容自动分流场景。
 
 ## 3. 使用上下文
 
@@ -218,11 +233,20 @@ ctx.record_meta("tenant.id", "demo");
 ### 3.1 错误侧挂载上下文
 
 ```rust
-use orion_error::conversion::ErrorWith;
+use orion_error::{ErrorWith, OperationContext, StructError, UvsReason};
+
+fn check_inventory() -> Result<(), StructError<UvsReason>> {
+    Err(StructError::from(UvsReason::business_error()).with_detail("inventory unavailable"))
+}
+
+let mut ctx = OperationContext::doing("place_order");
+ctx.record_field("order_id", "A-1001");
 
 let result = check_inventory()
     .doing("check inventory")
     .with_context(&ctx);
+
+assert!(result.is_err());
 ```
 
 上下文语义：
@@ -294,10 +318,29 @@ let err = result
 当上游已经是 `StructError<_>`，而当前层要建立新的语义边界时，使用 `wrap_as(...)`：
 
 ```rust
-use orion_error::ErrorWrapAs;
+use derive_more::From;
+use orion_error::{OrionError, StructError, UvsReason};
+use orion_error::conversion::ErrorWrapAs;
+
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
+enum AppReason {
+    #[orion_error(identity = "sys.repo_failed")]
+    RepoFailed,
+    #[orion_error(transparent)]
+    Uvs(UvsReason),
+}
+
+fn repo_call() -> Result<(), StructError<UvsReason>> {
+    Err(StructError::from(UvsReason::system_error()).with_detail("disk offline"))
+}
 
 let wrapped = repo_call()
     .wrap_as(AppReason::from(UvsReason::system_error()), "service layer failed");
+
+assert_eq!(
+    wrapped.unwrap_err().detail().as_deref(),
+    Some("service layer failed")
+);
 ```
 
 ### 4.3 `err_conv()`
@@ -305,24 +348,39 @@ let wrapped = repo_call()
 当只是把下层 reason 收敛到上层 reason，而不想新增一层 detail/source 语义时，使用 `err_conv()`：
 
 ```rust
+use derive_more::From;
+use orion_error::{OrionError, StructError, UvsReason};
 use orion_error::conversion::ErrorConv;
 
-let err = lower_layer_call().err_conv()?;
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
+enum RepoReason {
+    #[orion_error(transparent)]
+    Uvs(UvsReason),
+}
+
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
+enum ServiceReason {
+    #[orion_error(transparent)]
+    Repo(RepoReason),
+}
+
+fn lower_layer_call() -> Result<(), StructError<RepoReason>> {
+    Err(StructError::from(RepoReason::from(UvsReason::system_error()))
+        .with_detail("read config failed"))
+}
+
+fn upper_layer_call() -> Result<(), StructError<ServiceReason>> {
+    lower_layer_call().err_conv()?;
+    Ok(())
+}
+
+let err = upper_layer_call().unwrap_err();
+assert_eq!(err.detail().as_deref(), Some("read config failed"));
 ```
 
 典型前提是：
 
 - `R2: From<R1>`
-
-### 4.4 兼容旧路径
-
-旧代码仍然可以使用：
-
-- `owe(...)`
-- `err_wrap(...)`
-- `wrap(...)`
-
-但这些都只建议用于兼容维护，不建议作为新代码默认路径。
 
 ## 5. source、snapshot、report、bridge 的边界
 
@@ -342,8 +400,16 @@ let err = lower_layer_call().err_conv()?;
 常用入口：
 
 ```rust
+use orion_error::{StructError, UvsReason};
+
+let err = StructError::from(UvsReason::system_error())
+    .with_detail("read config failed");
+
 let snapshot = err.snapshot();
 let stable = snapshot.stable_export();
+
+assert_eq!(snapshot.reason, "system error");
+assert_eq!(stable.reason, "system error");
 ```
 
 ### 5.3 人类诊断对象
@@ -355,7 +421,14 @@ let stable = snapshot.stable_export();
 常用入口：
 
 ```rust
+use orion_error::{StructError, UvsReason};
+
+let err = StructError::from(UvsReason::system_error())
+    .with_detail("read config failed");
+
 let report = err.report();
+
+assert_eq!(report.reason, "system error");
 ```
 
 ### 5.4 标准错误生态 bridge
@@ -374,7 +447,7 @@ let report = err.report();
 如果 reason 实现了 `ErrorIdentityProvider`，可以直接做稳定身份和协议投影：
 
 ```rust
-use orion_error::{DefaultExposurePolicy, StructError, UvsReason};
+use orion_error::{DefaultExposurePolicy, ErrorWith, StructError, UvsReason};
 use orion_error::reason::ErrorCategory;
 
 let err = StructError::from(UvsReason::system_error())
@@ -427,7 +500,9 @@ assert_err_identity(&err, "sys.io_error", ErrorCategory::Sys);
 
 ```rust
 use orion_error::reason::ErrorCode;
+use orion_error::{StructError, UvsReason};
 
+let err = StructError::from(UvsReason::system_error());
 assert_eq!(err.error_code(), 201);
 ```
 
