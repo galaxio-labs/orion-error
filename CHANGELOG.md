@@ -1,5 +1,66 @@
 # Changelog
 
+## 0.7.2
+
+本版是 identity-first 架构收口：将 identity 从诊断层解耦到 exposure 层，清除 `ErrorCode` 在主路径上的残留 bound。
+
+### Added
+
+- `ErrorProtocolSnapshot::from_report(report, identity, policy)` — 从 `DiagnosticReport` 进入 protocol 层的 canonical 入口
+- `Visibility::as_str()` — 稳定 lowercase 输出
+
+### Changed
+
+- **`DiagnosticReport` 移除 identity 数据**：
+  - 删除 `category` / `code` 字段（只保留诊断字段）
+  - 删除整组 exposure bridge 方法（`exposure_identity` / `http_status` / `visibility` / `default_hints` / `decision` / `exposure_snapshot` / `to_exposure_snapshot_json`）
+  - `render()` / `render_compact()` / `redacted()` / `render_redacted()` 保留
+- **`StructError<T>::report()` / `into_report() `** — 只要求 `DomainReason`（不再需要 `ErrorIdentityProvider`）
+- **`From<StructError<T>> for DiagnosticReport`** — 降为 `DomainReason`-only
+- **`StableErrorSnapshot.category` / `.code`** — 添加 `#[serde(skip)]`，不在 v2 稳定导出中出现
+- **四个 JSON projection** — `category` / `visibility` 改用 `as_str()` 输出稳定小写字符串（`"biz"` / `"sys"` / `"public"` / `"internal"`），不再使用 Rust Debug 格式
+- **`exposure_snapshot().to_json()`** — 改用手动 JSON 构造，与其余四个 projection 一致
+
+### Removed
+
+- `DiagnosticReport::category` / `DiagnosticReport::code` 字段
+- `DiagnosticReport` 上的 exposure bridge 方法
+- `ErrorCode` bound 从以下路径移除（`DomainReason` 已足够）：
+  - `IntoSourcePayload for StructError<R>`
+  - `with_struct_source()`
+  - `wrap()` / `WrapStructErrorAs` / `ErrorWrapAs`
+  - `into_std()` / `into_boxed_std()` / `as_std()`
+  - `OwnedStdStructError::into_boxed()`
+
+### Fixed
+
+- `DiagnosticReport::exposure_identity()` 不再构造启发式 `"report.unclassified"`，改用真正的 `stable_code()`
+- `display_chain()` 不再要求 `ErrorCode`
+- `collect_struct_error_source_frames()` 不再要求 `ErrorCode`（compat `error_code` 字段只在 `OwnedDynStdStructError::from` 显式设置）
+
+## 0.7.1
+
+依赖更新与文档清理。
+
+### Added
+
+- 文档补充：`doing` 作为主操作 API 的定位说明
+
+### Changed
+
+- README 简化，面向新用户
+- 代码格式化
+
+### Docs
+
+- 组织引用更新到 `galaxio-labs`
+
+### Dependencies
+
+- `codecov/codecov-action` 5 → 6
+- `softprops/action-gh-release` 2 → 3
+- 常规依赖升级
+
 ## 0.7.0
 
 相对 `0.6.3`，`0.7.0` 是一次公开 API 口径收敛和协议命名统一。
