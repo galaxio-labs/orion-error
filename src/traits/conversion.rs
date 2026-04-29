@@ -157,7 +157,7 @@ mod tests {
 
         assert!(converted_result.is_err());
         let converted_error = converted_result.unwrap_err();
-        assert_eq!(converted_error.error_code(), 2001);
+        assert_eq!(converted_error.reason().error_code(), 2001);
 
         // 测试成功情况下的转换
         let success_result: Result<i32, StructError<TestReason>> = Ok(42);
@@ -174,7 +174,7 @@ mod tests {
 
         let converted_error: StructError<AnotherReason> = original_error.conv();
 
-        assert_eq!(converted_error.error_code(), 2001);
+        assert_eq!(converted_error.reason().error_code(), 2001);
 
         // 测试带有 UvsReason 的转换
         let uvs_error: StructError<TestReason> =
@@ -182,7 +182,7 @@ mod tests {
 
         let converted_uvs_error: StructError<AnotherReason> = uvs_error.conv();
 
-        assert_eq!(converted_uvs_error.error_code(), 202);
+        assert_eq!(converted_uvs_error.reason().error_code(), 202);
     }
 
     #[test]
@@ -191,7 +191,7 @@ mod tests {
         let reason = TestReason::TestError;
         let error: StructError<TestReason> = reason.to_err();
 
-        assert_eq!(error.error_code(), 1001);
+        assert_eq!(error.reason().error_code(), 1001);
 
         // 测试 ToStructError trait 的 err_result 方法
         let reason2 = TestReason::TestError;
@@ -199,18 +199,18 @@ mod tests {
 
         assert!(result.is_err());
         let error_from_result = result.unwrap_err();
-        assert_eq!(error_from_result.error_code(), 1001);
+        assert_eq!(error_from_result.reason().error_code(), 1001);
 
         // 测试使用 UvsReason
         let uvs_reason1 = UvsReason::validation_error();
         let uvs_error: StructError<UvsReason> = uvs_reason1.to_err();
 
-        assert_eq!(uvs_error.error_code(), 100);
+        assert_eq!(uvs_error.reason().error_code(), 100);
 
         let uvs_reason2 = UvsReason::validation_error();
         let uvs_result: Result<i32, StructError<UvsReason>> = uvs_reason2.err_result();
         assert!(uvs_result.is_err());
-        assert_eq!(uvs_result.unwrap_err().error_code(), 100);
+        assert_eq!(uvs_result.unwrap_err().reason().error_code(), 100);
     }
 
     #[test]
@@ -222,7 +222,7 @@ mod tests {
         let converted: Result<i32, StructError<AnotherReason>> = original.err_conv();
         let err = converted.unwrap_err();
 
-        assert_eq!(err.error_code(), 2001);
+        assert_eq!(err.reason().error_code(), 2001);
         assert_eq!(err.source_ref().unwrap().to_string(), "db unavailable");
     }
 
@@ -237,7 +237,7 @@ mod tests {
             original.wrap_as(AnotherReason::AnotherError, "service layer failed");
         let err = wrapped.unwrap_err();
 
-        assert_eq!(err.error_code(), 2001);
+        assert_eq!(err.reason().error_code(), 2001);
         assert_eq!(err.detail().as_deref(), Some("service layer failed"));
         assert_eq!(
             err.source_ref().unwrap().to_string(),
@@ -312,7 +312,7 @@ mod tests {
             original.wrap_as(AnotherReason::AnotherError, "service layer failed");
         let err = wrapped.unwrap_err();
 
-        assert_eq!(err.error_code(), 2001);
+        assert_eq!(err.reason().error_code(), 2001);
         assert_eq!(err.detail().as_deref(), Some("service layer failed"));
         assert!(err.source_ref().unwrap().to_string().contains("test error"));
         assert_eq!(err.root_cause().unwrap().to_string(), "db unavailable");

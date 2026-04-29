@@ -1,4 +1,4 @@
-use super::{DomainReason, ErrorCode, StructError};
+use super::{DomainReason, StructError};
 
 /// Print an error with its full source chain to stderr.
 ///
@@ -7,19 +7,16 @@ use super::{DomainReason, ErrorCode, StructError};
 ///
 /// # Example
 ///
-/// ```rust,ignore
-/// use orion_error::report::print_error;
+/// ```rust
+/// use orion_error::{report::print_error, StructError, UvsReason};
 ///
-/// fn main() {
-///     if let Err(err) = run() {
-///         print_error(&err);
-///         std::process::exit(1);
-///     }
-/// }
+/// let err = StructError::from(UvsReason::system_error())
+///     .with_detail("config not found");
+/// print_error(&err);
 /// ```
 pub fn print_error<R>(err: &StructError<R>)
 where
-    R: DomainReason + ErrorCode,
+    R: DomainReason,
 {
     eprintln!("{}", err.display_chain());
 }

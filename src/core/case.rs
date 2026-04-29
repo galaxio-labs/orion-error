@@ -64,7 +64,7 @@ mod tests {
         let err = StructError::from(TestDomainReason::Why1);
 
         assert_eq!(err.reason(), &TestDomainReason::Why1);
-        assert_eq!(err.error_code(), 200);
+        assert_eq!(err.reason().error_code(), 200);
     }
 
     #[test]

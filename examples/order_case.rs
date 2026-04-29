@@ -182,7 +182,7 @@ fn print_protocol_views(err: &OrderError) {
     print_error(err);
     println!();
     let exposure_policy = DefaultExposurePolicy;
-    println!("{}", err.render_user_debug(&exposure_policy));
+    println!("{}", err.exposure_snapshot(&exposure_policy).render_user_debug());
 }
 
 fn run_case(name: &str, user_id: u32, amount: u64, raw_order: &str) {

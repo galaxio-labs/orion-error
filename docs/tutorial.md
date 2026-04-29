@@ -382,27 +382,20 @@ let err = StructError::from(UvsReason::system_error())
     .doing("load config");
 
 let identity = err.identity_snapshot();
-let exposure_view = err.exposure_view();
-let snapshot = err.exposure_snapshot(&DefaultExposurePolicy);
-let http = err.http_response(&DefaultExposurePolicy);
-let cli = err.cli_response(&DefaultExposurePolicy);
-let log = err.log_response(&DefaultExposurePolicy);
-let rpc = err.rpc_response(&DefaultExposurePolicy);
-let user_debug = err.render_user_debug(&DefaultExposurePolicy);
+let proto = err.exposure_snapshot(&DefaultExposurePolicy);
+let user_debug = proto.render_user_debug();
 
 assert_eq!(identity.code, "sys.io_error");
 assert_eq!(identity.category, ErrorCategory::Sys);
-assert_eq!(http.status, 500);
-assert_eq!(rpc.detail, None);
 assert!(user_debug.contains("sys.io_error"));
 ```
 
 这几层的职责分别是：
 
 - `identity_snapshot()`：稳定身份视图
-- `exposure_view()`：identity + report 的组合视图
-- `exposure_snapshot(...)`：最完整的协议输入
-- `http_response(...)` / `cli_response(...)` / `log_response(...)` / `rpc_response(...)`：出口投影
+- `exposure_snapshot(...)`：最完整的协议输入（携带 identity + decision + report）
+- `proto.render_user_debug()`：用户调试摘要
+- `proto.to_http_error_json()` 等：出口 JSON 投影
 
 ## 7. 测试建议
 

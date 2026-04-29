@@ -235,7 +235,7 @@ mod tests {
         let value = serde_json::to_value(identity).unwrap();
 
         assert_eq!(value["code"], serde_json::json!("sys.io_error"));
-        assert_eq!(value["category"], serde_json::json!("Sys"));
+        assert_eq!(value["category"], serde_json::json!("sys"));
         assert_eq!(value["reason"], serde_json::json!("system error"));
     }
 

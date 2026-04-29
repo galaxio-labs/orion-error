@@ -37,6 +37,13 @@
 - `DiagnosticReport::exposure_identity()` 不再构造启发式 `"report.unclassified"`，改用真正的 `stable_code()`
 - `display_chain()` 不再要求 `ErrorCode`
 - `collect_struct_error_source_frames()` 不再要求 `ErrorCode`（compat `error_code` 字段只在 `OwnedDynStdStructError::from` 显式设置）
+- `print_error()` 不再要求 `ErrorCode` bound，只需 `DomainReason`
+
+### Docs
+
+- 新增 crate 级决策流程图（`src/lib.rs`），从"我有一个错误"到"我该怎么处理"的 5 条路径
+- `report()`、`render()`（`StructError`）、`exposure_snapshot()`、`render()`（`DiagnosticReport`）各增加可运行的 doc-example
+- `cli.rs::print_error` 的 doc-test 从 `ignore` 改为可运行
 
 ## 0.7.1
 

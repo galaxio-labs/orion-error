@@ -18,7 +18,11 @@ pub struct DiagnosticReport {
     pub source_frames: Vec<SourceFrame>,
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(rename_all = "lowercase")
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Visibility {
     Public,
@@ -124,6 +128,24 @@ pub trait RedactPolicy {
 }
 
 impl<T: DomainReason> StructError<T> {
+    /// Build a [`DiagnosticReport`] from this error.
+    ///
+    /// The report carries human-readable reason, detail, context, and source
+    /// frames — no identity or protocol data.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use orion_error::{StructError, UvsReason};
+    /// use orion_error::report::DiagnosticReport;
+    ///
+    /// let err = StructError::from(UvsReason::validation_error())
+    ///     .with_detail("field `email` is required");
+    ///
+    /// let report: DiagnosticReport = err.report();
+    /// assert!(report.reason.contains("validation"));
+    /// assert_eq!(report.detail.as_deref(), Some("field `email` is required"));
+    /// ```
     pub fn report(&self) -> DiagnosticReport {
         DiagnosticReport {
             reason: self.reason().to_string(),
@@ -154,6 +176,22 @@ impl<T: DomainReason> StructError<T> {
         self.report().redacted(policy)
     }
 
+    /// Render this error as a human-readable diagnostic string.
+    ///
+    /// Delegates to [`DiagnosticReport::render()`].
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use orion_error::StructError;
+    /// use orion_error::reason::UvsReason;
+    ///
+    /// let s = StructError::from(UvsReason::validation_error())
+    ///     .with_detail("field `email` is required")
+    ///     .render();
+    /// assert!(s.contains("validation"));
+    /// assert!(s.contains("field `email` is required"));
+    /// ```
     pub fn render(&self) -> String {
         self.report().render()
     }
@@ -164,6 +202,23 @@ impl<T: DomainReason> StructError<T> {
 }
 
 impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
+    /// Build an [`ErrorProtocolSnapshot`] by combining identity, exposure
+    /// decision, and diagnostic report in one pass.
+    ///
+    /// This is the primary entry point for protocol-level error output.
+    /// Requires [`ErrorIdentityProvider`] (provided by `#[derive(OrionError)]`).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use orion_error::{DefaultExposurePolicy, StructError, UvsReason};
+    ///
+    /// let err = StructError::from(UvsReason::system_error())
+    ///     .with_detail("disk full");
+    /// let proto = err.exposure_snapshot(&DefaultExposurePolicy);
+    /// assert_eq!(proto.identity.code, "sys.io_error");
+    /// assert_eq!(proto.decision.http_status, 500);
+    /// ```
     pub fn exposure_snapshot(
         &self,
         exposure_policy: &impl ExposurePolicy,
@@ -190,18 +245,6 @@ impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
         }
     }
 
-    pub fn render_user_debug(&self, exposure_policy: &impl ExposurePolicy) -> String {
-        self.exposure_snapshot(exposure_policy).render_user_debug()
-    }
-
-    pub fn render_user_debug_redacted(
-        &self,
-        exposure_policy: &impl ExposurePolicy,
-        redact_policy: &impl RedactPolicy,
-    ) -> String {
-        self.exposure_snapshot(exposure_policy)
-            .render_user_debug_redacted(redact_policy)
-    }
 }
 
 impl From<&ErrorSnapshot> for DiagnosticReport {
@@ -241,6 +284,20 @@ impl From<StableErrorSnapshot> for DiagnosticReport {
 }
 
 impl DiagnosticReport {
+    /// Render this report as a human-readable diagnostic string.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use orion_error::{StructError, UvsReason};
+    ///
+    /// let err = StructError::from(UvsReason::validation_error())
+    ///     .with_detail("field `email` is required");
+    /// let report = err.report();
+    /// let output = report.render();
+    /// assert!(output.contains("reason:"));
+    /// assert!(output.contains("validation"));
+    /// ```
     pub fn render(&self) -> String {
         let mut lines = Vec::new();
         lines.push(format!("reason: {}", self.reason));
@@ -348,8 +405,9 @@ impl ErrorProtocolSnapshot {
     pub fn render_user_debug(&self) -> String {
         let mut lines = Vec::new();
         lines.push(format!(
-            "code          : {} ({:?})",
-            self.identity.code, self.identity.category
+            "code          : {} ({})",
+            self.identity.code,
+            self.identity.category.as_str()
         ));
 
         if let Some(detail) = self.report.detail.as_deref() {
@@ -359,8 +417,10 @@ impl ErrorProtocolSnapshot {
         }
 
         lines.push(format!(
-            "http          : {} {:?} retryable={}",
-            self.decision.http_status, self.decision.visibility, self.decision.retryable
+            "http          : {} {} retryable={}",
+            self.decision.http_status,
+            self.decision.visibility.as_str(),
+            self.decision.retryable
         ));
 
         if let Some(path) = self.identity.path.as_deref() {
@@ -1176,9 +1236,9 @@ mod tests {
 
         let rendered = snapshot.render_user_debug();
 
-        assert!(rendered.contains("code          : biz.order_invalid (Biz)"));
+        assert!(rendered.contains("code          : biz.order_invalid (biz)"));
         assert!(rendered.contains("detail        : order text must not be empty"));
-        assert!(rendered.contains("http          : 400 Public retryable=false"));
+        assert!(rendered.contains("http          : 400 public retryable=false"));
         assert!(rendered.contains("path          : place_order / parse order"));
         assert!(rendered.contains("context       : user_id=\"42\", order.raw=\"\""));
         assert!(rendered.contains("component     : order_service"));
@@ -1311,7 +1371,7 @@ mod tests {
                 ctx
             });
 
-        let rendered = err.render_user_debug_redacted(&DefaultExposurePolicy, &TestPolicy);
+        let rendered = err.exposure_snapshot(&DefaultExposurePolicy).render_user_debug_redacted(&TestPolicy);
 
         assert!(rendered.contains("<redacted>"));
         assert!(!rendered.contains("token=abc"));

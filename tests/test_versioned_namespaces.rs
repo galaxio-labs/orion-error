@@ -15,7 +15,7 @@ fn test_layered_modules_and_root_prelude_compile() {
     let report = stable.report();
     let bridge = err.as_std();
 
-    assert_eq!(reason::ErrorCode::error_code(&err), 201);
+    assert_eq!(reason::ErrorCode::error_code(err.reason()), 201);
     assert_eq!(snapshot.reason, "system error");
     assert_eq!(
         stable.schema_version,
@@ -49,7 +49,7 @@ fn test_layered_modules_and_root_prelude_compile() {
     }
 
     let err = build_with_root_prelude().unwrap_err();
-    assert_eq!(err.error_code(), UvsReason::system_error().error_code());
+    assert_eq!(err.reason().error_code(), UvsReason::system_error().error_code());
     assert_eq!(err.action_main().as_deref(), Some("load config"));
     assert_eq!(err.locator_main(), None);
     assert_eq!(err.contexts()[0].action().as_deref(), Some("read config"));
@@ -112,8 +112,8 @@ fn test_root_prelude_and_compat_imports_compile() {
     }
 
     let err = build_with_prelude().unwrap_err();
-    assert_eq!(err.error_code(), UvsReason::system_error().error_code());
+    assert_eq!(err.reason().error_code(), UvsReason::system_error().error_code());
 
     let err = build_with_compat().unwrap_err();
-    assert_eq!(err.error_code(), UvsReason::business_error().error_code());
+    assert_eq!(err.reason().error_code(), UvsReason::business_error().error_code());
 }

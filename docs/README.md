@@ -13,10 +13,11 @@
 5. [OrionError 与稳定身份](./reason-identity-guide.md)
 6. [协议契约](./protocol-contract.md)
 7. [Stable Snapshot Schema](./stable-snapshot-schema.md)
-8. [日志说明](./LOGGING.md)
-9. [与 thiserror 的关系](./thiserror-comparison.md)
-10. [0.8 Breaking Plan](./0.8-breaking-plan.md)
-11. [Release Checklist](./release-checklist.md)
+8. [Report / Exposure Boundary](./report-exposure-boundary.md)
+9. [日志说明](./LOGGING.md)
+10. [与 thiserror 的关系](./thiserror-comparison.md)
+11. [0.8 Breaking Plan](./0.8-breaking-plan.md)
+12. [Release Checklist](./release-checklist.md)
 
 ## crates.io 发布顺序
 
@@ -38,7 +39,7 @@
 - 完整上下文：`with_context(...)`
 - 语义上下文：`doing(...)` / `at(...)`
 - 稳定导出：`snapshot().stable_export()`
-- 协议投影：`identity_snapshot()` / `exposure_snapshot(...)` / `http_response(...)`
+- 协议投影：`identity_snapshot()` / `exposure_snapshot(...)` / `.to_*_error_json()`
 
 ## 当前推荐导入方式
 

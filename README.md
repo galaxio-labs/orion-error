@@ -128,7 +128,7 @@ std::io::Error
 StructError<RepoReason>
   -> err_conv() or wrap_as(...)
 StructError<ServiceReason>
-  -> report() / snapshot() / http_response(...)
+  -> report() / snapshot().stable_export() / exposure_snapshot(...)
 ```
 
 This is the important shift:
@@ -144,11 +144,7 @@ When you reach HTTP/RPC/log/CLI boundaries, these are the main entry points:
 
 - `report()` for human-oriented diagnostics
 - `snapshot().stable_export()` for stable machine export
-- `http_response(...)`
-- `rpc_response(...)`
-- `cli_response(...)`
-- `log_response(...)`
-- `exposure_snapshot(...)`
+- `exposure_snapshot(...)` with `to_http_error_json()`, `to_cli_error_json()`, `to_log_error_json()`, `to_rpc_error_json()`
 
 Current protocol naming is `Exposure*`, not `ErrorPolicy*`.
 

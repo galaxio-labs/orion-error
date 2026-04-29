@@ -16,7 +16,7 @@ fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interopera
     let owned_bridge: bridge::OwnedStdStructError<reason::UvsReason> = err.clone().into_std();
 
     assert_eq!(
-        reason::ErrorCode::error_code(&err),
+        reason::ErrorCode::error_code(err.reason()),
         reason::ErrorCode::error_code(&reason::UvsReason::system_error())
     );
     assert_eq!(snapshot_value.reason, "system error");
@@ -38,7 +38,7 @@ fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interopera
         compat_prelude::ErrorOweBase::owe(legacy, reason::UvsReason::business_error());
 
     assert_eq!(
-        reason::ErrorCode::error_code(&compat_result.unwrap_err()),
+        reason::ErrorCode::error_code(compat_result.unwrap_err().reason()),
         reason::ErrorCode::error_code(&reason::UvsReason::business_error())
     );
 

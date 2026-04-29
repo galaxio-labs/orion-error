@@ -1,3 +1,43 @@
+//! # orion-error — structured error governance for large Rust codebases
+//!
+//! ## Decision flow
+//!
+//! When you have an error, the question is: **what do you need to do with it?**
+//!
+//! ```text
+//! ┌─ I have an error ──────────────────────────────────────────┐
+//! │                                                             │
+//! │  Need to print it for a human?                              │
+//! │    → err.report().render()                                  │
+//! │                                                             │
+//! │  Need to return it to an HTTP/RPC/CLI boundary?             │
+//! │    → err.exposure_snapshot(&policy).to_http_error_json()    │
+//! │    → err.exposure_snapshot(&policy).to_rpc_error_json()     │
+//! │    → err.exposure_snapshot(&policy).to_cli_error_json()     │
+//! │                                                             │
+//! │  Need a stable machine-readable snapshot?                   │
+//! │    → err.snapshot().stable_export()                         │
+//! │                                                             │
+//! │  Need to bridge to std::error::Error?                       │
+//! │    → err.as_std() / err.into_std() / err.into_dyn_std()    │
+//! │                                                             │
+//! │  Just need to log and move on?                              │
+//! │    → err.display_chain()                                    │
+//! │    → report::print_error(&err)                              │
+//! └─────────────────────────────────────────────────────────────┘
+//! ```
+//!
+//! The key boundary:
+//!
+//! - [`StructError::report()`] gives you a [`DiagnosticReport`] — human diagnostics,
+//!   redaction, text rendering. Only requires [`DomainReason`].
+//! - [`StructError::exposure_snapshot()`] gives you an [`ErrorProtocolSnapshot`] —
+//!   identity + exposure decision + report, the unified protocol input.
+//!   Requires [`DomainReason`] + [`ErrorIdentityProvider`].
+//!
+//! If you only have [`DomainReason`], you can always `report()`. If you
+//! also implement [`ErrorIdentityProvider`] (via `#[derive(OrionError)]`),
+//! you can use `exposure_snapshot()` and the full protocol projection stack.
 mod core;
 pub mod testcase;
 mod traits;

@@ -2,7 +2,7 @@ use std::{error::Error as StdError, fmt::Display, sync::Arc};
 
 use super::{
     context::OperationContext, domain::DomainReason, metadata::ErrorMetadata, ContextAdd,
-    ErrorCategory, ErrorCode, ErrorIdentityProvider,
+    ErrorCategory, ErrorIdentityProvider,
 };
 use crate::traits::ErrorWith;
 #[macro_export]
@@ -10,12 +10,6 @@ macro_rules! location {
     () => {
         format!("{}:{}:{}", file!(), line!(), column!())
     };
-}
-
-impl<T: DomainReason + ErrorCode> ErrorCode for StructError<T> {
-    fn error_code(&self) -> i32 {
-        self.reason().error_code()
-    }
 }
 
 impl<T> ErrorIdentityProvider for StructError<T>
@@ -337,7 +331,7 @@ impl OwnedDynStdStructError {
 
 impl<R> From<StructError<R>> for OwnedDynStdStructError
 where
-    R: DomainReason + ErrorCode,
+    R: DomainReason,
 {
     fn from(value: StructError<R>) -> Self {
         let display = value.to_string();
@@ -346,8 +340,7 @@ where
             .source_payload
             .as_ref()
             .map(InternalSourcePayload::source_arc);
-        let mut frames = collect_struct_error_source_frames(&value);
-        frames[0].error_code = Some(value.error_code());
+        let frames = collect_struct_error_source_frames(&value);
         Self {
             display,
             source,
@@ -358,7 +351,7 @@ where
 
 impl<R> From<OwnedStdStructError<R>> for OwnedDynStdStructError
 where
-    R: DomainReason + ErrorCode,
+    R: DomainReason,
 {
     fn from(value: OwnedStdStructError<R>) -> Self {
         value.into_struct().into()
@@ -806,7 +799,7 @@ impl<T: DomainReason> StructError<T> {
 
     pub fn into_dyn_std(self) -> OwnedDynStdStructError
     where
-        T: ErrorCode + std::fmt::Debug + Display + Send + Sync + 'static,
+        T: DomainReason,
     {
         self.into()
     }
@@ -1088,7 +1081,7 @@ impl<T: DomainReason> StructErrorBuilder<T> {
 
     pub fn source_struct<R>(mut self, source: StructError<R>) -> Self
     where
-        R: DomainReason + ErrorCode,
+        R: DomainReason,
     {
         self = self.with_internal_source(InternalSourceState::from_struct(source));
         self
@@ -1134,7 +1127,7 @@ mod tests {
 
     use crate::{
         core::context::{CallContext, ContextRecord},
-        DomainReason, UvsReason,
+        DomainReason, ErrorCode, UvsReason,
     };
 
     use super::*;
