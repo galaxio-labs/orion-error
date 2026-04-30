@@ -150,7 +150,7 @@ impl From<&OperationContext> for OperationContext {
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CallContext {
-    pub items: Vec<(String, String)>,
+    pub(crate) items: Vec<(String, String)>,
 }
 
 impl<K: AsRef<str>, V: AsRef<str>> From<(K, V)> for CallContext {

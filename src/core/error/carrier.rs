@@ -1,38 +1,42 @@
-/// Structured runtime error carrier with explicit bridge APIs for the standard
-/// error ecosystem.
-///
-/// ```compile_fail
-/// use orion_error::{StructError, UvsReason};
-///
-/// let err = StructError::from(UvsReason::system_error());
-/// let _ = std::error::Error::source(&err);
-/// ```
-///
-/// ```rust
-/// use orion_error::{StructError, UvsReason};
-///
-/// let err = StructError::from(UvsReason::system_error());
-/// let bridged = err.as_std();
-/// let _ = std::error::Error::source(&bridged);
-/// ```
+//! Core error carrier types.
+//!
+//! `StructError<T>` is the primary runtime error carrier. Closely associated
+//! types (`StructErrorImpl`, `StructErrorBuilder`) live here alongside the
+//! `Display`, `PartialEq`, `ContextAdd`, and `ErrorWith` implementations.
+
+use std::sync::Arc;
+use std::error::Error as StdError;
+use std::fmt::Display;
+
+use super::source_chain::{
+    InternalSourcePayload, InternalSourceState, SourcePayloadKind, SourcePayloadRef,
+};
+use super::std_bridge::{IntoSourcePayload, OwnedDynStdStructError, OwnedStdStructError,
+    StdStructRef,
+};
+use super::super::{
+    context::OperationContext, domain::DomainReason, metadata::ErrorMetadata, ContextAdd,
+};
+use crate::traits::ErrorWith;
+
+// ---------------------------------------------------------------------------
+// StructError
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Clone)]
 pub struct StructError<T: DomainReason> {
-    imp: Box<StructErrorImpl<T>>,
+    pub(crate) imp: Box<StructErrorImpl<T>>,
 }
 
 impl<T: DomainReason> StructError<T> {
     pub fn imp(&self) -> &StructErrorImpl<T> {
         &self.imp
     }
-}
 
-impl<T: DomainReason> PartialEq for StructError<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.imp == other.imp
+    pub(crate) fn into_imp(self) -> Box<StructErrorImpl<T>> {
+        self.imp
     }
-}
 
-impl<T: DomainReason> StructError<T> {
     pub fn reason(&self) -> &T {
         &self.imp.reason
     }
@@ -54,7 +58,7 @@ impl<T: DomainReason> StructError<T> {
         Self::new_with_source(reason, detail, position, context, None)
     }
 
-    fn new_with_source(
+    pub(crate) fn new_with_source(
         reason: T,
         detail: Option<String>,
         position: Option<String>,
@@ -82,15 +86,25 @@ where
     }
 }
 
+impl<T: DomainReason> PartialEq for StructError<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.imp == other.imp
+    }
+}
+
+// ---------------------------------------------------------------------------
+// StructErrorImpl
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct StructErrorImpl<T: DomainReason> {
-    reason: T,
-    detail: Option<String>,
-    position: Option<String>,
-    context: Arc<Vec<OperationContext>>,
+    pub reason: T,
+    pub detail: Option<String>,
+    pub position: Option<String>,
+    pub context: Arc<Vec<OperationContext>>,
     #[cfg_attr(feature = "serde", serde(skip_serializing))]
-    source_payload: Option<InternalSourcePayload>,
+    pub(crate) source_payload: Option<InternalSourcePayload>,
 }
 
 impl<T: DomainReason> PartialEq for StructErrorImpl<T> {
@@ -122,7 +136,7 @@ impl<T: DomainReason> StructErrorImpl<T> {
     pub fn source_ref(&self) -> Option<&(dyn StdError + 'static)> {
         self.source_payload
             .as_ref()
-            .map(InternalSourcePayload::source_ref)
+            .map(|sp| sp.source_ref())
     }
 
     fn source_payload_ref(&self) -> Option<SourcePayloadRef<'_>> {
@@ -131,18 +145,18 @@ impl<T: DomainReason> StructErrorImpl<T> {
             .map(|payload| SourcePayloadRef { payload })
     }
 
-    pub fn source_frames(&self) -> &[SourceFrame] {
+    pub fn source_frames(&self) -> &[crate::core::error::source_chain::SourceFrame] {
         self.source_payload
             .as_ref()
-            .map(InternalSourcePayload::frames)
+            .map(|sp| sp.frames())
             .unwrap_or(&[])
     }
 }
 
-/// Convert a [`StructError`] from one reason type to another.
-///
-/// This preserves all detail, position, context, and source state while
-/// mapping the reason via [`From`].
+// ---------------------------------------------------------------------------
+// convert_error
+// ---------------------------------------------------------------------------
+
 pub fn convert_error<R1, R2>(other: StructError<R1>) -> StructError<R2>
 where
     R1: DomainReason,
@@ -157,18 +171,16 @@ where
     )
 }
 
+// ---------------------------------------------------------------------------
+// StructError – source-related methods
+// ---------------------------------------------------------------------------
+
 impl<T: DomainReason> StructError<T> {
     fn with_internal_source(mut self, state: InternalSourceState) -> Self {
         self.imp.source_payload = Some(InternalSourcePayload::from_state(state));
         self
     }
 
-    #[must_use]
-    /// Route any supported source into the internal std/struct source split.
-    ///
-    /// Prefer [`with_source`](Self::with_source) for normal application code.
-    /// This lower-level entry point stays internal so the public source story
-    /// remains centered on `with_source(...)`.
     fn attach_source<S>(self, source: S) -> Self
     where
         S: IntoSourcePayload,
@@ -176,11 +188,6 @@ impl<T: DomainReason> StructError<T> {
         self.with_internal_source(source.into_source_payload())
     }
 
-    #[must_use]
-    /// Attach a non-structured source error explicitly.
-    ///
-    /// Prefer [`with_source`](Self::with_source) unless the call site needs to
-    /// make the source channel explicit.
     pub fn with_std_source<E>(self, source: E) -> Self
     where
         E: StdError + Send + Sync + 'static,
@@ -188,16 +195,6 @@ impl<T: DomainReason> StructError<T> {
         self.with_internal_source(InternalSourceState::from_std(source))
     }
 
-    #[must_use]
-    /// Auto-route a source error through the internal std/struct source split.
-    ///
-    /// This is the recommended public entry point for attaching sources. It
-    /// accepts both standard `StdError` values and `StructError<_>` values,
-    /// automatically routing through the correct internal channel.
-    ///
-    /// Use [`with_std_source`](Self::with_std_source) or
-    /// [`with_struct_source`](Self::with_struct_source) only when the call site
-    /// intentionally wants to make that distinction explicit.
     #[allow(private_bounds)]
     pub fn with_source<S>(self, source: S) -> Self
     where
@@ -206,7 +203,6 @@ impl<T: DomainReason> StructError<T> {
         self.attach_source(source)
     }
 
-    #[must_use]
     pub(crate) fn with_struct_error_source<R>(mut self, source: StructError<R>) -> Self
     where
         R: DomainReason,
@@ -215,11 +211,6 @@ impl<T: DomainReason> StructError<T> {
         self
     }
 
-    #[must_use]
-    /// Attach another `StructError<_>` explicitly as the structured source.
-    ///
-    /// Prefer [`with_source`](Self::with_source) unless the call site wants to
-    /// make structured-source preservation explicit.
     pub fn with_struct_source<R>(self, source: StructError<R>) -> Self
     where
         R: DomainReason,
@@ -227,9 +218,6 @@ impl<T: DomainReason> StructError<T> {
         self.with_struct_error_source(source)
     }
 
-    /// Internal helper: creates a new `StructError<R2>` wrapping `self` as the
-    /// structured source.
-    #[must_use]
     pub(crate) fn wrap<R2>(self, reason: R2) -> StructError<R2>
     where
         R2: DomainReason,
@@ -245,45 +233,25 @@ impl<T: DomainReason> StructError<T> {
         self.imp
             .source_payload
             .as_ref()
-            .map(InternalSourcePayload::root_cause)
+            .map(|sp| sp.root_cause())
     }
 
-    pub fn source_frames(&self) -> &[SourceFrame] {
+    pub fn source_frames(&self) -> &[super::source_chain::SourceFrame] {
         self.imp.source_frames()
     }
 
-    /// Read-only source payload observation view.
-    ///
-    /// Prefer [`with_source`](Self::with_source), [`with_std_source`](Self::with_std_source),
-    /// and [`with_struct_source`](Self::with_struct_source) when attaching
-    /// sources. This accessor is intended for diagnostics, testing, and bridge
-    /// inspection rather than normal application flow.
     pub fn source_payload(&self) -> Option<SourcePayloadRef<'_>> {
         self.imp.source_payload_ref()
     }
 
-    /// Read-only source payload kind observation helper.
-    ///
-    /// This is a thin convenience wrapper over [`source_payload()`](Self::source_payload)
-    /// for diagnostics and tests.
     pub fn source_payload_kind(&self) -> Option<SourcePayloadKind> {
         self.source_payload().map(|payload| payload.kind())
     }
 
-    pub fn root_cause_frame(&self) -> Option<&SourceFrame> {
+    pub fn root_cause_frame(&self) -> Option<&super::source_chain::SourceFrame> {
         self.source_frames().last()
     }
 
-    /// Returns merged metadata from all context layers.
-    ///
-    /// Context layers are iterated in push order (innermost first). The merge
-    /// uses an **inner wins** strategy: the first value set for any key is kept;
-    /// outer layers only supply keys that are missing from inner layers.
-    ///
-    /// For example, if inner context sets `key = "inner"` and outer context sets
-    /// `key = "outer"`, the result is `key = "inner"`.
-    ///
-    /// To query metadata from a specific context layer, use [`context_metadata_at`].
     pub fn context_metadata(&self) -> ErrorMetadata {
         let mut merged = ErrorMetadata::new();
         for ctx in self.contexts() {
@@ -292,10 +260,6 @@ impl<T: DomainReason> StructError<T> {
         merged
     }
 
-    /// Returns the metadata from a specific context layer by index.
-    ///
-    /// Index 0 is the innermost (first pushed) context layer.
-    /// Returns `None` if the index is out of bounds.
     pub fn context_metadata_at(&self, index: usize) -> Option<&ErrorMetadata> {
         self.contexts().get(index).map(|ctx| ctx.metadata())
     }
@@ -304,7 +268,7 @@ impl<T: DomainReason> StructError<T> {
         self.imp
             .source_payload
             .as_ref()
-            .map(InternalSourcePayload::source_chain)
+            .map(|sp| sp.source_chain())
             .unwrap_or_default()
     }
 
@@ -354,6 +318,10 @@ impl<T: DomainReason> StructError<T> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// StructError – builder, context, path methods
+// ---------------------------------------------------------------------------
+
 impl<T: DomainReason> StructError<T> {
     pub fn builder(reason: T) -> StructErrorBuilder<T> {
         StructErrorBuilder {
@@ -365,12 +333,11 @@ impl<T: DomainReason> StructError<T> {
         }
     }
 
-    #[must_use]
     pub fn with_position(mut self, position: impl Into<String>) -> Self {
         self.imp.position = Some(position.into());
         self
     }
-    #[must_use]
+
     pub fn with_context<C: Into<OperationContext>>(mut self, context: C) -> Self {
         Arc::make_mut(&mut self.imp.context).push(context.into());
         self
@@ -380,11 +347,11 @@ impl<T: DomainReason> StructError<T> {
         self.imp.context.as_ref()
     }
 
-    #[must_use]
     pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
         self.imp.detail = Some(detail.into());
         self
     }
+
     pub fn err<V>(self) -> Result<V, Self> {
         Err(self)
     }
@@ -454,16 +421,25 @@ impl<T: DomainReason> StructError<T> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// ContextAdd
+// ---------------------------------------------------------------------------
+
 impl<T: DomainReason> ContextAdd<&OperationContext> for StructError<T> {
     fn add_context(&mut self, ctx: &OperationContext) {
         Arc::make_mut(&mut self.imp.context).push(ctx.clone());
     }
 }
+
 impl<T: DomainReason> ContextAdd<OperationContext> for StructError<T> {
     fn add_context(&mut self, ctx: OperationContext) {
         Arc::make_mut(&mut self.imp.context).push(ctx);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Display
+// ---------------------------------------------------------------------------
 
 impl<T: DomainReason> Display for StructError<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -498,23 +474,27 @@ impl<T: DomainReason> Display for StructError<T> {
     }
 }
 
-/// Builder for constructing a [`StructError`] with optional detail, position,
-/// context, and source attachments.
-///
-/// Created via [`StructError::builder`]. Call [`finish`](StructErrorBuilder::finish)
-/// to produce the final [`StructError`].
-///
-/// # Example
-/// ```rust
-/// use orion_error::{StructError, UvsReason};
-///
-/// let err = StructError::builder(UvsReason::validation_error())
-///     .detail("port number out of range")
-///     .position("src/config.rs:42")
-///     .finish();
-///
-/// assert_eq!(err.detail().as_deref(), Some("port number out of range"));
-/// ```
+// ---------------------------------------------------------------------------
+// ErrorWith
+// ---------------------------------------------------------------------------
+
+impl<T: DomainReason> ErrorWith for StructError<T> {
+    fn position<S: Into<String>>(mut self, pos: S) -> Self {
+        self.imp.position = Some(pos.into());
+        self
+    }
+
+    fn with_context<C: Into<OperationContext>>(mut self, ctx: C) -> Self {
+        let ctx = ctx.into();
+        self.add_context(ctx);
+        self
+    }
+}
+
+// ---------------------------------------------------------------------------
+// StructErrorBuilder
+// ---------------------------------------------------------------------------
+
 pub struct StructErrorBuilder<T: DomainReason> {
     reason: T,
     detail: Option<String>,
@@ -536,34 +516,26 @@ impl<T: DomainReason> StructErrorBuilder<T> {
         self.with_internal_source(source.into_source_payload())
     }
 
-    /// Set the human-readable detail message for the error.
     pub fn detail(mut self, detail: impl Into<String>) -> Self {
         self.detail = Some(detail.into());
         self
     }
 
-    /// Set the source-code location (file, line, column).
     pub fn position(mut self, position: impl Into<String>) -> Self {
         self.position = Some(position.into());
         self
     }
 
-    /// Attach an [`OperationContext`] to the builder.
     pub fn context(mut self, ctx: OperationContext) -> Self {
         self.contexts.push(ctx);
         self
     }
 
-    /// Attach a borrowed [`OperationContext`] (cloned into the builder).
     pub fn context_ref(mut self, ctx: &OperationContext) -> Self {
         self.contexts.push(ctx.clone());
         self
     }
 
-    /// Attach a non-structured source error explicitly.
-    ///
-    /// Prefer [`source`](Self::source) unless the builder call site needs to
-    /// make the source channel explicit.
     pub fn source_std<E>(self, source: E) -> Self
     where
         E: StdError + Send + Sync + 'static,
@@ -571,12 +543,6 @@ impl<T: DomainReason> StructErrorBuilder<T> {
         self.with_internal_source(InternalSourceState::from_std(source))
     }
 
-    /// Convenience sugar that auto-routes either a standard source error or an
-    /// existing `StructError<_>` through the internal std/struct source split.
-    ///
-    /// This is the recommended builder entry point for attaching sources.
-    /// Prefer `source_std(...)` / `source_struct(...)` only when the builder
-    /// call site wants to make the source kind explicit.
     #[allow(private_bounds)]
     pub fn source<S>(self, source: S) -> Self
     where
@@ -585,10 +551,6 @@ impl<T: DomainReason> StructErrorBuilder<T> {
         self.attach_source(source)
     }
 
-/// Attach a [`StructError`] as the structured source.
-///
-/// Prefer [`source`](Self::source) unless the builder call site needs to
-/// make the structured-source channel explicit.
     pub fn source_struct<R>(mut self, source: StructError<R>) -> Self
     where
         R: DomainReason,
@@ -597,7 +559,6 @@ impl<T: DomainReason> StructErrorBuilder<T> {
         self
     }
 
-    /// Consume the builder and produce a [`StructError`].
     pub fn finish(self) -> StructError<T> {
         StructError::new_with_source(
             self.reason,
@@ -606,18 +567,5 @@ impl<T: DomainReason> StructErrorBuilder<T> {
             self.contexts,
             self.source_payload,
         )
-    }
-}
-
-impl<T: DomainReason> ErrorWith for StructError<T> {
-    fn position<S: Into<String>>(mut self, pos: S) -> Self {
-        self.imp.position = Some(pos.into());
-        self
-    }
-
-    fn with_context<C: Into<OperationContext>>(mut self, ctx: C) -> Self {
-        let ctx = ctx.into();
-        self.add_context(ctx);
-        self
     }
 }

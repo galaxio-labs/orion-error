@@ -205,7 +205,7 @@ impl ErrorProtocolSnapshot {
     ///
     /// Prefer `StructError::exposure_snapshot(...)` for normal business code
     /// and boundary output.
-    pub fn from_report_skeleton(
+    pub(crate) fn from_report_skeleton(
         report: DiagnosticReport,
         identity: ErrorIdentity,
         exposure_policy: &impl ExposurePolicy,
@@ -307,21 +307,33 @@ impl ErrorProtocolSnapshot {
         }
     }
 
+    /// Serialize to HTTP-bound error JSON.
+    ///
+    /// Requires feature: `"serde_json"`.
     #[cfg(feature = "serde_json")]
     pub fn to_http_error_json(&self) -> serde_json::Result<serde_json::Value> {
         self.protocol_json_view().to_http_json()
     }
 
+    /// Serialize to CLI-bound error JSON.
+    ///
+    /// Requires feature: `"serde_json"`.
     #[cfg(feature = "serde_json")]
     pub fn to_cli_error_json(&self) -> serde_json::Result<serde_json::Value> {
         self.protocol_json_view().to_cli_json()
     }
 
+    /// Serialize to log-bound error JSON.
+    ///
+    /// Requires feature: `"serde_json"`.
     #[cfg(feature = "serde_json")]
     pub fn to_log_error_json(&self) -> serde_json::Result<serde_json::Value> {
         self.protocol_json_view().to_log_json()
     }
 
+    /// Serialize to RPC-bound error JSON.
+    ///
+    /// Requires feature: `"serde_json"`.
     #[cfg(feature = "serde_json")]
     pub fn to_rpc_error_json(&self) -> serde_json::Result<serde_json::Value> {
         self.protocol_json_view().to_rpc_json()

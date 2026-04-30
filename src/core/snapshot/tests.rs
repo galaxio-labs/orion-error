@@ -6,7 +6,7 @@
 
     use super::{
         DiagnosticReport, ErrorSnapshot, SnapshotContextFrame, SnapshotSourceFrame,
-        StableErrorSnapshot, STABLE_SNAPSHOT_SCHEMA_VERSION,
+        StableErrorSnapshot, StableSnapshotContextFrame, STABLE_SNAPSHOT_SCHEMA_VERSION,
     };
 
     #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -512,6 +512,67 @@
         let roundtrip = SnapshotSourceFrame::from(report_frame);
 
         assert_eq!(roundtrip, frame);
+    }
+
+    #[test]
+    fn test_stable_snapshot_source_frame_to_source_frame_roundtrip() {
+        let stable = super::StableSnapshotSourceFrame {
+            index: 0,
+            message: "db unavailable".to_string(),
+            error_code: Some(200),
+            reason: Some("test error".to_string()),
+            path: Some("load config / read".to_string()),
+            detail: Some("inner detail".to_string()),
+            metadata: {
+                let mut metadata = ErrorMetadata::new();
+                metadata.insert("config.kind", "sink_defaults");
+                metadata
+            },
+            is_root_cause: true,
+        };
+
+        let source_frame: SourceFrame = stable.clone().into();
+        let roundtrip: SnapshotSourceFrame = source_frame.into();
+
+        assert_eq!(roundtrip.index, stable.index);
+        assert_eq!(roundtrip.message, stable.message);
+        assert_eq!(roundtrip.error_code, stable.error_code);
+        assert_eq!(roundtrip.reason, stable.reason);
+        assert_eq!(roundtrip.path, stable.path);
+        assert_eq!(roundtrip.detail, stable.detail);
+        assert_eq!(
+            roundtrip.metadata.get_str("config.kind"),
+            Some("sink_defaults")
+        );
+        assert!(roundtrip.is_root_cause);
+    }
+
+    #[test]
+    fn test_stable_snapshot_context_frame_to_operation_context_roundtrip() {
+        let stable = StableSnapshotContextFrame {
+            target: Some("start engine".to_string()),
+            action: Some("start engine".to_string()),
+            locator: Some("engine.toml".to_string()),
+            path: vec!["start engine".to_string(), "engine.toml".to_string()],
+            metadata: {
+                let mut metadata = ErrorMetadata::new();
+                metadata.insert("component.name", "engine");
+                metadata
+            },
+        };
+
+        let ctx: OperationContext = stable.into();
+
+        assert_eq!(ctx.action().as_deref(), Some("start engine"));
+        assert_eq!(ctx.locator().as_deref(), Some("engine.toml"));
+        assert_eq!(
+            ctx.path(),
+            &["start engine".to_string(), "engine.toml".to_string()]
+        );
+        assert_eq!(
+            ctx.metadata().get_str("component.name"),
+            Some("engine")
+        );
     }
 
     #[cfg(feature = "serde_json")]

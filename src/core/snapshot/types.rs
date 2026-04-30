@@ -145,6 +145,9 @@ impl ErrorSnapshot {
         }
     }
 
+    /// Serialize to stable snapshot JSON.
+    ///
+    /// Requires feature: `"serde_json"`.
     #[cfg(feature = "serde_json")]
     pub fn to_stable_snapshot_json(&self) -> serde_json::Result<serde_json::Value> {
         serde_json::to_value(self.stable_export())
@@ -217,6 +220,9 @@ impl StableErrorSnapshot {
 }
 
 impl From<SnapshotContextFrame> for StableSnapshotContextFrame {
+    /// Strip compat/projection fields (`fields`, `result`) that are not stable
+    /// across serialization boundaries. The stable snapshot format only carries
+    /// path-related context; ad-hoc KV pairs and operation result are runtime-only.
     fn from(value: SnapshotContextFrame) -> Self {
         StableSnapshotContextFrame {
             target: value.target,
@@ -235,6 +241,13 @@ impl From<&SnapshotContextFrame> for StableSnapshotContextFrame {
 }
 
 impl From<StableSnapshotContextFrame> for SnapshotContextFrame {
+    /// Reconstitute a runtime snapshot frame from stable data.
+    ///
+    /// `fields` and `result` cannot be recovered — they are intentionally excluded
+    /// from the stable format because ad-hoc KV pairs lose meaning after
+    /// serialization and the result is always `Fail` at snapshot time.
+    /// Callers that need full-fidelity context should use `ErrorSnapshot` directly
+    /// instead of going through the stable export/import round-trip.
     fn from(value: StableSnapshotContextFrame) -> Self {
         SnapshotContextFrame {
             target: value.target,

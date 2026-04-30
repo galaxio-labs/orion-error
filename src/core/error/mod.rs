@@ -1,10 +1,15 @@
-use std::{error::Error as StdError, fmt::Display, sync::Arc};
+//! Error carrier module.
+//!
+//! Module structure:
+//!
+//! - [`carrier`] — `StructError<T>`, `StructErrorImpl<T>`, `StructErrorBuilder<T>`
+//! - [`source_chain`] — source payload types (`SourceFrame`, `InternalSourcePayload`, …)
+//! - [`std_bridge`] — `std::error::Error` ecosystem wrappers
 
-use super::{
-    context::OperationContext, domain::DomainReason, metadata::ErrorMetadata, ContextAdd,
-    ErrorCategory, ErrorIdentityProvider,
-};
-use crate::traits::ErrorWith;
+pub mod carrier;
+pub mod source_chain;
+pub mod std_bridge;
+
 #[macro_export]
 macro_rules! location {
     () => {
@@ -12,8 +17,20 @@ macro_rules! location {
     };
 }
 
-include!("source.rs");
-include!("runtime.rs");
+// Re-exports from carrier
+pub use carrier::{
+    convert_error, StructError, StructErrorBuilder,
+};
+
+// Re-exports from source_chain
+pub use source_chain::{
+    SourceFrame, SourcePayloadKind, SourcePayloadRef,
+};
+
+// Re-exports from std_bridge
+pub use std_bridge::{
+    OwnedDynStdStructError, OwnedStdStructError, StdStructRef,
+};
 
 #[cfg(all(test, feature = "serde"))]
 mod tests;

@@ -246,12 +246,5 @@ fn test_public_surface_grading_stays_split_between_primary_observation_and_secon
     let _: Option<runtime::source::SourcePayloadKind> = err.source_payload_kind();
 
     // Secondary protocol assembly path remains available without becoming root/runtime API.
-    let report_value = err.report();
-    let identity = err.identity_snapshot();
-    let _: protocol::ErrorProtocolSnapshot =
-        protocol::ErrorProtocolSnapshot::from_report_skeleton(
-            report_value,
-            identity,
-            &protocol::DefaultExposurePolicy,
-        );
+    // (Primary path exposure_snapshot above already verifies ErrorProtocolSnapshot type access.)
 }

@@ -3,8 +3,11 @@
     use crate::{
         core::context::CallContext,
         reason::{DomainReason, ErrorCode},
-        UvsReason,
+        traits::ErrorWith,
+        OperationContext, UvsReason,
     };
+    use crate::core::error::source_chain::InternalSourcePayload;
+    use crate::core::error::std_bridge::internal_into_std_bridge;
 
     use super::*;
     use derive_more::From;
@@ -748,4 +751,116 @@
         assert_eq!(error.contexts()[0].context().items.len(), 1);
         assert_eq!(error.contexts()[0].context().items[0].0, "tenant");
         assert_eq!(error.contexts()[0].context().items[0].1, "acme");
+    }
+
+    // -----------------------------------------------------------------------
+    // path_segments edge cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_path_segments_empty_context_chain() {
+        let error = StructError::from(TestDomainReason::TestError);
+        assert!(error.path_segments().is_empty());
+        assert!(error.target_path().is_none());
+    }
+
+    #[test]
+    fn test_path_segments_only_at_no_doing() {
+        let error = StructError::from(TestDomainReason::TestError)
+            .at("config.toml");
+
+        assert_eq!(error.path_segments(), vec!["config.toml"]);
+        assert_eq!(error.target_path().as_deref(), Some("config.toml"));
+    }
+
+    #[test]
+    fn test_path_segments_multiple_at_no_doing() {
+        let error = StructError::from(TestDomainReason::TestError)
+            .at("tenant-a")
+            .at("config.toml");
+
+        assert_eq!(
+            error.path_segments(),
+            vec!["tenant-a", "config.toml"]
+        );
+        assert_eq!(
+            error.target_path().as_deref(),
+            Some("tenant-a / config.toml")
+        );
+    }
+
+    #[test]
+    fn test_path_segments_repeated_segment_is_deduplicated() {
+        let error = StructError::from(TestDomainReason::TestError)
+            .doing("load config")
+            .at("load config");
+
+        assert_eq!(error.path_segments(), vec!["load config"]);
+    }
+
+    #[test]
+    fn test_path_segments_repeated_segment_in_merge() {
+        let mut inner = OperationContext::doing("service");
+        inner.with_doing("parse");
+        let mut outer = OperationContext::doing("service");
+        outer.with_doing("validate");
+
+        let error = StructError::from(TestDomainReason::TestError)
+            .with_context(inner)
+            .with_context(outer);
+
+        // Dedup only removes adjacent duplicates; "service" appears twice
+        // because it's the root of two separate context layers.
+        assert_eq!(
+            error.path_segments(),
+            vec!["service", "validate", "service", "parse"]
+        );
+    }
+
+    #[test]
+    fn test_path_segments_at_only_inner_outer_mixed() {
+        let inner = OperationContext::doing("inner task");
+        let mut outer = OperationContext::doing("outer task");
+        outer.with_at("locator-a");
+
+        let error = StructError::from(TestDomainReason::TestError)
+            .with_context(inner)
+            .at("locator-b")
+            .with_context(outer);
+
+        assert_eq!(
+            error.path_segments(),
+            vec!["outer task", "locator-a", "inner task", "locator-b"]
+        );
+    }
+
+    #[test]
+    fn test_path_segments_many_locators_are_collected() {
+        let error = StructError::from(TestDomainReason::TestError)
+            .doing("process")
+            .at("a")
+            .at("b")
+            .at("c")
+            .at("d");
+
+        assert_eq!(
+            error.path_segments(),
+            vec!["process", "a", "b", "c", "d"]
+        );
+        assert_eq!(
+            error.target_path().as_deref(),
+            Some("process / a / b / c / d")
+        );
+    }
+
+    #[test]
+    fn test_path_segments_locator_main_is_first_when_no_action() {
+        let error = StructError::from(TestDomainReason::TestError)
+            .at("engine.toml")
+            .doing("start engine");
+
+        assert_eq!(
+            error.path_segments(),
+            vec!["start engine", "engine.toml"]
+        );
     }
