@@ -13,9 +13,10 @@ categories = ["rust-patterns"]
 default = ["log", "derive"]
 # Derive macros for `ErrorCode` and `ErrorIdentityProvider`.
 derive = ["dep:orion-error-derive"]
-# 启用 log 日志集成（与 `OperationContext` 的日志方法和 Drop 输出相关）
+# Log integration via the `log` crate (enables `OperationContext` log
+# methods and Drop output).
 log = ["dep:log"]
-# tracing 日志集成
+# Tracing integration via the `tracing` crate.
 tracing = ["dep:tracing"]
 serde = ["dep:serde"]
 anyhow = ["dep:anyhow"]

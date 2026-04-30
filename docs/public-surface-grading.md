@@ -82,13 +82,12 @@
 
 这些字段或投影仍然有现实兼容价值，但名字本身带有历史包袱：
 
-- snapshot / protocol 中的 `want`
 - context / snapshot frame 中的 `target`
 
 当前统一口径：
 
 - runtime 主语义应优先理解为 `action` / `locator` / path segments
-- `target` / `want` 继续存在，主要作为 compat projection
+- `target` 继续存在，主要作为 compat projection
 - `path` 是稳定导出的路径投影
 
 ## 5. 当前结论
@@ -107,7 +106,7 @@
 
 如果进入下一个版本线，可以按这个顺序评估：
 
-1. 是否继续保留 snapshot / protocol 中的 `want` 与 frame 中的 `target`
+1. 是否继续保留 frame 中的 `target`
 2. 是否需要继续缩窄 `dev::prelude::*`
 3. 是否要给 observation / adapter API 增加更明确的模块或命名提示
 

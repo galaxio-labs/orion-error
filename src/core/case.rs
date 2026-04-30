@@ -123,7 +123,7 @@ mod tests {
 
         assert!(display_output.contains("configuration error << core config"));
         assert!(display_output.contains("-> At: src/config.rs:42"));
-        assert!(display_output.contains("-> Want: database_config"));
+        assert!(display_output.contains("-> Path: database_config"));
         assert!(display_output.contains("-> Details: missing db config"));
         assert!(display_output.contains("Context stack:"));
         assert!(display_output.contains("1. step: initialization"));

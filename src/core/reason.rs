@@ -10,6 +10,7 @@ pub trait ErrorCode {
     }
 }
 
+/// Categorisation of an error for protocol-level routing and policy decisions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(
     feature = "serde",
@@ -17,13 +18,18 @@ pub trait ErrorCode {
     serde(rename_all = "lowercase")
 )]
 pub enum ErrorCategory {
+    /// Configuration / environment issue (e.g. missing file, bad config).
     Conf,
+    /// Business-logic violation (e.g. validation failure, policy reject).
     Biz,
+    /// Internal logic error (e.g. unreachable branch, invariant violation).
     Logic,
+    /// System / infrastructure error (e.g. network, disk I/O, upstream timeout).
     Sys,
 }
 
 impl ErrorCategory {
+    /// Return the stable string code for this error variant.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Conf => "conf",
@@ -34,6 +40,12 @@ impl ErrorCategory {
     }
 }
 
+/// Runtime identity provider for stable error codes and categories.
+///
+/// Implemented automatically by `#[derive(OrionError)]`. Used by
+/// [`StructError::exposure_snapshot`](crate::StructError::exposure_snapshot)
+/// and the protocol projection layer to determine visibility and
+/// exposure decisions.
 pub trait ErrorIdentityProvider {
     fn stable_code(&self) -> &'static str;
 

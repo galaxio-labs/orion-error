@@ -20,15 +20,13 @@ where
         let source_frames = self.source_frames();
         let source_chain = self.source_chain();
         let source_message = source_chain.first().cloned();
-        let want = self.compat_target_main();
         let path = self.target_path();
 
-        let mut state = serializer.serialize_struct("StructError", 9)?;
+        let mut state = serializer.serialize_struct("StructError", 8)?;
         state.serialize_field("reason", self.imp().reason())?;
         state.serialize_field("detail", self.imp().detail())?;
         state.serialize_field("position", self.imp().position())?;
         state.serialize_field("context", self.imp().context())?;
-        state.serialize_field("want", &want)?;
         state.serialize_field("path", &path)?;
         state.serialize_field("source_frames", &source_frames)?;
         state.serialize_field("source_message", &source_message)?;
@@ -127,7 +125,6 @@ mod tests {
             type_name: None,
             error_code: None,
             reason: None,
-            want: None,
             path: None,
             detail: None,
             metadata: ErrorMetadata::default(),
@@ -228,7 +225,6 @@ mod tests {
             reason: "system error".to_string(),
             detail: Some("engine bootstrap failed".to_string()),
             position: Some("src/main.rs:42".to_string()),
-            want: Some("start engine".to_string()),
             path: Some("start engine".to_string()),
         };
 
@@ -266,7 +262,6 @@ mod tests {
             serde_json::json!("engine bootstrap failed")
         );
         assert_eq!(json_value["position"], serde_json::json!("src/main.rs:42"));
-        assert_eq!(json_value["want"], serde_json::json!("start engine"));
         assert_eq!(json_value["path"], serde_json::json!("start engine"));
         assert_eq!(
             json_value["root_metadata"]["component.name"],
@@ -300,10 +295,6 @@ mod tests {
             serde_json::json!("test error")
         );
         assert_eq!(
-            json_value["source_frames"][0]["want"],
-            serde_json::json!("load defaults")
-        );
-        assert_eq!(
             json_value["source_frames"][0]["path"],
             serde_json::json!("load defaults")
         );
@@ -332,7 +323,6 @@ mod tests {
             reason: "system error".to_string(),
             detail: Some("outer detail".to_string()),
             position: Some("src/main.rs:42".to_string()),
-            want: Some("start engine".to_string()),
             path: Some("start engine".to_string()),
             context: vec![SnapshotContextFrame {
                 target: Some("start engine".to_string()),
@@ -359,7 +349,6 @@ mod tests {
                 type_name: Some("std::io::Error".to_string()),
                 error_code: None,
                 reason: None,
-                want: Some("load config".to_string()),
                 path: Some("load config / read".to_string()),
                 detail: Some("inner detail".to_string()),
                 metadata: {

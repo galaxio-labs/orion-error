@@ -31,18 +31,26 @@ pub enum MetadataValue {
 }
 
 impl ErrorMetadata {
+    /// Create an empty metadata container.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Returns `true` if no entries are stored.
     pub fn is_empty(&self) -> bool {
         self.fields.is_empty()
     }
 
+    /// Borrow the underlying map for read-only access.
     pub fn as_map(&self) -> &BTreeMap<String, MetadataValue> {
         &self.fields
     }
 
+    /// Insert a key-value pair into the metadata.
+    ///
+    /// Supports any key type that converts into `String` and any value
+    /// type that converts into [`MetadataValue`] (i.e. `String`, `bool`,
+    /// `i64`, `u64`, and their subtypes).
     pub fn insert<K, V>(&mut self, key: K, value: V)
     where
         K: Into<String>,
@@ -57,10 +65,13 @@ impl ErrorMetadata {
         self.fields.insert(key, value.into());
     }
 
+    /// Look up a key and return its typed value.
     pub fn get(&self, key: &str) -> Option<&MetadataValue> {
         self.fields.get(key)
     }
 
+    /// Look up a key and return its `&str` value, or `None` if the key
+    /// is absent or the value is not a string variant.
     pub fn get_str(&self, key: &str) -> Option<&str> {
         match self.get(key) {
             Some(MetadataValue::String(value)) => Some(value.as_str()),
@@ -68,6 +79,7 @@ impl ErrorMetadata {
         }
     }
 
+    /// Iterate over all key-value pairs.
     pub fn iter(&self) -> impl Iterator<Item = (&String, &MetadataValue)> {
         self.fields.iter()
     }

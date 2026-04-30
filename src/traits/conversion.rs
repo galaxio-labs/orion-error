@@ -1,14 +1,26 @@
 use crate::{core::convert_error, core::DomainReason, StructError};
 
+/// Convert a `Result<T, StructError<R1>>` into `Result<T, StructError<R2>>`.
+///
+/// Requires `R2: From<R1>`. Preserves all detail, position, context, and source state.
 pub trait ErrorConv<T, R: DomainReason>: Sized {
     fn err_conv(self) -> Result<T, StructError<R>>;
 }
 
+/// Convert a `StructError<R1>` into `StructError<R2>`.
+///
+/// Requires `R2: From<R1>`. Preserves all detail, position, context, and source state.
 pub trait ConvStructError<R: DomainReason>: Sized {
     fn conv(self) -> StructError<R>;
 }
 
 
+/// Wrap a `Result<T, StructError<R1>>` into `Result<T, StructError<R2>>`
+/// by attaching the existing error as a structured source under a new reason.
+///
+/// The original error becomes the `source` of the new error. The new error
+/// carries its own `detail` and the original error's chain is preserved
+/// in the structured source frames.
 pub trait ErrorWrapAs<T, R: DomainReason>: Sized {
     fn wrap_as(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>>;
 }
@@ -44,10 +56,14 @@ where
 {
     fn wrap_as(self, reason: R2, detail: impl Into<String>) -> Result<T, StructError<R2>> {
         let detail = detail.into();
-        self.map_err(|e| e.wrap(reason).with_detail(detail))
+        self.map_err(move |e: StructError<R1>| e.wrap(reason).with_detail(detail.clone()))
     }
 }
 
+/// Convenience to wrap any [`DomainReason`] value into a [`StructError`].
+///
+/// Provides both direct `to_err()` and `err_result::<T>()` via blanket impl
+/// for all `R: DomainReason`.
 pub trait ToStructError<R>
 where
     R: DomainReason,

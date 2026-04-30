@@ -124,13 +124,6 @@
 //! use orion_error::{StructError, UvsReason};
 //!
 //! let report = StructError::from(UvsReason::system_error()).report();
-//! let _ = report.want();
-//! ```
-//!
-//! ```compile_fail
-//! use orion_error::{StructError, UvsReason};
-//!
-//! let report = StructError::from(UvsReason::system_error()).report();
 //! let _ = report.path();
 //! ```
 //!
@@ -245,7 +238,12 @@ pub mod cli {
     pub use crate::core::cli::print_error;
 }
 
-/// Standard-error ecosystem interop.
+/// Standard-error ecosystem interop: bridge types for entering the standard
+/// `std::error::Error` ecosystem.
+///
+/// Provides owned and borrowed wrappers that implement `StdError` and delegate
+/// to the underlying [`StructError`]. Use these when you need to pass an
+/// orion-error through an interface that expects `dyn Error`.
 pub mod interop {
     pub use crate::core::{OwnedDynStdStructError, OwnedStdStructError, StdStructRef};
     pub use crate::traits::{raw_source, RawSource, RawStdError};

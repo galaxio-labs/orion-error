@@ -15,7 +15,7 @@
 当前稳定 schema version：
 
 ```text
-orion-error.snapshot.v2
+orion-error.snapshot.v3
 ```
 
 对应常量：
@@ -57,7 +57,6 @@ let stable = StableErrorSnapshot::from(&err);
 - `reason`
 - `detail`
 - `position`
-- `want`
 - `path`
 - `context`
 - `root_metadata`
@@ -78,7 +77,6 @@ let stable = StableErrorSnapshot::from(&err);
 
 说明：
 
-- `want` 继续保留在 snapshot 中，主要是兼容 target 投影
 - `path` 是稳定导出的路径投影
 - 当前运行时主语义和新代码文档应优先使用 `doing(...)` / `action`
 
@@ -92,14 +90,10 @@ let stable = StableErrorSnapshot::from(&err);
 - `reason`
 - `detail`
 - `position`
-- `want`
 - `path`
 - `context`
 - `root_metadata`
 - `source_frames`
-
-这里的 `want` 仍是稳定导出的一部分，但它不代表当前 API 里还保留
-`want(...)` 这一构造入口。
 
 ## 5. Stable Context Shape
 
@@ -131,18 +125,12 @@ let stable = StableErrorSnapshot::from(&err);
 - `message`
 - `error_code`
 - `reason`
-- `want`
 - `path`
 - `detail`
 - `metadata`
 - `is_root_cause`
 
-其中 `want` / `path` 仍属于兼容投影信息。
-
-更具体地说：
-
-- `want` 是兼容 target 投影
-- `path` 是稳定导出的路径投影
+其中 `path` 是稳定导出的路径投影。
 
 不属于稳定 schema 的 source frame 字段：
 

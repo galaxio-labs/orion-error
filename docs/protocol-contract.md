@@ -32,7 +32,6 @@
 - `reason`
 - `detail`
 - `position`
-- `want`
 - `path`
 
 语义：
@@ -41,7 +40,6 @@
 - `category`：稳定分类
 - `reason`：稳定的人类摘要
 - `detail`：可变补充说明，不是主键
-- `want`：兼容 target 投影字段
 - `path`：稳定导出的路径投影
 - 当前 runtime 主语义仍应优先理解为 `action` / `locator` / path segments
 
@@ -77,8 +75,8 @@ exposure 决策结构是 [`ExposureDecision`](/Users/zuowenjian/devspace/wp-labs
 说明：
 
 - 当前文档中的运行时主路径仍然是 `doing(...)`
-- `want` / `target` 继续存在于 identity / report / snapshot 投影里，主要用于兼容旧消费方
-- 不应在新文档或新示例里把 `want(...)` 当成主路径 API 介绍
+- top-level `want` 已从 identity / snapshot / protocol 投影中移除
+- 兼容残留主要收在 context frame 的 `target`
 
 主要入口：
 

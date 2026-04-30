@@ -2,14 +2,14 @@ use crate::{core::DomainReason, StructError};
 use crate::reason::{ErrorCategory, ErrorIdentityProvider};
 
 #[allow(dead_code)]
-// 测试专用断言 (无消息)
+// Testing-only assertion trait (no message).
 pub trait TestAssert {
     type Output;
     fn assert(self) -> Self::Output;
 }
 
 #[allow(dead_code)]
-// 测试专用断言 (带消息)
+// Testing-only assertion trait (with message).
 pub trait TestAssertWithMsg<A> {
     type Output;
     fn assert(self, msg: A) -> Self::Output;
