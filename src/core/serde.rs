@@ -121,7 +121,7 @@ mod tests {
             index: 0,
             message: "message".to_string(),
             display: None,
-            debug: "debug".to_string(),
+            debug: Some("debug".to_string()),
             type_name: None,
             error_code: None,
             reason: None,

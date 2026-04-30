@@ -115,7 +115,9 @@ fn redact_metadata(metadata: &ErrorMetadata, policy: &impl RedactPolicy) -> Erro
 fn redact_frame(mut frame: SourceFrame, policy: &impl RedactPolicy) -> SourceFrame {
     frame.message = redact_required_text(Some("source.message"), &frame.message, policy);
     frame.display = redact_optional_text(Some("source.display"), frame.display.as_deref(), policy);
-    frame.debug = redact_required_text(Some("source.debug"), &frame.debug, policy);
+    if let Some(ref debug_str) = frame.debug {
+        frame.debug = Some(redact_required_text(Some("source.debug"), debug_str, policy));
+    }
     frame.detail = redact_optional_text(Some("detail"), frame.detail.as_deref(), policy);
     frame.reason = redact_optional_text(Some("source.reason"), frame.reason.as_deref(), policy);
     frame.path = redact_optional_text(Some("path"), frame.path.as_deref(), policy);

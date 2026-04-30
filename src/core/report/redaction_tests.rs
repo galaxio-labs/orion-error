@@ -58,7 +58,7 @@
                     index: 0,
                     message: "inner".to_string(),
                     display: Some("inner token=abc".to_string()),
-                    debug: "debug".to_string(),
+                    debug: Some("debug".to_string()),
                     type_name: None,
                     error_code: None,
                     reason: None,
@@ -105,7 +105,7 @@
                     index: 0,
                     message: "inner".to_string(),
                     display: None,
-                    debug: "debug token=abc".to_string(),
+                    debug: Some("debug token=abc".to_string()),
                     type_name: None,
                     error_code: None,
                     reason: None,
@@ -125,8 +125,15 @@
         );
 
         let redacted = snapshot.redacted(&TestPolicy);
-        assert_eq!(redacted.projection.source_frames[0].debug, "<redacted>");
-        assert!(!redacted.projection.source_frames[0].debug.contains("token=abc"));
+        assert_eq!(
+            redacted.projection.source_frames[0].debug.as_deref(),
+            Some("<redacted>")
+        );
+        assert!(!redacted.projection.source_frames[0]
+            .debug
+            .as_deref()
+            .unwrap_or("")
+            .contains("token=abc"));
     }
 
     #[test]

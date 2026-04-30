@@ -154,7 +154,7 @@ pub struct SourceFrame {
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub display: Option<String>,
     #[cfg_attr(feature = "serde", serde(skip_serializing))]
-    pub debug: String,
+    pub debug: Option<String>,
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub type_name: Option<String>,
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
@@ -193,7 +193,7 @@ fn collect_source_frames(
             index,
             message: source.to_string(),
             display: None,
-            debug: format!("{source:?}"),
+            debug: None,
             type_name: if index == 0 {
                 root_type_name.map(str::to_string)
             } else {
@@ -233,7 +233,7 @@ where
         index: 0,
         message: source.reason().to_string(),
         display: Some(source.to_string()),
-        debug: format!("{source:?}"),
+        debug: None,
         type_name: Some(std::any::type_name::<StructError<R>>().to_string()),
         error_code: None,
         reason: Some(source.reason().to_string()),

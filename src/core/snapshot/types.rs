@@ -374,7 +374,7 @@ impl From<SnapshotSourceFrame> for SourceFrame {
             index: value.index,
             message: value.message,
             display: value.display,
-            debug: String::new(),
+            debug: None,
             type_name: value.type_name,
             error_code: value.error_code,
             reason: value.reason,
