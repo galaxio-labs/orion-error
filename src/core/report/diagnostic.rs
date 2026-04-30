@@ -62,7 +62,7 @@ impl<T: DomainReason> StructError<T> {
             self.reason().to_string(),
             self.detail().clone(),
             self.position().clone(),
-            Arc::clone(self.imp().context()),
+            self.imp().context_arc(),
         )
     }
 
@@ -85,7 +85,7 @@ impl<T: DomainReason> StructError<T> {
             self.reason().to_string(),
             self.detail().clone(),
             self.position().clone(),
-            Arc::clone(self.imp().context()),
+            self.imp().context_arc(),
         )
     }
 

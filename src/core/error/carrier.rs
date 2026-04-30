@@ -69,12 +69,17 @@ impl<T: DomainReason> StructError<T> {
         context: Vec<OperationContext>,
         source_payload: Option<InternalSourcePayload>,
     ) -> Self {
+        let context = if context.is_empty() {
+            None
+        } else {
+            Some(Arc::new(context))
+        };
         StructError {
             imp: Box::new(StructErrorImpl {
                 reason,
                 detail,
                 position,
-                context: Arc::new(context),
+                context,
                 source_payload,
             }),
         }
@@ -106,7 +111,8 @@ pub struct StructErrorImpl<T: DomainReason> {
     pub reason: T,
     pub detail: Option<String>,
     pub position: Option<String>,
-    pub context: Arc<Vec<OperationContext>>,
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
+    pub context: Option<Arc<Vec<OperationContext>>>,
     #[cfg_attr(feature = "serde", serde(skip_serializing))]
     pub(crate) source_payload: Option<InternalSourcePayload>,
 }
@@ -116,7 +122,7 @@ impl<T: DomainReason> PartialEq for StructErrorImpl<T> {
         self.reason == other.reason
             && self.detail == other.detail
             && self.position == other.position
-            && self.context == other.context
+            && self.context.as_deref().map_or(&[][..], |v| v.as_slice()) == other.context.as_deref().map_or(&[][..], |v| v.as_slice())
     }
 }
 
@@ -133,8 +139,15 @@ impl<T: DomainReason> StructErrorImpl<T> {
         &self.position
     }
 
-    pub fn context(&self) -> &Arc<Vec<OperationContext>> {
-        &self.context
+    /// Borrow the context list (empty slice when no context was attached).
+    pub fn context(&self) -> &[OperationContext] {
+        self.context.as_deref().map_or(&[], |v| v.as_ref())
+    }
+
+    /// Get a clone of the context Arc (allocates an empty Vec when absent).
+    /// Prefer [`context()`](Self::context) for read-only access.
+    pub(crate) fn context_arc(&self) -> Arc<Vec<OperationContext>> {
+        self.context.clone().unwrap_or_default()
     }
 
     pub fn source_ref(&self) -> Option<&(dyn StdError + 'static)> {
@@ -170,7 +183,7 @@ where
         other.imp.reason.into(),
         other.imp.detail,
         other.imp.position,
-        Arc::try_unwrap(other.imp.context).unwrap_or_else(|arc| (*arc).clone()),
+        other.imp.context.map_or(Vec::new(), |arc| Arc::try_unwrap(arc).unwrap_or_else(|a| (*a).clone())),
         other.imp.source_payload,
     )
 }
@@ -343,12 +356,13 @@ impl<T: DomainReason> StructError<T> {
     }
 
     pub fn with_context<C: Into<OperationContext>>(mut self, context: C) -> Self {
-        Arc::make_mut(&mut self.imp.context).push(context.into());
+        let vec = self.imp.context.get_or_insert_with(|| Arc::new(Vec::new()));
+        Arc::make_mut(vec).push(context.into());
         self
     }
 
     pub fn contexts(&self) -> &[OperationContext] {
-        self.imp.context.as_ref()
+        self.imp.context.as_deref().map_or(&[], |v| v.as_ref())
     }
 
     pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
@@ -360,15 +374,19 @@ impl<T: DomainReason> StructError<T> {
         Err(self)
     }
 
+    fn context_slice(&self) -> &[OperationContext] {
+        self.imp.context.as_deref().map_or(&[], |v| v.as_ref())
+    }
+
     pub fn action_main(&self) -> Option<String> {
-        self.imp.context
+        self.context_slice()
             .iter()
             .rev()
             .find_map(|ctx| ctx.action().clone())
     }
 
     pub fn locator_main(&self) -> Option<String> {
-        self.imp.context
+        self.context_slice()
             .iter()
             .rev()
             .find_map(|ctx| ctx.locator().clone())
@@ -378,7 +396,7 @@ impl<T: DomainReason> StructError<T> {
         let mut path = Vec::new();
         let mut pending_locators: Vec<String> = Vec::new();
 
-        for ctx in self.imp.context.iter().rev() {
+        for ctx in self.context_slice().iter().rev() {
             let locator_only = ctx.action().is_none()
                 && ctx.compat_target().is_none()
                 && ctx.locator().is_some()
@@ -431,13 +449,15 @@ impl<T: DomainReason> StructError<T> {
 
 impl<T: DomainReason> ContextAdd<&OperationContext> for StructError<T> {
     fn add_context(&mut self, ctx: &OperationContext) {
-        Arc::make_mut(&mut self.imp.context).push(ctx.clone());
+        let vec = self.imp.context.get_or_insert_with(|| Arc::new(Vec::new()));
+        Arc::make_mut(vec).push(ctx.clone());
     }
 }
 
 impl<T: DomainReason> ContextAdd<OperationContext> for StructError<T> {
     fn add_context(&mut self, ctx: OperationContext) {
-        Arc::make_mut(&mut self.imp.context).push(ctx);
+        let vec = self.imp.context.get_or_insert_with(|| Arc::new(Vec::new()));
+        Arc::make_mut(vec).push(ctx);
     }
 }
 
@@ -465,10 +485,11 @@ impl<T: DomainReason> Display for StructError<T> {
             write!(f, "\n  -> Source: {source}")?;
         }
 
-        if !self.imp.context.is_empty() {
+        let ctx_slice = self.context_slice();
+        if !ctx_slice.is_empty() {
             writeln!(f, "\n  -> Context stack:")?;
 
-            for (i, c) in self.imp.context.iter().enumerate() {
+            for (i, c) in ctx_slice.iter().enumerate() {
                 writeln!(f, "context {i}: ")?;
                 writeln!(f, "{c}")?;
             }

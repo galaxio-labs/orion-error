@@ -20,24 +20,38 @@ Rust：stable 2025-04-30
 
 ## 结果
 
+### Before：`context: Arc<Vec<OperationContext>>`
+
 | 场景 | 吞吐量 | ns/iter | 总耗时 |
 |------|--------|---------|--------|
-| bare | 28 M/s | **35.9** | 17 ms |
+| bare | 28 M/s | 35.9 | 17 ms |
 | with-detail | 19 M/s | 53.3 | 26 ms |
 | with-detail+pos | 15 M/s | 64.6 | 32 ms |
 | builder | 15 M/s | 65.1 | 32 ms |
 
+### After：`context: Option<Arc<Vec<OperationContext>>>`
+
+| 场景 | 吞吐量 | ns/iter | 总耗时 | 提升 |
+|------|--------|---------|--------|------|
+| bare | **55 M/s** | **18.2** | 9 ms | **+97%** |
+| with-detail | 27 M/s | 36.6 | 18 ms | +46% |
+| with-detail+pos | 20 M/s | 48.9 | 24 ms | +32% |
+| builder | 20 M/s | 48.8 | 24 ms | +33% |
+
+## 优化方法
+
+`StructErrorImpl` 中的 `context: Arc<Vec<OperationContext>>` → `context: Option<Arc<Vec<OperationContext>>>`。
+
+空 context 时不再堆分配，仅在 `with_context()` 或 `ContextAdd::add_context()` 首次调用时懒初始化。
+
 ## 分析
 
-- `bare`（35.9 ns）是 baseline，主要开销来自 `Box::new` + `Arc::new(Vec::new())` + `StructErrorImpl` 的栈构造
-- `with-detail` 增加一次 `String` 堆分配，耗时 +48%
-- `with-detail+pos` 增加两次 `String` 堆分配，耗时 +80%
-- builder 与链式 API 等价，无额外开销
-
-## 目标
-
-优化后预期 `bare` 提升约 30-40%（去掉空 `Arc::new(vec![])` 堆分配）。
+- bare（18.2 ns）现为主要来自 `Box::new` + 栈构造
+- with-detail 比 bare 多一次 `String` 堆分配（约 18 ns）
+- with-detail+pos 比 bare 多两次 `String` 堆分配（约 30 ns）
+- 预期符合：去掉一次空 Arc 堆分配 reduce ~18 ns
 
 ---
 
 *测试文件：`tests/perf_context_allocation.rs`*
+*优化改动：`src/core/error/carrier.rs` + `src/core/report/diagnostic.rs`*
