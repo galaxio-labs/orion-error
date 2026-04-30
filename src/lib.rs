@@ -48,7 +48,7 @@
 //!
 //! - derive macros stay importable from the crate root
 //! - runtime identity traits live under [`reason`]
-//! - removed root trait/type re-exports must not drift back
+//! - removed root trait/type re-exports and old extension modules must not drift back
 //!
 //! ```compile_fail
 //! use orion_error::DomainReason;
@@ -67,6 +67,30 @@
 //! ```
 //!
 //! ```compile_fail
+//! use orion_error::bridge::*;
+//! ```
+//!
+//! ```compile_fail
+//! use orion_error::testing::*;
+//! ```
+//!
+//! ```compile_fail
+//! use orion_error::test_prelude::*;
+//! ```
+//!
+//! ```compile_fail
+//! use orion_error::ErrorWith;
+//! ```
+//!
+//! ```compile_fail
+//! use orion_error::ErrorWrapAs;
+//! ```
+//!
+//! ```compile_fail
+//! use orion_error::IntoAs;
+//! ```
+//!
+//! ```compile_fail
 //! use orion_error::{StructError, UvsReason};
 //!
 //! let _ = StructError::from(UvsReason::system_error())
@@ -75,6 +99,10 @@
 //!
 //! ```compile_fail
 //! use orion_error::types::ErrorIdentity;
+//! ```
+//!
+//! ```compile_fail
+//! use orion_error::DefaultExposurePolicy;
 //! ```
 //!
 //! ```compile_fail
@@ -120,6 +148,22 @@
 //! let _ = report.source_frames();
 //! ```
 //!
+//! ```compile_fail
+//! use orion_error::{OperationContext, StructError, UvsReason};
+//!
+//! let _ = OperationContext::doing("load config").target();
+//! let _ = StructError::from(UvsReason::system_error()).target_main();
+//! ```
+//!
+//! ```compile_fail
+//! use orion_error::protocol::DefaultExposurePolicy;
+//! use orion_error::{StructError, UvsReason};
+//!
+//! let proto = StructError::from(UvsReason::system_error())
+//!     .exposure_snapshot(&DefaultExposurePolicy);
+//! let _ = proto.report();
+//! ```
+//!
 //! ```rust
 //! use orion_error::OrionError;
 //! use orion_error::reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
@@ -136,7 +180,7 @@
 //! assert_eq!(reason.error_category(), ErrorCategory::Logic);
 //! ```
 mod core;
-pub mod testcase;
+mod testing;
 mod traits;
 
 extern crate self as orion_error;
@@ -144,8 +188,7 @@ extern crate self as orion_error;
 #[cfg(feature = "derive")]
 pub use orion_error_derive::{ErrorCode, ErrorIdentityProvider, OrionError};
 
-pub use core::{DefaultExposurePolicy, OperationContext, StructError, UvsReason};
-pub use traits::{ErrorWith, ErrorWrapAs, IntoAs};
+pub use core::{OperationContext, StructError, UvsReason};
 
 /// Primary-path traits and types for convenient wildcard imports.
 ///
@@ -154,25 +197,8 @@ pub use traits::{ErrorWith, ErrorWrapAs, IntoAs};
 /// use orion_error::prelude::*;
 /// ```
 pub mod prelude {
-    pub use crate::core::{DefaultExposurePolicy, StructError};
+    pub use crate::core::StructError;
     pub use crate::traits::{ErrorWith, ErrorWrapAs, IntoAs};
-    #[cfg(feature = "derive")]
-    pub use crate::OrionError;
-}
-
-/// Wildcard imports for protocol/schema checks and migration-oriented tests.
-///
-/// Prefer [`prelude`] for new application code. Use this module when a test or
-/// verification task intentionally needs broad access to projection and
-/// snapshot surfaces in one place.
-pub mod advanced_prelude {
-    pub use crate::core::{
-        DiagnosticReport, ErrorIdentity, ErrorProtocolSnapshot, ErrorSnapshot,
-        ExposureDecision, ExposurePolicy, RedactPolicy, SnapshotContextFrame,
-        SnapshotSourceFrame, StableErrorSnapshot, StableSnapshotContextFrame,
-        StableSnapshotSourceFrame, Visibility,
-        STABLE_SNAPSHOT_SCHEMA_VERSION,
-    };
     #[cfg(feature = "derive")]
     pub use crate::OrionError;
 }
@@ -199,20 +225,11 @@ pub mod runtime {
     }
 }
 
-/// Explicit bridge types for entering the standard error ecosystem.
-pub mod bridge {
-    pub use crate::core::{
-        OwnedDynStdStructError, OwnedStdStructError, StdStructRef,
-    };
-    pub use crate::traits::{raw_source, RawSource, RawStdError};
-}
-
 /// Snapshot-layer types and stable snapshot schema exports.
 pub mod snapshot {
     pub use crate::core::{
         ErrorIdentity, ErrorSnapshot, SnapshotContextFrame, SnapshotSourceFrame,
-        StableErrorSnapshot, StableSnapshotContextFrame, StableSnapshotSourceFrame,
-        STABLE_SNAPSHOT_SCHEMA_VERSION,
+        StableErrorSnapshot, STABLE_SNAPSHOT_SCHEMA_VERSION,
     };
 }
 
@@ -226,6 +243,12 @@ pub mod report {
 /// CLI-side output helpers.
 pub mod cli {
     pub use crate::core::cli::print_error;
+}
+
+/// Standard-error ecosystem interop.
+pub mod interop {
+    pub use crate::core::{OwnedDynStdStructError, OwnedStdStructError, StdStructRef};
+    pub use crate::traits::{raw_source, RawSource, RawStdError};
 }
 
 /// Protocol/exposure-layer types for boundary projections.
@@ -248,4 +271,23 @@ pub mod conversion {
     pub use crate::traits::{
         ConvStructError, ErrorConv, ErrorWith, ErrorWrapAs, IntoAs, ToStructError,
     };
+}
+
+/// Development and validation-only helpers.
+pub mod dev {
+    /// Test assertion helpers and testing-only utility traits.
+    pub mod testing {
+        pub use crate::testing::*;
+    }
+
+    /// Wildcard imports for tests, schema checks, and migration-oriented validation.
+    pub mod prelude {
+        pub use crate::core::{
+            DiagnosticReport, ErrorIdentity, ErrorProtocolSnapshot, ErrorSnapshot,
+            ExposureDecision, ExposurePolicy, RedactPolicy, StableErrorSnapshot, Visibility,
+            STABLE_SNAPSHOT_SCHEMA_VERSION,
+        };
+        #[cfg(feature = "derive")]
+        pub use crate::OrionError;
+    }
 }

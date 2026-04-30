@@ -1,6 +1,7 @@
 use orion_error::reason::ErrorCode;
 use orion_error::{conversion, reason, runtime, snapshot};
-use orion_error::{ErrorWith, IntoAs, UvsReason};
+use orion_error::prelude::*;
+use orion_error::UvsReason;
 
 #[test]
 fn test_layered_modules_and_root_prelude_compile() {
@@ -18,10 +19,10 @@ fn test_layered_modules_and_root_prelude_compile() {
     assert_eq!(reason::ErrorCode::error_code(err.reason()), 201);
     assert_eq!(snapshot.reason, "system error");
     assert_eq!(
-        stable.schema_version,
+        stable.schema_version(),
         snapshot::STABLE_SNAPSHOT_SCHEMA_VERSION
     );
-    assert_eq!(report.reason, "system error");
+    assert_eq!(report.reason(), "system error");
     assert!(std::error::Error::source(&bridge).is_none());
 
     let io_result: Result<(), std::io::Error> = Err(std::io::Error::other("disk offline"));
@@ -67,9 +68,10 @@ fn test_layered_modules_and_root_prelude_compile() {
 
 #[cfg(feature = "serde_json")]
 #[test]
-fn test_advanced_prelude_exports_cli_projection_types() {
-    use orion_error::advanced_prelude::*;
-    use orion_error::{DefaultExposurePolicy, StructError, UvsReason};
+fn test_dev_prelude_exports_cli_projection_types() {
+    use orion_error::dev::prelude::*;
+    use orion_error::protocol::DefaultExposurePolicy;
+    use orion_error::{StructError, UvsReason};
 
     let http = StructError::from(UvsReason::system_error())
         .exposure_snapshot(&DefaultExposurePolicy)
@@ -83,6 +85,10 @@ fn test_advanced_prelude_exports_cli_projection_types() {
     assert_eq!(http["code"], serde_json::json!("sys.io_error"));
     assert_eq!(http["status"], serde_json::json!(500));
     assert_eq!(cli["code"], serde_json::json!("sys.io_error"));
+    assert!(StructError::from(UvsReason::system_error())
+        .exposure_snapshot(&DefaultExposurePolicy)
+        .render()
+        .contains("reason: system error"));
 }
 
 #[test]

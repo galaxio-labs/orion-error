@@ -65,7 +65,9 @@
 这些 API 主要服务测试、schema 校验、中间层适配或协议拼装：
 
 - `ErrorProtocolSnapshot::from_report_skeleton(...)`
-- `advanced_prelude::*`
+- `dev::prelude::*`
+- `dev::testing::*`
+- `interop::*`
 - `runtime::source::*`
 - snapshot / stable snapshot 之间的兼容转换路径
 
@@ -74,14 +76,12 @@
 - 允许公开存在
 - 但应明确不是正常业务主路径
 - 文档中应把它们描述成 secondary path
+- 其中 `dev::prelude::*` 应保持在对象级检查面，不再扩成 frame 级宽导出
 
 ## 4. 兼容保留 API
 
-这些 API 或字段仍然有现实兼容价值，但名字本身带有历史包袱：
+这些字段或投影仍然有现实兼容价值，但名字本身带有历史包袱：
 
-- `OperationContext::target()`
-- `StructError::target()`
-- `StructError::target_main()`
 - snapshot / protocol 中的 `want`
 - context / snapshot frame 中的 `target`
 
@@ -95,7 +95,7 @@
 
 当前 `orion-error` 的主要结构问题已经不是“大量兼容 API 混在主路径里”，而是：
 
-- 少量 compat projection 命名仍公开存在
+- 少量 compat projection 字段仍公开存在
 - 少量 observation / secondary path 仍需要靠文档说明降级
 
 这意味着下一阶段如果要继续打磨：
@@ -107,8 +107,8 @@
 
 如果进入下一个版本线，可以按这个顺序评估：
 
-1. 是否继续保留 `target()/target_main()/want` 这组 compat 命名
-2. 是否需要继续缩窄 `advanced_prelude::*`
+1. 是否继续保留 snapshot / protocol 中的 `want` 与 frame 中的 `target`
+2. 是否需要继续缩窄 `dev::prelude::*`
 3. 是否要给 observation / adapter API 增加更明确的模块或命名提示
 
 在没有明确版本策略前，当前更合理的做法是：

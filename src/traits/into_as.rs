@@ -41,8 +41,9 @@ pub struct RawSource<E>(E);
 /// ```rust
 /// use std::fmt;
 ///
-/// use orion_error::{IntoAs, UvsReason};
-/// use orion_error::bridge::{raw_source, RawStdError};
+/// use orion_error::prelude::*;
+/// use orion_error::UvsReason;
+/// use orion_error::interop::{raw_source, RawStdError};
 ///
 /// #[derive(Debug)]
 /// struct ThirdPartyError;
@@ -67,7 +68,7 @@ pub struct RawSource<E>(E);
 ///
 /// ```compile_fail
 /// use orion_error::{StructError, UvsReason};
-/// use orion_error::bridge::{raw_source, RawStdError};
+/// use orion_error::interop::{raw_source, RawStdError};
 ///
 /// let structured = StructError::from(UvsReason::system_error());
 /// let _ = raw_source(structured);

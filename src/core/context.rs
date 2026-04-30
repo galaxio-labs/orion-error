@@ -7,7 +7,7 @@ use std::{
 };
 
 use super::metadata::{ErrorMetadata, MetadataValue};
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OperationResult {
     Suc,
@@ -27,7 +27,7 @@ macro_rules! op_context {
     };
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OperationContext {
     context: CallContext,
@@ -268,14 +268,6 @@ impl OperationContext {
 
     pub fn mod_path(&self) -> &String {
         &self.mod_path
-    }
-
-    /// Compatibility projection of the context's main operation target.
-    ///
-    /// Prefer [`action()`](Self::action) and [`path_string()`](Self::path_string)
-    /// when working with the current structured runtime semantics.
-    pub fn target(&self) -> Option<String> {
-        self.compat_target()
     }
 
     pub fn action(&self) -> &Option<String> {
@@ -847,7 +839,7 @@ impl From<&OperationContext> for OperationContext {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CallContext {
     pub items: Vec<(String, String)>,
@@ -912,7 +904,7 @@ mod tests {
     #[test]
     fn test_op_context_macro_sets_callsite_mod_path() {
         let ctx = crate::op_context!("macro_target");
-        assert_eq!(ctx.target(), Some("macro_target".to_string()));
+        assert_eq!(ctx.compat_target(), Some("macro_target".to_string()));
         assert_eq!(ctx.mod_path().as_str(), module_path!());
     }
 
@@ -930,7 +922,7 @@ mod tests {
 
         assert_eq!(ctx.action().as_deref(), Some("load_config"));
         assert_eq!(ctx.locator().as_deref(), Some("config.toml"));
-        assert_eq!(ctx.target().as_deref(), Some("load_config"));
+        assert_eq!(ctx.compat_target().as_deref(), Some("load_config"));
         assert_eq!(
             ctx.path(),
             &["load_config".to_string(), "config.toml".to_string()]
@@ -1163,7 +1155,7 @@ mod tests {
         ctx1.record("key1", "value1");
         ctx1.with_doing("step1");
         let ctx2 = OperationContext::from(&ctx1);
-        assert_eq!(ctx2.target(), Some("target1".to_string()));
+        assert_eq!(ctx2.compat_target(), Some("target1".to_string()));
         assert_eq!(ctx2.path(), &["target1".to_string(), "step1".to_string()]);
         assert_eq!(ctx2.context().items.len(), 1);
         assert_eq!(
@@ -1230,7 +1222,7 @@ mod tests {
         ctx.record("key", "value");
 
         let cloned = ctx.clone();
-        assert_eq!(ctx.target(), cloned.target());
+        assert_eq!(ctx.compat_target(), cloned.compat_target());
         assert_eq!(ctx.context().items.len(), cloned.context().items.len());
         assert_eq!(ctx.context().items[0], cloned.context().items[0]);
     }
@@ -1269,7 +1261,7 @@ mod tests {
 
         let ctx2 = OperationContext::doing("test").with_auto_log();
         assert!(ctx2.exit_log);
-        assert_eq!(ctx2.target(), Some("test".to_string()));
+        assert_eq!(ctx2.compat_target(), Some("test".to_string()));
     }
 
     #[test]
@@ -1376,7 +1368,7 @@ mod tests {
         ctx.with_doing("start engine");
         ctx.with_at("engine.toml");
 
-        assert_eq!(ctx.target().as_deref(), Some("legacy_target"));
+        assert_eq!(ctx.compat_target().as_deref(), Some("legacy_target"));
         assert_eq!(
             ctx.path_string().as_deref(),
             Some("start engine / engine.toml")
@@ -1388,7 +1380,7 @@ mod tests {
         let mut ctx = OperationContext::doing("start engine");
         ctx.set_target("legacy_target");
 
-        assert_eq!(ctx.target().as_deref(), Some("start engine"));
+        assert_eq!(ctx.compat_target().as_deref(), Some("start engine"));
         assert_eq!(
             ctx.path_string().as_deref(),
             Some("start engine / legacy_target")
@@ -1400,7 +1392,7 @@ mod tests {
         let mut ctx = OperationContext::new();
         ctx.set_target("legacy_target");
 
-        assert_eq!(ctx.target().as_deref(), Some("legacy_target"));
+        assert_eq!(ctx.compat_target().as_deref(), Some("legacy_target"));
         assert!(ctx.path().is_empty());
         assert_eq!(ctx.path_string().as_deref(), Some("legacy_target"));
     }
@@ -1411,7 +1403,7 @@ mod tests {
         ctx.with_doing("start engine");
 
         assert!(ctx.target.is_none());
-        assert_eq!(ctx.target().as_deref(), Some("start engine"));
+        assert_eq!(ctx.compat_target().as_deref(), Some("start engine"));
         assert_eq!(ctx.path(), &["start engine".to_string()]);
     }
 
@@ -1516,7 +1508,7 @@ mod tests {
         // 验证上下文状态
         assert!(ctx.result == OperationResult::Suc);
         assert!(ctx.exit_log);
-        assert_eq!(ctx.target(), Some("user_registration".to_string()));
+        assert_eq!(ctx.compat_target(), Some("user_registration".to_string()));
         assert_eq!(ctx.context().items.len(), 3);
 
         // 验证format_context输出
@@ -1565,7 +1557,7 @@ mod tests {
         // 测试构建器模式的使用
         let ctx = OperationContext::doing("builder_test").with_auto_log();
 
-        assert_eq!(ctx.target(), Some("builder_test".to_string()));
+        assert_eq!(ctx.compat_target(), Some("builder_test".to_string()));
         assert_eq!(ctx.path(), &["builder_test".to_string()]);
         assert!(ctx.exit_log);
     }

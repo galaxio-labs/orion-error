@@ -17,6 +17,14 @@
 应优先从 `StructError::exposure_snapshot(...)` 进入。
 
 `StructError<T>::report()` 只要求 `DomainReason`，不再需要 `ErrorIdentityProvider`。
+`ErrorProtocolSnapshot` 现在直接提供：
+
+- `render()`
+- `render_redacted(...)`
+
+因此协议边界消费者不必再为了拿到人类可读文本而先跳转到 `report()`.
+同时，`ErrorProtocolSnapshot` 不再向外暴露 `report()` / `into_report()`，
+避免协议对象再次退回 report 对象，打乱分层。
 
 ## 1. 当前对象分工
 
@@ -45,28 +53,11 @@
 
 ## 2. 当前边界问题
 
-虽然协议 JSON projection 已经主要集中到 `ErrorProtocolSnapshot`，但
-`DiagnosticReport` 当前仍然保留了一整组 exposure bridge 方法：
+当前代码里，这组 `DiagnosticReport -> exposure` bridge 已经删除。
+现存的边界问题主要变成两个更轻量的点：
 
-- `exposure_identity()`
-- `http_status(...)`
-- `visibility(...)`
-- `default_hints(...)`
-- `decision(...)`
-- `exposure_snapshot(...)`
-- `to_exposure_snapshot_json(...)`
-
-这会带来两个问题：
-
-1. `DiagnosticReport` 不再只是“诊断对象”，而是同时承担：
-   - 文本 render
-   - redaction
-   - exposure 决策桥接
-2. public API 会形成两条并行路径：
-   - `StructError -> exposure_snapshot(...)`
-   - `DiagnosticReport -> exposure_snapshot(...)`
-
-这两条路径都能工作，但第二条路径会继续把 protocol/exposure 逻辑压回 report 层，导致 `DiagnosticReport` 持续变胖。
+1. `ErrorProtocolSnapshot` 与 `DiagnosticReport` 是两个对象，用户需要知道各自职责
+2. `from_report_skeleton(...)` 仍作为 secondary adapter 入口存在
 
 ## 3. 当前建议主路径
 
@@ -127,7 +118,7 @@ let http = proto.to_http_error_json()?;
 
 ### 5.2 新增 canonical 入口
 
-如果仍需要“从 `DiagnosticReport` 继续进入 protocol 层”的能力，建议把入口收成一个显式构造函数：
+如果仍需要“从 `DiagnosticReport` 继续进入 protocol 层”的能力，入口应收成一个显式构造函数：
 
 ```rust,ignore
 impl ErrorProtocolSnapshot {
@@ -159,9 +150,7 @@ impl ErrorProtocolSnapshot {
 
 可选做法：
 
-1. 先保留实现，但在文档里降级为 secondary path
-2. 后续改成内部转发到 `ErrorProtocolSnapshot::from_report_skeleton(...)`
-3. 再决定是否在下一个 breaking window 正式移除
+这一步在当前代码中已经完成，因此后续重点不再是删 bridge，而是继续把 secondary path 的定位压实。
 
 ## 6. 建议迁移后的调用形态
 
@@ -172,6 +161,7 @@ let report = err.report();
 println!("{}", report.render());
 
 let proto = err.exposure_snapshot(&policy);
+println!("{}", proto.render());
 println!("{}", proto.render_user_debug());
 let http = proto.to_http_error_json()?;
 ```

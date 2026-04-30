@@ -1,8 +1,8 @@
-use orion_error::ErrorWith;
-use orion_error::{bridge, cli, conversion, protocol, reason, report, runtime, snapshot};
+use orion_error::{cli, conversion, interop, protocol, reason, report, runtime, snapshot};
+use orion_error::prelude::ErrorWith;
 
 #[test]
-fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interoperate() {
+fn test_layered_surfaces_compile_and_interoperate() {
     let err = conversion::ErrorWith::with_context(
         runtime::StructError::from(reason::UvsReason::system_error())
             .with_detail("engine bootstrap failed"),
@@ -12,8 +12,8 @@ fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interopera
     let snapshot_value: snapshot::ErrorSnapshot = err.snapshot();
     let stable: snapshot::StableErrorSnapshot = snapshot_value.stable_export();
     let report_value: report::DiagnosticReport = stable.report();
-    let bridge_view: bridge::StdStructRef<'_, reason::UvsReason> = err.as_std();
-    let owned_bridge: bridge::OwnedStdStructError<reason::UvsReason> = err.clone().into_std();
+    let bridge_view: interop::StdStructRef<'_, reason::UvsReason> = err.as_std();
+    let owned_bridge: interop::OwnedStdStructError<reason::UvsReason> = err.clone().into_std();
 
     assert_eq!(
         reason::ErrorCode::error_code(err.reason()),
@@ -21,10 +21,10 @@ fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interopera
     );
     assert_eq!(snapshot_value.reason, "system error");
     assert_eq!(
-        stable.schema_version,
+        stable.schema_version(),
         snapshot::STABLE_SNAPSHOT_SCHEMA_VERSION
     );
-    assert_eq!(report_value.reason, "system error");
+    assert_eq!(report_value.reason(), "system error");
     #[cfg(feature = "serde")]
     assert_eq!(
         serde_json::to_value(&err).unwrap()["reason"],
@@ -44,26 +44,25 @@ fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interopera
 }
 
 #[test]
-fn test_testcase_module_exports_assert_helpers() {
+fn test_dev_testing_module_exports_assert_helpers() {
     let err = runtime::StructError::from(reason::UvsReason::business_error())
         .with_detail("order state invalid")
         .doing("validate order");
 
-    orion_error::testcase::assert_err_identity(
+    orion_error::dev::testing::assert_err_identity(
         &err,
         "biz.business_error",
         reason::ErrorCategory::Biz,
     );
-    orion_error::testcase::assert_err_operation(&err, "validate order");
-    orion_error::testcase::assert_err_path(&err, "validate order");
+    orion_error::dev::testing::assert_err_operation(&err, "validate order");
+    orion_error::dev::testing::assert_err_path(&err, "validate order");
 }
 
 #[test]
 fn test_root_surface_stays_on_primary_runtime_path() {
-    use orion_error::{
-        DefaultExposurePolicy, ErrorWith, IntoAs, OperationContext,
-        UvsReason,
-    };
+    use orion_error::prelude::*;
+    use orion_error::{OperationContext, UvsReason};
+    use orion_error::protocol::DefaultExposurePolicy;
 
     let mut ctx = OperationContext::doing("load config");
     ctx.record_field("path", "config.toml");
@@ -79,12 +78,31 @@ fn test_root_surface_stays_on_primary_runtime_path() {
     let proto = err.exposure_snapshot(&DefaultExposurePolicy);
 
     assert_eq!(snapshot.reason, "system error");
-    assert_eq!(report.reason, "system error");
+    assert_eq!(report.reason(), "system error");
     assert_eq!(proto.identity.code, "sys.io_error");
     assert_eq!(err.action_main().as_deref(), Some("load config"));
     assert_eq!(err.target_path().as_deref(), Some("load config / read config"));
     assert_eq!(err.contexts()[0].action().as_deref(), Some("read config"));
     assert_eq!(err.contexts()[1].action().as_deref(), Some("load config"));
+}
+
+#[test]
+fn test_root_conversion_traits_now_live_under_prelude_or_conversion() {
+    fn build_with_prelude() -> Result<(), runtime::StructError<reason::UvsReason>> {
+        use orion_error::prelude::*;
+        use orion_error::reason::UvsReason;
+
+        std::fs::read_to_string("missing-config.toml")
+            .into_as(UvsReason::system_error(), "read config failed")
+            .map(|_| ())
+    }
+
+    let _ = build_with_prelude().unwrap_err();
+    let _: fn(
+        Result<(), std::io::Error>,
+        reason::UvsReason,
+        &'static str,
+    ) -> Result<(), runtime::StructError<reason::UvsReason>> = conversion::IntoAs::into_as;
 }
 
 #[test]
@@ -95,16 +113,16 @@ fn test_layered_modules_remain_the_official_home_for_non_root_types() {
 
     let snapshot_value: snapshot::ErrorSnapshot = err.snapshot();
     let report_value: report::DiagnosticReport = snapshot_value.report();
-    let std_bridge: bridge::OwnedStdStructError<reason::UvsReason> = err.clone().into_std();
+    let std_bridge: interop::OwnedStdStructError<reason::UvsReason> = err.clone().into_std();
 
     let _: runtime::StructErrorBuilder<reason::UvsReason> =
         runtime::StructError::builder(reason::UvsReason::system_error());
     let _: reason::ErrorCategory = reason::ErrorCategory::Sys;
     let _: protocol::Visibility = protocol::Visibility::Internal;
     let _: snapshot::StableErrorSnapshot = snapshot_value.stable_export();
-    let _: bridge::OwnedStdStructError<reason::UvsReason> = err.clone().into_std();
+    let _: interop::OwnedStdStructError<reason::UvsReason> = err.clone().into_std();
 
-    assert_eq!(report_value.reason, "system error");
+    assert_eq!(report_value.reason(), "system error");
     assert_eq!(std_bridge.into_struct(), err);
 }
 
@@ -128,7 +146,7 @@ fn test_reason_module_is_the_trait_home_for_identity_and_code() {
 }
 
 #[test]
-fn test_removed_types_module_does_not_return_as_a_second_root() {
+fn test_removed_root_type_aliases_do_not_return() {
     let identity: snapshot::ErrorIdentity =
         runtime::StructError::from(reason::UvsReason::system_error()).identity_snapshot();
     let _: runtime::ErrorMetadata = Default::default();
@@ -155,11 +173,10 @@ fn test_runtime_source_observation_surface_lives_under_runtime_source_module() {
 
 #[cfg(feature = "serde_json")]
 #[test]
-fn test_advanced_prelude_types_and_report_exports_include_cli_projection() {
-    use orion_error::advanced_prelude::{
-        DiagnosticReport, ErrorProtocolSnapshot, ExposureDecision, Visibility,
-    };
-    use orion_error::{DefaultExposurePolicy, StructError, UvsReason};
+fn test_dev_prelude_types_and_report_exports_include_cli_projection() {
+    use orion_error::dev::prelude::{ErrorProtocolSnapshot, ExposureDecision, Visibility};
+    use orion_error::protocol::DefaultExposurePolicy;
+    use orion_error::{StructError, UvsReason};
 
     let snapshot = StructError::from(UvsReason::business_error())
         .with_detail("order state invalid")
@@ -183,7 +200,7 @@ fn test_advanced_prelude_types_and_report_exports_include_cli_projection() {
     let _: &ErrorProtocolSnapshot = &snapshot;
     let _: Visibility = Visibility::Internal;
     let _: ExposureDecision = snapshot.decision.clone();
-    let _: &DiagnosticReport = snapshot.report();
+    assert!(snapshot.render().contains("reason: business logic error"));
 }
 
 #[test]
@@ -198,7 +215,7 @@ fn test_report_and_protocol_modules_have_distinct_roles() {
         retryable: false,
     };
 
-    assert_eq!(report_value.reason, "system error");
+    assert_eq!(report_value.reason(), "system error");
 }
 
 #[test]

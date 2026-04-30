@@ -65,7 +65,7 @@ exposure 决策结构是 [`ExposureDecision`](/Users/zuowenjian/devspace/wp-labs
 - `default_hints`
 - `retryable`
 
-默认 exposure 策略实现是 `DefaultExposurePolicy`。
+默认 exposure 策略实现是 `protocol::DefaultExposurePolicy`。
 
 当前默认规则：
 
@@ -101,7 +101,7 @@ exposure 决策结构是 [`ExposureDecision`](/Users/zuowenjian/devspace/wp-labs
 
 - `identity`
 - `decision`
-- `report`
+- 内嵌诊断 report（内部持有，不再向外暴露 `report()` 穿透）
 
 入口：
 
@@ -243,8 +243,8 @@ JSON 字段：
 
 如果启用了 `serde_json` feature，还可以使用：
 
-- `DiagnosticReport::to_exposure_snapshot_json(...)`
-- `DiagnosticReport::to_exposure_snapshot_json(...)`
+- 协议投影应改走 `StructError::exposure_snapshot(...)`
+- 然后使用 `ErrorProtocolSnapshot::to_*_json()`
 
 ## 11. 建议的消费路径
 

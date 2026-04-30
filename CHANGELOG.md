@@ -168,7 +168,7 @@
 ### Migration Notes
 
 - 领域 reason enum 优先使用 `#[derive(OrionError)]`
-- 优先使用 `reason::*`、`runtime::*`、`report::*`、`snapshot::*`、`bridge::*`、`conversion::*`、`testcase::*`，避免继续扩大 root import
+- 优先使用 `reason::*`、`runtime::*`、`report::*`、`snapshot::*`、`interop::*`、`conversion::*`、`dev::testing::*`，避免继续扩大 root import
 - 维护旧代码时才使用 `compat_prelude::*` / `compat_traits::*`
 - `0.8` 的 breaking 收口计划见 [docs/0.8-breaking-plan.md](./docs/0.8-breaking-plan.md)
 
@@ -200,7 +200,7 @@
   - `WrapStructErrorAs`
 
 ### Changed
-- `prelude::*` / `traits_ext::*` 面向 V1 主路径
+- `prelude::*` 面向 V1 主路径
 - `compat_prelude::*` / `compat_traits::*` 专门承接旧的 `owe_*()` / `err_wrap(...)` 兼容路径
 - `into_as(...)` 不再依赖 `E: StdError` blanket 风格入口，避免误吞 `StructError<_>`
 - 兼容路径内部也改用 source 分流接口，减少普通 source 和结构化 source 的混用
@@ -261,7 +261,7 @@
 - Display 输出增加 source 摘要
 - `serde` 输出增加 `source_frames`，同时保留兼容字段 `source_message` / `source_chain`
 - `Want` / `Path` 语义收敛，展示与序列化统一输出 `want` / `path`
-- 推荐读取接口统一为 `target_main()` / `target_path()`
+- 推荐读取接口统一为 `action_main()` / `target_path()`
 - source frame 的 `message` 收敛为 reason 文本，完整格式化结果放到 `display`
 
 ### Docs

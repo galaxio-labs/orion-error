@@ -1,9 +1,9 @@
 use orion_error::protocol::Visibility as ReportVisibility;
+use orion_error::protocol::DefaultExposurePolicy;
 use orion_error::reason::ErrorCategory;
-use orion_error::testcase::{assert_err_identity, assert_err_operation, assert_err_path};
-use orion_error::{
-    DefaultExposurePolicy, ErrorWith, IntoAs, OperationContext, StructError, UvsReason,
-};
+use orion_error::dev::testing::{assert_err_identity, assert_err_operation, assert_err_path};
+use orion_error::prelude::*;
+use orion_error::{OperationContext, StructError, UvsReason};
 
 #[test]
 fn test_snapshot_exposure_flow_for_system_error() {
@@ -30,7 +30,8 @@ fn test_snapshot_exposure_flow_for_system_error() {
         vec!["check filesystem state", "verify file permissions"]
     );
     assert!(!snapshot.decision.retryable);
-    assert_eq!(snapshot.report().reason, "system error");
+    assert_eq!(snapshot.identity.reason, "system error");
+    assert!(snapshot.render().contains("reason: system error"));
     assert!(rendered.contains("sys.io_error"));
     assert!(rendered.contains("read config failed"));
 }
@@ -55,7 +56,8 @@ fn test_snapshot_exposure_flow_for_business_error() {
     assert_eq!(snapshot.decision.visibility, ReportVisibility::Public);
     assert!(snapshot.decision.default_hints.is_empty());
     assert!(!snapshot.decision.retryable);
-    assert_eq!(snapshot.report().reason, "business logic error");
+    assert_eq!(snapshot.identity.reason, "business logic error");
+    assert!(snapshot.render().contains("reason: business logic error"));
     assert!(rendered.contains("reason: business logic error"));
     assert!(rendered.contains("detail: order state invalid"));
     assert!(rendered.contains("validate order"));

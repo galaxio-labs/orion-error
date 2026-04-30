@@ -1,4 +1,5 @@
 use crate::{core::DomainReason, StructError};
+use std::sync::Arc;
 
 use super::{
     context::OperationResult, report::DiagnosticReport, ErrorCategory, ErrorIdentityProvider,
@@ -27,12 +28,12 @@ pub struct SnapshotContextFrame {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq)]
-pub struct StableSnapshotContextFrame {
-    pub target: Option<String>,
-    pub action: Option<String>,
-    pub locator: Option<String>,
-    pub path: Vec<String>,
-    pub metadata: ErrorMetadata,
+struct StableSnapshotContextFrame {
+    target: Option<String>,
+    action: Option<String>,
+    locator: Option<String>,
+    path: Vec<String>,
+    metadata: ErrorMetadata,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -56,16 +57,16 @@ pub struct SnapshotSourceFrame {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq)]
-pub struct StableSnapshotSourceFrame {
-    pub index: usize,
-    pub message: String,
-    pub error_code: Option<i32>,
-    pub reason: Option<String>,
-    pub want: Option<String>,
-    pub path: Option<String>,
-    pub detail: Option<String>,
-    pub metadata: ErrorMetadata,
-    pub is_root_cause: bool,
+struct StableSnapshotSourceFrame {
+    index: usize,
+    message: String,
+    error_code: Option<i32>,
+    reason: Option<String>,
+    want: Option<String>,
+    path: Option<String>,
+    detail: Option<String>,
+    metadata: ErrorMetadata,
+    is_root_cause: bool,
 }
 
 /// Stable machine-readable snapshot view derived from `StructError`.
@@ -92,21 +93,21 @@ pub struct ErrorSnapshot {
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct StableErrorSnapshot {
-    pub schema_version: &'static str,
-    pub reason: String,
-    pub detail: Option<String>,
-    pub position: Option<String>,
+    schema_version: &'static str,
+    reason: String,
+    detail: Option<String>,
+    position: Option<String>,
     /// Compatibility top-level target/want projection.
-    pub want: Option<String>,
+    want: Option<String>,
     /// Stable exported operation path projection.
-    pub path: Option<String>,
+    path: Option<String>,
     #[cfg_attr(feature = "serde", serde(skip))]
-    pub category: ErrorCategory,
+    category: ErrorCategory,
     #[cfg_attr(feature = "serde", serde(skip))]
-    pub code: String,
-    pub context: Vec<StableSnapshotContextFrame>,
-    pub root_metadata: ErrorMetadata,
-    pub source_frames: Vec<StableSnapshotSourceFrame>,
+    code: String,
+    context: Vec<StableSnapshotContextFrame>,
+    root_metadata: ErrorMetadata,
+    source_frames: Vec<StableSnapshotSourceFrame>,
 }
 
 /// Identity-first snapshot view.
@@ -175,18 +176,54 @@ impl ErrorSnapshot {
             self.reason,
             self.detail,
             self.position,
-            self.context.into_iter().map(Into::into).collect(),
+            Arc::new(self.context.into_iter().map(Into::into).collect()),
         )
     }
 }
 
 impl StableErrorSnapshot {
+    pub fn schema_version(&self) -> &'static str {
+        self.schema_version
+    }
+
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+
+    pub fn detail(&self) -> Option<&str> {
+        self.detail.as_deref()
+    }
+
+    pub fn position(&self) -> Option<&str> {
+        self.position.as_deref()
+    }
+
+    pub fn want(&self) -> Option<&str> {
+        self.want.as_deref()
+    }
+
+    pub fn path(&self) -> Option<&str> {
+        self.path.as_deref()
+    }
+
+    pub fn category(&self) -> ErrorCategory {
+        self.category
+    }
+
+    pub fn code(&self) -> &str {
+        &self.code
+    }
+
+    pub fn root_metadata(&self) -> &ErrorMetadata {
+        &self.root_metadata
+    }
+
     pub fn report(&self) -> DiagnosticReport {
         DiagnosticReport::from_parts(
             self.reason.clone(),
             self.detail.clone(),
             self.position.clone(),
-            self.context.iter().cloned().map(Into::into).collect(),
+            Arc::new(self.context.iter().cloned().map(Into::into).collect()),
         )
     }
 
@@ -195,20 +232,8 @@ impl StableErrorSnapshot {
             self.reason,
             self.detail,
             self.position,
-            self.context.into_iter().map(Into::into).collect(),
+            Arc::new(self.context.into_iter().map(Into::into).collect()),
         )
-    }
-}
-
-impl SnapshotContextFrame {
-    pub fn stable_export(&self) -> StableSnapshotContextFrame {
-        self.clone().into()
-    }
-}
-
-impl SnapshotSourceFrame {
-    pub fn stable_export(&self) -> StableSnapshotSourceFrame {
-        self.clone().into()
     }
 }
 
@@ -299,7 +324,7 @@ impl From<&StableSnapshotSourceFrame> for SnapshotSourceFrame {
 impl From<OperationContext> for SnapshotContextFrame {
     fn from(value: OperationContext) -> Self {
         Self {
-            target: value.target(),
+            target: value.compat_target(),
             action: value.action().clone(),
             locator: value.locator().clone(),
             path: value.normalized_path_segments(),
@@ -394,7 +419,7 @@ where
             reason: self.reason().to_string(),
             detail: self.detail().clone(),
             position: self.position().clone(),
-            want: self.target_main(),
+            want: self.compat_target_main(),
             path: self.target_path(),
             category: self.error_category(),
             code: self.stable_code().to_string(),
@@ -420,7 +445,7 @@ where
             reason: self.reason().to_string(),
             detail: self.detail().clone(),
             position: self.position().clone(),
-            want: self.target_main(),
+            want: self.compat_target_main(),
             path: self.target_path(),
         }
     }
@@ -484,8 +509,7 @@ mod tests {
 
     use super::{
         DiagnosticReport, ErrorSnapshot, SnapshotContextFrame, SnapshotSourceFrame,
-        StableErrorSnapshot, StableSnapshotContextFrame, StableSnapshotSourceFrame,
-        STABLE_SNAPSHOT_SCHEMA_VERSION,
+        StableErrorSnapshot, STABLE_SNAPSHOT_SCHEMA_VERSION,
     };
 
     #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -595,8 +619,8 @@ mod tests {
         assert_eq!(snapshot.context[1].locator.as_deref(), Some("config.toml"));
 
         let report = snapshot.into_report();
-        assert_eq!(report.context[1].action().as_deref(), Some("parse config"));
-        assert_eq!(report.context[1].locator().as_deref(), Some("config.toml"));
+        assert_eq!(report.context()[1].action().as_deref(), Some("parse config"));
+        assert_eq!(report.context()[1].locator().as_deref(), Some("config.toml"));
     }
 
     #[test]
@@ -628,17 +652,18 @@ mod tests {
 
         let report = snapshot.report();
 
-        assert_eq!(report.reason, snapshot.reason);
-        assert_eq!(report.detail, snapshot.detail);
-        assert_eq!(report.position, snapshot.position);
+        assert_eq!(report.reason(), snapshot.reason);
+        assert_eq!(report.detail(), snapshot.detail.as_deref());
+        assert_eq!(report.position(), snapshot.position.as_deref());
         assert_eq!(
-            report.context,
+            report.context(),
             snapshot
                 .context
                 .clone()
                 .into_iter()
                 .map(Into::into)
                 .collect::<Vec<OperationContext>>()
+                .as_slice()
         );
     }
 
@@ -768,23 +793,21 @@ mod tests {
         let snapshot = err.snapshot();
         let stable = snapshot.stable_export();
 
-        assert_eq!(stable.schema_version, STABLE_SNAPSHOT_SCHEMA_VERSION);
-        assert_eq!(stable.reason, snapshot.reason);
-        assert_eq!(stable.context[0].target.as_deref(), Some("start engine"));
-        assert_eq!(stable.context[0].action.as_deref(), Some("start engine"));
-        assert_eq!(stable.context[0].locator.as_deref(), Some("engine.toml"));
+        assert_eq!(stable.schema_version(), STABLE_SNAPSHOT_SCHEMA_VERSION);
+        assert_eq!(stable.reason(), snapshot.reason);
+        assert_eq!(stable.path(), Some("start engine / engine.toml"));
+        assert_eq!(stable.want(), Some("start engine"));
         assert_eq!(
-            stable.context[0].path,
-            vec!["start engine".to_string(), "engine.toml".to_string()]
+            stable.root_metadata().get_str("component.name"),
+            None
         );
+        let report = stable.report();
         assert_eq!(
-            stable.source_frames[0].message,
-            snapshot.source_frames[0].message
+            report.context()[0].compat_target().as_deref(),
+            Some("start engine")
         );
-        assert_eq!(
-            stable.source_frames[0].metadata.get_str("config.kind"),
-            Some("sink_defaults")
-        );
+        assert_eq!(report.context()[0].action().as_deref(), Some("start engine"));
+        assert_eq!(report.context()[0].locator().as_deref(), Some("engine.toml"));
     }
 
     #[test]
@@ -830,7 +853,7 @@ mod tests {
         assert_eq!(via_owned, via_borrowed);
         assert_eq!(via_from_borrowed, via_borrowed);
         assert_eq!(via_from_owned, via_borrowed);
-        assert_eq!(via_borrowed.schema_version, STABLE_SNAPSHOT_SCHEMA_VERSION);
+        assert_eq!(via_borrowed.schema_version(), STABLE_SNAPSHOT_SCHEMA_VERSION);
     }
 
     #[test]
@@ -854,68 +877,28 @@ mod tests {
     }
 
     #[test]
-    fn test_snapshot_frame_stable_from_matches_stable_export() {
-        let context = SnapshotContextFrame {
-            target: Some("start engine".to_string()),
-            action: None,
-            locator: None,
-            path: vec!["start engine".to_string()],
-            metadata: ErrorMetadata::new(),
-            fields: vec![("tenant".to_string(), "alpha".to_string())],
-            result: crate::core::context::OperationResult::Fail,
-        };
-        let source = SnapshotSourceFrame {
-            index: 0,
-            message: "db unavailable".to_string(),
-            display: Some("db unavailable".to_string()),
-            type_name: Some("std::io::Error".to_string()),
-            error_code: None,
-            reason: None,
-            want: Some("load config".to_string()),
-            path: Some("load config / read".to_string()),
-            detail: Some("inner detail".to_string()),
-            metadata: ErrorMetadata::new(),
-            is_root_cause: true,
-        };
-
-        assert_eq!(
-            StableSnapshotContextFrame::from(&context),
-            context.stable_export()
-        );
-        assert_eq!(
-            StableSnapshotContextFrame::from(context.clone()),
-            context.stable_export()
-        );
-        assert_eq!(
-            StableSnapshotSourceFrame::from(&source),
-            source.stable_export()
-        );
-        assert_eq!(
-            StableSnapshotSourceFrame::from(source.clone()),
-            source.stable_export()
-        );
-    }
-
-    #[test]
     fn test_stable_snapshot_into_report_matches_report() {
-        let stable = StableErrorSnapshot {
-            schema_version: STABLE_SNAPSHOT_SCHEMA_VERSION,
+        let stable = ErrorSnapshot {
             reason: "system error".to_string(),
             detail: Some("outer detail".to_string()),
             position: None,
             want: Some("start engine".to_string()),
             path: Some("start engine".to_string()),
-            context: vec![StableSnapshotContextFrame {
+            context: vec![SnapshotContextFrame {
                 target: Some("start engine".to_string()),
                 action: None,
                 locator: None,
                 path: vec!["start engine".to_string()],
                 metadata: ErrorMetadata::new(),
+                fields: vec![],
+                result: crate::core::context::OperationResult::Fail,
             }],
             root_metadata: ErrorMetadata::new(),
-            source_frames: vec![StableSnapshotSourceFrame {
+            source_frames: vec![SnapshotSourceFrame {
                 index: 0,
                 message: "db unavailable".to_string(),
+                display: None,
+                type_name: None,
                 error_code: None,
                 reason: None,
                 want: Some("load config".to_string()),
@@ -926,7 +909,8 @@ mod tests {
             }],
             category: ErrorCategory::Sys,
             code: "sys.test_error".to_string(),
-        };
+        }
+        .stable_export();
 
         let via_method = stable.report();
         let via_owned = stable.clone().into_report();
@@ -935,39 +919,34 @@ mod tests {
     }
 
     #[test]
-    fn test_stable_frame_to_compat_frame_defaults_compat_fields() {
-        let context = StableSnapshotContextFrame {
-            target: Some("start engine".to_string()),
-            action: None,
-            locator: None,
-            path: vec!["start engine".to_string()],
-            metadata: ErrorMetadata::new(),
-        };
-        let source = StableSnapshotSourceFrame {
-            index: 0,
-            message: "db unavailable".to_string(),
-            error_code: None,
-            reason: None,
-            want: Some("load config".to_string()),
-            path: Some("load config / read".to_string()),
-            detail: Some("inner detail".to_string()),
-            metadata: ErrorMetadata::new(),
-            is_root_cause: true,
-        };
+    fn test_stable_snapshot_accessors_expose_only_top_level_contract() {
+        let stable = ErrorSnapshot {
+            reason: "system error".to_string(),
+            detail: Some("outer detail".to_string()),
+            position: Some("src/main.rs:42".to_string()),
+            want: Some("start engine".to_string()),
+            path: Some("start engine / engine.toml".to_string()),
+            context: vec![],
+            root_metadata: {
+                let mut metadata = ErrorMetadata::new();
+                metadata.insert("component.name", "engine");
+                metadata
+            },
+            source_frames: vec![],
+            category: ErrorCategory::Sys,
+            code: "sys.test_error".to_string(),
+        }
+        .stable_export();
 
-        let compat_context = SnapshotContextFrame::from(&context);
-        let compat_source = SnapshotSourceFrame::from(&source);
-
-        assert_eq!(compat_context.target, context.target);
-        assert_eq!(compat_context.path, context.path);
-        assert_eq!(compat_context.fields, Vec::<(String, String)>::new());
-        assert_eq!(
-            compat_context.result,
-            crate::core::context::OperationResult::Fail
-        );
-        assert_eq!(compat_source.message, source.message);
-        assert_eq!(compat_source.display, None);
-        assert_eq!(compat_source.type_name, None);
+        assert_eq!(stable.schema_version(), STABLE_SNAPSHOT_SCHEMA_VERSION);
+        assert_eq!(stable.reason(), "system error");
+        assert_eq!(stable.detail(), Some("outer detail"));
+        assert_eq!(stable.position(), Some("src/main.rs:42"));
+        assert_eq!(stable.want(), Some("start engine"));
+        assert_eq!(stable.path(), Some("start engine / engine.toml"));
+        assert_eq!(stable.category(), ErrorCategory::Sys);
+        assert_eq!(stable.code(), "sys.test_error");
+        assert_eq!(stable.root_metadata().get_str("component.name"), Some("engine"));
     }
 
     #[test]
@@ -985,7 +964,7 @@ mod tests {
             snapshot_frame.path,
             vec!["start engine".to_string(), "load defaults".to_string()]
         );
-        assert_eq!(roundtrip.target().as_deref(), Some("start engine"));
+        assert_eq!(roundtrip.compat_target().as_deref(), Some("start engine"));
         assert_eq!(
             roundtrip.path(),
             vec!["start engine".to_string(), "load defaults".to_string()]

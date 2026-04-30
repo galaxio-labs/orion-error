@@ -87,7 +87,7 @@ fn assert_non_struct_source(type_name: &str, message: &str) {
     assert!(!is_struct_error_type_name(type_name), "{message}");
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct SourceFrame {
     pub index: usize,
@@ -181,7 +181,7 @@ where
         type_name: Some(std::any::type_name::<StructError<R>>().to_string()),
         error_code: None,
         reason: Some(source.reason().to_string()),
-        want: source.target_main(),
+        want: source.compat_target_main(),
         path: source.target_path(),
         detail: source.detail().clone(),
         metadata: source.context_metadata(),
@@ -860,12 +860,7 @@ impl<T: DomainReason> StructError<T> {
         Err(self)
     }
 
-    /// Main compat target projection across the context stack.
-    ///
-    /// Prefer [`action_main()`](Self::action_main) together with
-    /// [`target_path()`](Self::target_path) in new code. This method remains as
-    /// the compatibility bridge for older `want/target`-shaped consumers.
-    pub fn target_main(&self) -> Option<String> {
+    pub(crate) fn compat_target_main(&self) -> Option<String> {
         self.imp.context.iter().rev().find_map(OperationContext::compat_target)
     }
 
@@ -881,13 +876,6 @@ impl<T: DomainReason> StructError<T> {
             .iter()
             .rev()
             .find_map(|ctx| ctx.locator().clone())
-    }
-
-    /// Compatibility alias for `target_main()`.
-    ///
-    /// Prefer `action_main()` and `target_path()` in new code.
-    pub fn target(&self) -> Option<String> {
-        self.target_main()
     }
 
     pub fn path_segments(&self) -> Vec<String> {
@@ -971,7 +959,7 @@ impl<T: DomainReason> Display for StructError<T> {
         }
 
         // 目标资源信息
-        let want = self.target_main();
+        let want = self.compat_target_main();
         if let Some(want) = &want {
             write!(f, "\n  -> Want: {want}")?;
         }
@@ -1233,8 +1221,7 @@ mod tests {
         let error = StructError::from(TestDomainReason::TestError).with_context(outer);
 
         assert_eq!(error.action_main().as_deref(), Some("place_order"));
-        assert_eq!(error.target_main().as_deref(), Some("place_order"));
-        assert_eq!(error.target().as_deref(), Some("place_order"));
+        assert_eq!(error.compat_target_main().as_deref(), Some("place_order"));
         assert_eq!(
             error.target_path().as_deref(),
             Some("place_order / read_order_payload / parse_order")
@@ -1261,7 +1248,7 @@ mod tests {
 
         assert_eq!(error.action_main().as_deref(), Some("parse config"));
         assert_eq!(error.locator_main().as_deref(), Some("config.toml"));
-        assert_eq!(error.target_main().as_deref(), Some("parse config"));
+        assert_eq!(error.compat_target_main().as_deref(), Some("parse config"));
         assert_eq!(
             error.target_path().as_deref(),
             Some("parse config / config.toml")

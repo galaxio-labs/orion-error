@@ -20,7 +20,7 @@ where
         let source_frames = self.source_frames();
         let source_chain = self.source_chain();
         let source_message = source_chain.first().cloned();
-        let want = self.target_main();
+        let want = self.compat_target_main();
         let path = self.target_path();
 
         let mut state = serializer.serialize_struct("StructError", 9)?;
@@ -421,14 +421,9 @@ mod tests {
         let json_value = serde_json::to_value(err.report()).expect("serialize report");
 
         assert_eq!(json_value["reason"], serde_json::json!("system error"));
-        assert_eq!(
-            json_value["root_metadata"]["component.name"],
-            serde_json::json!("engine")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["metadata"]["config.kind"],
-            serde_json::json!("sink_defaults")
-        );
+        // DiagnosticReport no longer includes root_metadata or source_frames.
+        assert!(json_value.get("root_metadata").is_none());
+        assert!(json_value.get("source_frames").is_none());
     }
 
     #[test]

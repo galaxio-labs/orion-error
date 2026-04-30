@@ -1,8 +1,10 @@
 use derive_more::From;
 use orion_error::{
-    cli::print_error, conversion::ErrorConv, DefaultExposurePolicy, ErrorWith, OperationContext,
-    OrionError, StructError, UvsReason,
+    cli::print_error, conversion::ErrorConv, OperationContext, OrionError,
+    StructError, UvsReason,
 };
+use orion_error::prelude::*;
+use orion_error::protocol::DefaultExposurePolicy;
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum ParseReason {

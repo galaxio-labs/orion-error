@@ -87,7 +87,8 @@ mod tests {
         assert_err_category, assert_err_code, assert_err_identity, assert_err_operation,
         assert_err_path,
     };
-    use crate::{ErrorWith, StructError, UvsReason};
+    use crate::{StructError, UvsReason};
+    use crate::conversion::ErrorWith;
     use crate::reason::ErrorCategory;
 
     #[test]

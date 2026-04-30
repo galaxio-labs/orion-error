@@ -38,16 +38,19 @@ use orion_error::runtime::OperationContext;
 或：
 
 ```rust
-use orion_error::{StructError, DefaultExposurePolicy, OrionError};
+use orion_error::{StructError, OrionError};
 use orion_error::conversion::{ErrorWith, IntoAs, ErrorWrapAs};
+use orion_error::protocol::DefaultExposurePolicy;
 use orion_error::reason::UvsReason;
 use orion_error::runtime::OperationContext;
 ```
 
 其中：
 
-- `prelude::*` 只导出主路径：`OrionError`、`StructError`、`IntoAs`、`ErrorWith`、`ErrorWrapAs`、`DefaultExposurePolicy`
-- 需要更明确边界时，再按职责补 `runtime` / `conversion` / `snapshot` / `report` / `bridge` / `reason`
+- `prelude::*` 只导出主路径：`OrionError`、`StructError`、`IntoAs`、`ErrorWith`、`ErrorWrapAs`
+- 新业务代码默认先用 `prelude::*`；只有在模块要显式表达 runtime / conversion / protocol 等边界时，再补 layered imports
+- `DefaultExposurePolicy` 只从 `protocol::*` 导入，因为它只属于 exposure/projection 边界
+- 需要更明确边界时，再按职责补 `runtime` / `conversion` / `snapshot` / `report` / `bridge` / `reason` / `protocol`
 
 ## 一分钟上手
 
@@ -233,7 +236,8 @@ ctx.record_meta("tenant.id", "demo");
 ### 3.1 错误侧挂载上下文
 
 ```rust
-use orion_error::{ErrorWith, OperationContext, StructError, UvsReason};
+use orion_error::prelude::*;
+use orion_error::{OperationContext, StructError, UvsReason};
 
 fn check_inventory() -> Result<(), StructError<UvsReason>> {
     Err(StructError::from(UvsReason::business_error()).with_detail("inventory unavailable"))
@@ -260,7 +264,6 @@ assert!(result.is_err());
 
 - `action_main()`
 - `locator_main()`
-- `target_main()`：兼容投影；新代码优先理解 `action_main()`
 - `target_path()`
 
 ## 4. 错误进入和跨层转换
@@ -270,7 +273,8 @@ assert!(result.is_err());
 `into_as(...)` 用于“普通错误第一次进入结构化体系”。
 
 ```rust
-use orion_error::{IntoAs, UvsReason};
+use orion_error::prelude::*;
+use orion_error::UvsReason;
 
 let err = std::fs::read_to_string("config.toml")
     .into_as(UvsReason::system_error(), "read config failed")
@@ -291,8 +295,9 @@ let err = std::fs::read_to_string("config.toml")
 
 ```rust
 use std::fmt;
-use orion_error::{IntoAs, UvsReason};
-use orion_error::bridge::{raw_source, RawStdError};
+use orion_error::prelude::*;
+use orion_error::UvsReason;
+use orion_error::interop::{raw_source, RawStdError};
 
 #[derive(Debug)]
 struct ThirdPartyError;
@@ -409,7 +414,7 @@ let snapshot = err.snapshot();
 let stable = snapshot.stable_export();
 
 assert_eq!(snapshot.reason, "system error");
-assert_eq!(stable.reason, "system error");
+assert_eq!(stable.reason(), "system error");
 ```
 
 ### 5.3 人类诊断对象
@@ -428,7 +433,7 @@ let err = StructError::from(UvsReason::system_error())
 
 let report = err.report();
 
-assert_eq!(report.reason, "system error");
+assert_eq!(report.reason(), "system error");
 ```
 
 ### 5.4 标准错误生态 bridge
@@ -447,7 +452,9 @@ assert_eq!(report.reason, "system error");
 如果 reason 实现了 `ErrorIdentityProvider`，可以直接做稳定身份和协议投影：
 
 ```rust
-use orion_error::{DefaultExposurePolicy, ErrorWith, StructError, UvsReason};
+use orion_error::protocol::DefaultExposurePolicy;
+use orion_error::prelude::*;
+use orion_error::{StructError, UvsReason};
 use orion_error::reason::ErrorCategory;
 
 let err = StructError::from(UvsReason::system_error())
@@ -487,9 +494,10 @@ assert!(user_debug.contains("sys.io_error"));
 示例：
 
 ```rust
-use orion_error::{IntoAs, UvsReason};
+use orion_error::prelude::*;
+use orion_error::UvsReason;
 use orion_error::reason::ErrorCategory;
-use orion_error::testcase::assert_err_identity;
+use orion_error::dev::testing::assert_err_identity;
 
 let err = std::fs::read_to_string("config.toml")
     .into_as(UvsReason::system_error(), "read config failed")

@@ -101,9 +101,9 @@ let stable = StableErrorSnapshot::from(&err);
 这里的 `want` 仍是稳定导出的一部分，但它不代表当前 API 里还保留
 `want(...)` 这一构造入口。
 
-## 5. Stable Context Frame
+## 5. Stable Context Shape
 
-`StableSnapshotContextFrame` 字段：
+`StableErrorSnapshot.context[]` 的稳定导出字段：
 
 - `target`
 - `action`
@@ -123,9 +123,9 @@ let stable = StableErrorSnapshot::from(&err);
 
 它们仍存在于 `SnapshotContextFrame`，但不会进入稳定导出。
 
-## 6. Stable Source Frame
+## 6. Stable Source Shape
 
-`StableSnapshotSourceFrame` 字段：
+`StableErrorSnapshot.source_frames[]` 的稳定导出字段：
 
 - `index`
 - `message`

@@ -6,9 +6,10 @@ mod tests {
 
     use crate::{
         core::convert_error,
-        testcase::TestAssertWithMsg,
-        ErrorWith, OperationContext, StructError, UvsReason,
+        testing::TestAssertWithMsg,
+        OperationContext, StructError, UvsReason,
     };
+    use crate::conversion::ErrorWith;
     use crate::reason::{DomainReason, ErrorCode};
 
     // 测试用领域原因类型
@@ -82,7 +83,7 @@ mod tests {
 
         let err = StructError::from(TestDomainReason::Why1).with_context(ctx);
 
-        assert_eq!(err.target(), Some("user_profile".to_string()));
+        assert_eq!(err.action_main(), Some("user_profile".to_string()));
         assert!(err
             .contexts()
             .first()
@@ -113,7 +114,7 @@ mod tests {
 
         let err = StructError::from(TestDomainReason::Uvs(UvsReason::core_conf()))
             .with_detail("missing db config")
-            .position("src/config.rs:42")
+            .with_position("src/config.rs:42")
             .doing("database_config")
             .with_context(ctx);
 

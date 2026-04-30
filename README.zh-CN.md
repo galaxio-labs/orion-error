@@ -190,6 +190,9 @@ assert!(std::error::Error::source(boxed_std.as_ref()).is_none());
 use orion_error::prelude::*;
 ```
 
+把它当成业务代码默认入口。只有模块本身在表达架构边界、协议适配层，
+或者测试 / schema 校验时，才切到分层导入。
+
 然后按需补少量分层导入，例如：
 
 - `orion_error::reason::UvsReason`
@@ -199,7 +202,8 @@ use orion_error::prelude::*;
 - `orion_error::protocol::*`
 - `orion_error::snapshot::*`
 
-这样既能保持业务代码入口简单，也能在大型工程里维持清晰的模块边界。
+这样可以把普通业务代码固定在一条可预测主路径上，同时在真正需要时仍然保留
+清晰的分层边界。
 
 ## 直接试一下
 

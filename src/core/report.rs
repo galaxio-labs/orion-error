@@ -1,5 +1,6 @@
 use crate::{core::DomainReason, StructError};
 use crate::reason::ErrorCategory;
+use std::sync::Arc;
 
 use super::{
     snapshot::{ErrorIdentity, ErrorSnapshot, StableErrorSnapshot},
@@ -9,10 +10,10 @@ use super::{
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct DiagnosticReport {
-    pub reason: String,
-    pub detail: Option<String>,
-    pub position: Option<String>,
-    pub context: Vec<OperationContext>,
+    reason: String,
+    detail: Option<String>,
+    position: Option<String>,
+    context: Arc<Vec<OperationContext>>,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -25,15 +26,6 @@ pub(crate) struct ReportProjectionParts {
 }
 
 impl ReportProjectionParts {
-    fn from_error<T: DomainReason>(err: &StructError<T>) -> Self {
-        Self {
-            want: err.target_main(),
-            path: err.target_path(),
-            root_metadata: err.context_metadata(),
-            source_frames: err.source_frames().to_vec(),
-        }
-    }
-
     fn from_identity_skeleton(identity: &ErrorIdentity) -> Self {
         Self {
             want: identity.want.clone(),
@@ -185,15 +177,15 @@ impl<T: DomainReason> StructError<T> {
     ///     .with_detail("field `email` is required");
     ///
     /// let report: DiagnosticReport = err.report();
-    /// assert!(report.reason.contains("validation"));
-    /// assert_eq!(report.detail.as_deref(), Some("field `email` is required"));
+    /// assert!(report.reason().contains("validation"));
+    /// assert_eq!(report.detail(), Some("field `email` is required"));
     /// ```
     pub fn report(&self) -> DiagnosticReport {
         DiagnosticReport::from_parts(
             self.reason().to_string(),
             self.detail().clone(),
             self.position().clone(),
-            self.contexts().to_vec(),
+            Arc::clone(self.imp().context()),
         )
     }
 
@@ -208,15 +200,15 @@ impl<T: DomainReason> StructError<T> {
     ///     .with_detail("field `email` is required")
     ///     .into_report();
     ///
-    /// assert!(report.reason.contains("validation"));
-    /// assert_eq!(report.detail.as_deref(), Some("field `email` is required"));
+    /// assert!(report.reason().contains("validation"));
+    /// assert_eq!(report.detail(), Some("field `email` is required"));
     /// ```
     pub fn into_report(self) -> DiagnosticReport {
         DiagnosticReport::from_parts(
             self.reason().to_string(),
             self.detail().clone(),
             self.position().clone(),
-            self.contexts().to_vec(),
+            Arc::clone(self.imp().context()),
         )
     }
 
@@ -244,7 +236,7 @@ impl<T: DomainReason> StructError<T> {
     ///     .with_detail("token=abc")
     ///     .report_redacted(&HideDetail);
     ///
-    /// assert_eq!(report.detail.as_deref(), Some("<redacted>"));
+    /// assert_eq!(report.detail(), Some("<redacted>"));
     /// ```
     pub fn report_redacted(&self, policy: &impl RedactPolicy) -> DiagnosticReport {
         self.report().redacted(policy)
@@ -311,7 +303,8 @@ impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
     /// # Example
     ///
     /// ```rust
-    /// use orion_error::{DefaultExposurePolicy, StructError, UvsReason};
+    /// use orion_error::protocol::DefaultExposurePolicy;
+    /// use orion_error::{StructError, UvsReason};
     ///
     /// let err = StructError::from(UvsReason::system_error())
     ///     .with_detail("disk full");
@@ -325,7 +318,12 @@ impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
     ) -> ErrorProtocolSnapshot {
         let identity = self.identity_snapshot();
         let report = self.report();
-        let projection = ReportProjectionParts::from_error(self);
+        let projection = ReportProjectionParts {
+            want: identity.want.clone(),
+            path: identity.path.clone(),
+            root_metadata: self.context_metadata(),
+            source_frames: self.source_frames().to_vec(),
+        };
         ErrorProtocolSnapshot::from_parts(report, projection, identity, exposure_policy)
     }
 
@@ -334,7 +332,8 @@ impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
     /// # Example
     ///
     /// ```rust
-    /// use orion_error::{DefaultExposurePolicy, StructError, UvsReason};
+    /// use orion_error::protocol::DefaultExposurePolicy;
+    /// use orion_error::{StructError, UvsReason};
     ///
     /// let proto = StructError::from(UvsReason::system_error())
     ///     .with_detail("disk full")
@@ -348,7 +347,12 @@ impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
         exposure_policy: &impl ExposurePolicy,
     ) -> ErrorProtocolSnapshot {
         let identity = self.identity_snapshot();
-        let projection = ReportProjectionParts::from_error(&self);
+        let projection = ReportProjectionParts {
+            want: identity.want.clone(),
+            path: identity.path.clone(),
+            root_metadata: self.context_metadata(),
+            source_frames: self.source_frames().to_vec(),
+        };
         let report = self.into_report();
         let decision = exposure_policy.decide(&identity);
         ErrorProtocolSnapshot {
@@ -398,11 +402,27 @@ impl From<StableErrorSnapshot> for DiagnosticReport {
 }
 
 impl DiagnosticReport {
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+
+    pub fn detail(&self) -> Option<&str> {
+        self.detail.as_deref()
+    }
+
+    pub fn position(&self) -> Option<&str> {
+        self.position.as_deref()
+    }
+
+    pub fn context(&self) -> &[OperationContext] {
+        self.context.as_ref()
+    }
+
     pub(crate) fn from_parts(
         reason: String,
         detail: Option<String>,
         position: Option<String>,
-        context: Vec<OperationContext>,
+        context: Arc<Vec<OperationContext>>,
     ) -> Self {
         Self {
             reason,
@@ -471,19 +491,20 @@ impl DiagnosticReport {
     ///     .report()
     ///     .redacted(&HidePosition);
     ///
-    /// assert_eq!(report.position.as_deref(), Some("<hidden>"));
+    /// assert_eq!(report.position(), Some("<hidden>"));
     /// ```
     pub fn redacted(&self, policy: &impl RedactPolicy) -> Self {
         Self {
             reason: redact_required_text(Some("reason"), &self.reason, policy),
             detail: redact_optional_text(Some("detail"), self.detail.as_deref(), policy),
             position: redact_optional_text(Some("position"), self.position.as_deref(), policy),
-            context: self
-                .context
+            context: Arc::new(
+                self.context
                 .iter()
                 .cloned()
                 .map(|ctx| redact_context(ctx, policy))
-            .collect(),
+                .collect(),
+            ),
         }
     }
 
@@ -531,12 +552,17 @@ impl DiagnosticReport {
 }
 
 impl ErrorProtocolSnapshot {
-    pub fn report(&self) -> &DiagnosticReport {
-        &self.report
+    /// Render the embedded diagnostic report.
+    ///
+    /// This keeps protocol-boundary consumers from having to reach through
+    /// `report()` just to obtain the human-facing text form.
+    pub fn render(&self) -> String {
+        self.report.render()
     }
 
-    pub fn into_report(self) -> DiagnosticReport {
-        self.report
+    /// Render the embedded diagnostic report after redaction.
+    pub fn render_redacted(&self, policy: &impl RedactPolicy) -> String {
+        self.report.render_redacted(policy)
     }
 
     pub(crate) fn from_parts(
@@ -553,24 +579,22 @@ impl ErrorProtocolSnapshot {
         }
     }
 
+    /// Build a protocol shell from an already-materialized report plus stable
+    /// identity.
+    ///
+    /// This is a secondary adapter/test entry point. It does not carry the
+    /// full runtime-derived projection payload that
+    /// `StructError::exposure_snapshot(...)` can assemble.
+    ///
+    /// Prefer `StructError::exposure_snapshot(...)` for normal business code
+    /// and boundary output.
     pub fn from_report_skeleton(
         report: DiagnosticReport,
         identity: ErrorIdentity,
         exposure_policy: &impl ExposurePolicy,
     ) -> Self {
-        // Secondary entry point for tests/adapters that already hold report +
-        // identity and only need a protocol shell.
         let projection = ReportProjectionParts::from_identity_skeleton(&identity);
         Self::from_parts(report, projection, identity, exposure_policy)
-    }
-
-    #[doc(hidden)]
-    pub fn from_report(
-        report: DiagnosticReport,
-        identity: ErrorIdentity,
-        exposure_policy: &impl ExposurePolicy,
-    ) -> Self {
-        Self::from_report_skeleton(report, identity, exposure_policy)
     }
 
     pub fn render_user_debug(&self) -> String {
@@ -623,18 +647,14 @@ impl ErrorProtocolSnapshot {
         UserDebugView {
             code: self.identity.code.as_str(),
             category: self.identity.category.as_str(),
-            detail: self
-                .report
-                .detail
-                .as_deref()
-                .unwrap_or(self.identity.reason.as_str()),
+            detail: self.report.detail().unwrap_or(self.identity.reason.as_str()),
             http_status: self.decision.http_status,
             visibility: self.decision.visibility.as_str(),
             retryable: self.decision.retryable,
             path: self.identity.path.as_deref(),
             context_summary: self
                 .report
-                .context
+                .context()
                 .iter()
                 .flat_map(|ctx| ctx.context().items.iter())
                 .map(|(key, value)| format!("{key}={value:?}"))
@@ -676,7 +696,7 @@ impl ErrorProtocolSnapshot {
             summary: self.report.render_summary(),
             rendered_detail: self.report.render(),
             root_metadata: self.projection.root_metadata.clone(),
-            context: self.report.context.clone(),
+            context: self.report.context.as_ref().clone(),
             source_frames: self.projection.source_frames.clone(),
         }
     }
@@ -996,19 +1016,19 @@ fn redact_required_text(key: Option<&str>, value: &str, policy: &impl RedactPoli
 mod tests {
     use crate::{
         core::DomainReason,
+        protocol::DefaultExposurePolicy,
         core::{
-            ErrorIdentity, ErrorMetadata, SourceFrame, StableErrorSnapshot,
-            StableSnapshotContextFrame, StableSnapshotSourceFrame,
+            ErrorIdentity, ErrorMetadata, ErrorSnapshot, SnapshotContextFrame, SnapshotSourceFrame,
+            SourceFrame,
         },
         OperationContext, StructError, UvsReason,
     };
     use crate::reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
 
     use super::{
-        DefaultExposurePolicy, DiagnosticReport, ErrorProtocolSnapshot, ExposureDecision,
-        ExposurePolicy, RedactPolicy, ReportProjectionParts, Visibility,
+        DiagnosticReport, ErrorProtocolSnapshot, ExposureDecision, ExposurePolicy, RedactPolicy,
+        ReportProjectionParts, Visibility,
     };
-    use crate::core::STABLE_SNAPSHOT_SCHEMA_VERSION;
     #[derive(Debug)]
     struct TestPolicy;
 
@@ -1111,6 +1131,7 @@ mod tests {
         let rendered = report.render();
 
         assert_eq!(report.reason, "system error");
+        assert_eq!(report.reason(), "system error");
         assert!(rendered.contains("reason: system error"));
         assert!(rendered.contains("context:"));
         assert!(rendered.contains("start engine"));
@@ -1154,24 +1175,27 @@ mod tests {
 
     #[test]
     fn test_report_from_stable_snapshot_matches_report_methods() {
-        let stable = StableErrorSnapshot {
-            schema_version: STABLE_SNAPSHOT_SCHEMA_VERSION,
+        let stable = ErrorSnapshot {
             reason: "system error".to_string(),
             detail: Some("outer detail".to_string()),
             position: None,
             want: Some("start engine".to_string()),
             path: Some("start engine".to_string()),
-            context: vec![StableSnapshotContextFrame {
+            context: vec![SnapshotContextFrame {
                 target: Some("start engine".to_string()),
                 action: None,
                 locator: None,
                 path: vec!["start engine".to_string()],
                 metadata: ErrorMetadata::new(),
+                fields: vec![],
+                result: crate::core::context::OperationResult::Fail,
             }],
             root_metadata: ErrorMetadata::new(),
-            source_frames: vec![StableSnapshotSourceFrame {
+            source_frames: vec![SnapshotSourceFrame {
                 index: 0,
                 message: "db unavailable".to_string(),
+                display: None,
+                type_name: None,
                 error_code: None,
                 reason: None,
                 want: Some("load config".to_string()),
@@ -1182,7 +1206,8 @@ mod tests {
             }],
             category: ErrorCategory::Sys,
             code: "sys.test_error".to_string(),
-        };
+        }
+        .stable_export();
 
         let via_method = stable.report();
         let via_borrowed = DiagnosticReport::from(&stable);
@@ -1198,7 +1223,7 @@ mod tests {
             "test error".to_string(),
             Some("failed".to_string()),
             None,
-            vec![OperationContext::doing("load")],
+            std::sync::Arc::new(vec![OperationContext::doing("load")]),
         );
 
         let rendered = report.render();
@@ -1279,7 +1304,8 @@ mod tests {
                 retryable: false,
             }
         );
-        assert_eq!(snapshot.report().reason, "system error");
+        assert_eq!(snapshot.identity.reason, "system error");
+        assert!(snapshot.render().contains("reason: system error"));
     }
 
     #[test]
@@ -1288,7 +1314,7 @@ mod tests {
             "configuration error".to_string(),
             Some("invalid config".to_string()),
             None,
-            vec![],
+            std::sync::Arc::new(vec![]),
         );
 
         let identity = ErrorIdentity {
@@ -1331,8 +1357,9 @@ mod tests {
         assert_eq!(snapshot.identity.category, ErrorCategory::Sys);
         assert_eq!(snapshot.decision.http_status, 500);
         assert_eq!(snapshot.decision.visibility, Visibility::Internal);
-        assert_eq!(snapshot.report().reason, "system error");
-        assert_eq!(snapshot.report().detail, Some("engine bootstrap failed".to_string()));
+        assert_eq!(snapshot.identity.reason, "system error");
+        assert!(snapshot.render().contains("reason: system error"));
+        assert!(snapshot.render().contains("detail: engine bootstrap failed"));
     }
 
     #[test]
@@ -1345,7 +1372,8 @@ mod tests {
         assert_eq!(snapshot.identity.code, "sys.io_error");
         assert_eq!(snapshot.identity.category, ErrorCategory::Sys);
         assert!(snapshot.decision.http_status > 0);
-        assert_eq!(snapshot.report().reason, "system error");
+        assert_eq!(snapshot.identity.reason, "system error");
+        assert!(snapshot.render().contains("reason: system error"));
     }
 
     #[cfg(feature = "serde_json")]
@@ -1523,18 +1551,18 @@ mod tests {
     #[test]
     fn test_exposure_snapshot_render_debug_summary_prefers_detail_path_context_and_component() {
         let snapshot = test_proto(
-            DiagnosticReport {
-                reason: "invalid order".to_string(),
-                detail: Some("order text must not be empty".to_string()),
-                position: None,
-                context: vec![{
+            DiagnosticReport::from_parts(
+                "invalid order".to_string(),
+                Some("order text must not be empty".to_string()),
+                None,
+                std::sync::Arc::new(vec![{
                     let mut ctx = OperationContext::doing("place_order");
                     ctx.record_field("user_id", "42");
                     ctx.record_field("order.raw", "");
                     ctx.record_meta("component.name", "order_service");
                     ctx
-                }],
-            },
+                }]),
+            ),
             ReportProjectionParts {
                 want: Some("place_order".to_string()),
                 path: Some("place_order / parse order".to_string()),
@@ -1576,12 +1604,12 @@ mod tests {
     #[test]
     fn test_exposure_snapshot_render_debug_summary_falls_back_to_reason_and_source() {
         let snapshot = test_proto(
-            DiagnosticReport {
-                reason: "storage full".to_string(),
-                detail: None,
-                position: None,
-                context: vec![],
-            },
+            DiagnosticReport::from_parts(
+                "storage full".to_string(),
+                None,
+                None,
+                std::sync::Arc::new(vec![]),
+            ),
             ReportProjectionParts {
                 want: Some("place_order".to_string()),
                 path: Some("place_order / save order".to_string()),
@@ -1626,12 +1654,12 @@ mod tests {
     #[test]
     fn test_exposure_snapshot_render_debug_summary_prefers_root_cause_source_frame() {
         let snapshot = test_proto(
-            DiagnosticReport {
-                reason: "system error".to_string(),
-                detail: Some("save order failed".to_string()),
-                position: None,
-                context: vec![],
-            },
+            DiagnosticReport::from_parts(
+                "system error".to_string(),
+                Some("save order failed".to_string()),
+                None,
+                std::sync::Arc::new(vec![]),
+            ),
             ReportProjectionParts {
                 want: Some("place_order".to_string()),
                 path: Some("place_order / save order".to_string()),
@@ -1864,7 +1892,7 @@ mod tests {
                 "test error".to_string(),
                 None,
                 None,
-                vec![],
+                std::sync::Arc::new(vec![]),
             ),
             ReportProjectionParts {
                 want: None,
@@ -1913,7 +1941,7 @@ mod tests {
                 "test error".to_string(),
                 None,
                 None,
-                vec![],
+                std::sync::Arc::new(vec![]),
             ),
             ReportProjectionParts {
                 want: None,
@@ -1954,7 +1982,7 @@ mod tests {
             "test error".to_string(),
             None,
             Some("/srv/app/config.toml:10".to_string()),
-            vec![OperationContext::at("/srv/app/config.toml")],
+            std::sync::Arc::new(vec![OperationContext::at("/srv/app/config.toml")]),
         );
 
         #[derive(Debug)]
@@ -1982,7 +2010,7 @@ mod tests {
             "tenant secret error".to_string(),
             None,
             None,
-            vec![],
+            std::sync::Arc::new(vec![]),
         );
 
         #[derive(Debug)]
@@ -2000,7 +2028,7 @@ mod tests {
         }
 
         let redacted = report.redacted(&ReasonPolicy);
-        assert_eq!(redacted.reason, "tenant <redacted> error");
+        assert_eq!(redacted.reason(), "tenant <redacted> error");
     }
 
     #[test]

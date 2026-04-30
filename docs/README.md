@@ -66,20 +66,21 @@
 
 ## 当前推荐导入方式
 
-- 新代码的通配导入：`orion_error::prelude::*`
+- 新业务代码默认使用：`orion_error::prelude::*`
 - 分层导入：
   - `orion_error::runtime::*`
   - `orion_error::conversion::*`
   - `orion_error::snapshot::*`
   - `orion_error::report::*`
   - `orion_error::protocol::*`
-  - `orion_error::bridge::*`
+  - `orion_error::interop::*`
   - `orion_error::reason::*`
 
 ## 分层导入边界
 
 - `orion_error::prelude::*`
   面向新业务代码的最小主路径，只放最常用入口。
+  如果模块不是在表达明确边界，一般不要跳过它直接拼 layered imports。
 - `orion_error::runtime::*`
   运行时传播载体与上下文，如 `StructError`、`OperationContext`。
   source 观察模型单独放在 `orion_error::runtime::source::*`。
@@ -94,14 +95,17 @@
 - `orion_error::protocol::*`
   协议/exposure 投影，如 `ErrorProtocolSnapshot`、`ExposurePolicy`、
   `DefaultExposurePolicy`、`Visibility`。
-- `orion_error::bridge::*`
-  进入标准错误生态的显式 bridge 类型。
+- `orion_error::interop::*`
+  进入标准错误生态的显式 interop 类型。
 - `orion_error::reason::*`
   reason trait、`UvsReason`、category 与 stable identity 相关能力。
-- `orion_error::advanced_prelude::*`
+- `orion_error::dev::testing::*`
+  测试断言 helper 与测试专用辅助 trait，不属于业务主路径。
+- `orion_error::dev::prelude::*`
   只建议用于协议/schema 测试、迁移验证和大范围编译覆盖。
-  当前只覆盖 snapshot/report/protocol 相关检查表面；
-  runtime、reason、conversion、bridge 仍应显式导入。
+  当前只覆盖 snapshot/report/protocol 的对象级检查表面；
+  不再承载 snapshot frame 级类型的宽导出。
+  runtime、reason、conversion、interop 仍应显式导入。
 
 ## 设计边界
 

@@ -185,6 +185,10 @@ For new code, start with:
 use orion_error::prelude::*;
 ```
 
+Treat this as the default for business code. Only switch to layered imports when
+the module is explicitly modeling architecture boundaries, protocol adapters,
+or test/schema checks.
+
 Then add only the layered imports you need, for example:
 
 - `orion_error::reason::UvsReason`
@@ -194,8 +198,9 @@ Then add only the layered imports you need, for example:
 - `orion_error::protocol::*`
 - `orion_error::snapshot::*`
 
-This keeps application code simple while still letting larger codebases keep
-clear module boundaries.
+This keeps normal application code on one predictable entry path while still
+letting larger codebases keep clear module boundaries where that extra
+precision is useful.
 
 ## Try It
 

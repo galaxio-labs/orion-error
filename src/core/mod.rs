@@ -26,6 +26,6 @@ pub use report::{
 };
 pub use snapshot::{
     ErrorIdentity, ErrorSnapshot, SnapshotContextFrame, SnapshotSourceFrame, StableErrorSnapshot,
-    StableSnapshotContextFrame, StableSnapshotSourceFrame, STABLE_SNAPSHOT_SCHEMA_VERSION,
+    STABLE_SNAPSHOT_SCHEMA_VERSION,
 };
 pub use universal::{ConfErrReason, UvsReason};
