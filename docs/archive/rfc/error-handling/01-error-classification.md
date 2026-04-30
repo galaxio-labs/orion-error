@@ -368,7 +368,7 @@ let result = critical_operation().map_err(|e| {
    ```rust
    use orion_error::{
        conversion::{ErrorWith, IntoAs},
-       runtime::{ContextRecord, OperationContext},
+       runtime::OperationContext,
    };
 
    let mut context = OperationContext::doing("user_service");

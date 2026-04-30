@@ -15,7 +15,7 @@
 新代码默认按下面规则 review：
 
 - 默认使用 `orion_error::prelude::*` 作为 V1 主路径通配导入
-- 如果只想按 trait 分组导入 V1 主路径，可使用 `orion_error::traits_ext::*`
+- 如果只想按 trait 分组导入当前主路径，请显式组合 `orion_error::conversion::*` 与 `orion_error::reason::ErrorCode`
 - 旧的 `owe(...)` 兼容导入要显式写成 `orion_error::compat_prelude::*` 或 `orion_error::compat_traits::*`
 - 普通错误第一次进入结构化体系，优先 `into_as(...)`
 - 已结构化错误向上层建立新边界，优先 `wrap_as(...)`

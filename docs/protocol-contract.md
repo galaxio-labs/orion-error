@@ -41,7 +41,9 @@
 - `category`：稳定分类
 - `reason`：稳定的人类摘要
 - `detail`：可变补充说明，不是主键
-- `want` / `path`：兼容投影字段；当前主语义应优先理解为 `action` / `locator`
+- `want`：兼容 target 投影字段
+- `path`：稳定导出的路径投影
+- 当前 runtime 主语义仍应优先理解为 `action` / `locator` / path segments
 
 入口：
 
@@ -75,7 +77,7 @@ exposure 决策结构是 [`ExposureDecision`](/Users/zuowenjian/devspace/wp-labs
 说明：
 
 - 当前文档中的运行时主路径仍然是 `doing(...)`
-- `want` 继续存在于 identity / report / snapshot 投影里，主要用于兼容旧消费方
+- `want` / `target` 继续存在于 identity / report / snapshot 投影里，主要用于兼容旧消费方
 - 不应在新文档或新示例里把 `want(...)` 当成主路径 API 介绍
 
 主要入口：
@@ -83,7 +85,13 @@ exposure 决策结构是 [`ExposureDecision`](/Users/zuowenjian/devspace/wp-labs
 - `ExposurePolicy::decide(...)`
 - `StructError::exposure_snapshot(...)`
 - `StructError::into_exposure_snapshot(...)`
-- `ErrorProtocolSnapshot::from_report(report, identity, policy)`
+- `ErrorProtocolSnapshot::from_report_skeleton(report, identity, policy)`
+
+说明：
+
+- `from_report_skeleton(...)` 适合“已有 report + identity，需要补一个协议骨架”的场景
+- 它更偏向测试、适配器和中间层拼装，不是正常业务主路径
+- 完整 projection 数据仍以 `StructError::exposure_snapshot(...)` 为主路径
 
 ## 4. `ErrorProtocolSnapshot`
 
@@ -99,7 +107,7 @@ exposure 决策结构是 [`ExposureDecision`](/Users/zuowenjian/devspace/wp-labs
 
 - `StructError::exposure_snapshot(...)`
 - `StructError::into_exposure_snapshot(...)`
-- `ErrorProtocolSnapshot::from_report(report, identity, policy)`
+- `ErrorProtocolSnapshot::from_report_skeleton(report, identity, policy)`
 
 适用场景：
 

@@ -24,7 +24,7 @@
 - `orion_error::v1::*` / `orion_error::v1::prelude::*` / `orion_error::v1` 下的 compat prelude 模块是 V1 显式版本入口
 - `orion_error::v2::*` / `orion_error::v2::prelude::*` 是 V2 主入口
 - `orion_error::runtime::*` / `conversion::*` / `reason::*` / `snapshot::*` / `report::*` / `bridge::*` 是 V2 分层导入入口
-- 如果只想导入 V1 主路径扩展 trait，可使用 `orion_error::traits_ext::*`
+- 如果只想导入当前主路径 trait，请显式组合 `orion_error::conversion::*` 与 `orion_error::reason::ErrorCode`
 - crate root 下的 compat prelude / compat traits 模块只用于维护旧的 `owe(...)` / `err_wrap(...)` 路径
 - 使用 `OperationContext::record(...)`，不要继续新增旧的链式键值写法
 - 使用 `StructError::from(UvsReason::validation_error()).with_detail(...)`
@@ -45,7 +45,7 @@
 use orion_error::{
     conversion::{ErrorWith, IntoAs},
     reason::UvsReason,
-    runtime::{ContextRecord, OperationContext, StructError},
+    runtime::{OperationContext, StructError},
 };
 
 fn place_order(order_txt: &str) -> Result<(), StructError<UvsReason>> {

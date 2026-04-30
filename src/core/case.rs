@@ -5,7 +5,7 @@ mod tests {
     use thiserror::Error;
 
     use crate::{
-        core::{context::ContextRecord, convert_error},
+        core::convert_error,
         testcase::TestAssertWithMsg,
         ErrorWith, OperationContext, StructError, UvsReason,
     };

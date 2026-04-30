@@ -69,6 +69,7 @@ fn test_layered_modules_and_root_prelude_compile() {
 #[test]
 fn test_advanced_prelude_exports_cli_projection_types() {
     use orion_error::advanced_prelude::*;
+    use orion_error::{DefaultExposurePolicy, StructError, UvsReason};
 
     let http = StructError::from(UvsReason::system_error())
         .exposure_snapshot(&DefaultExposurePolicy)

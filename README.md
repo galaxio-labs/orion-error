@@ -189,7 +189,9 @@ Then add only the layered imports you need, for example:
 
 - `orion_error::reason::UvsReason`
 - `orion_error::runtime::OperationContext`
+- `orion_error::runtime::source::*`
 - `orion_error::report::*`
+- `orion_error::protocol::*`
 - `orion_error::snapshot::*`
 
 This keeps application code simple while still letting larger codebases keep

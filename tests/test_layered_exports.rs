@@ -1,5 +1,5 @@
 use orion_error::ErrorWith;
-use orion_error::{bridge, conversion, reason, report, runtime, snapshot};
+use orion_error::{bridge, cli, conversion, protocol, reason, report, runtime, snapshot};
 
 #[test]
 fn test_runtime_snapshot_report_bridge_and_legacy_exports_compile_and_interoperate() {
@@ -100,7 +100,7 @@ fn test_layered_modules_remain_the_official_home_for_non_root_types() {
     let _: runtime::StructErrorBuilder<reason::UvsReason> =
         runtime::StructError::builder(reason::UvsReason::system_error());
     let _: reason::ErrorCategory = reason::ErrorCategory::Sys;
-    let _: report::Visibility = report::Visibility::Internal;
+    let _: protocol::Visibility = protocol::Visibility::Internal;
     let _: snapshot::StableErrorSnapshot = snapshot_value.stable_export();
     let _: bridge::OwnedStdStructError<reason::UvsReason> = err.clone().into_std();
 
@@ -137,13 +137,29 @@ fn test_removed_types_module_does_not_return_as_a_second_root() {
     assert_eq!(identity.code, "sys.io_error");
 }
 
+#[test]
+fn test_runtime_source_observation_surface_lives_under_runtime_source_module() {
+    let err = runtime::StructError::from(reason::UvsReason::system_error())
+        .with_source(std::io::Error::other("disk offline"));
+
+    let payload = err.source_payload().expect("source payload");
+    let _: runtime::source::SourcePayloadRef<'_> = payload;
+    let _: runtime::source::SourcePayloadKind = payload.kind();
+    let _: &[runtime::source::SourceFrame] = payload.frames();
+
+    assert_eq!(
+        err.source_payload_kind(),
+        Some(runtime::source::SourcePayloadKind::Std)
+    );
+}
+
 #[cfg(feature = "serde_json")]
 #[test]
 fn test_advanced_prelude_types_and_report_exports_include_cli_projection() {
     use orion_error::advanced_prelude::{
-        DefaultExposurePolicy, DiagnosticReport, ErrorProtocolSnapshot, ExposureDecision,
-        StructError, UvsReason, Visibility,
+        DiagnosticReport, ErrorProtocolSnapshot, ExposureDecision, Visibility,
     };
+    use orion_error::{DefaultExposurePolicy, StructError, UvsReason};
 
     let snapshot = StructError::from(UvsReason::business_error())
         .with_detail("order state invalid")
@@ -167,5 +183,58 @@ fn test_advanced_prelude_types_and_report_exports_include_cli_projection() {
     let _: &ErrorProtocolSnapshot = &snapshot;
     let _: Visibility = Visibility::Internal;
     let _: ExposureDecision = snapshot.decision.clone();
-    let _: DiagnosticReport = snapshot.report.clone();
+    let _: &DiagnosticReport = snapshot.report();
+}
+
+#[test]
+fn test_report_and_protocol_modules_have_distinct_roles() {
+    let report_value: report::DiagnosticReport =
+        runtime::StructError::from(reason::UvsReason::system_error()).report();
+    let _: protocol::Visibility = protocol::Visibility::Internal;
+    let _: protocol::ExposureDecision = protocol::ExposureDecision {
+        http_status: 500,
+        visibility: protocol::Visibility::Internal,
+        default_hints: vec![],
+        retryable: false,
+    };
+
+    assert_eq!(report_value.reason, "system error");
+}
+
+#[test]
+fn test_cli_module_is_the_public_home_for_print_error() {
+    let fn_ptr: fn(&runtime::StructError<reason::UvsReason>) = cli::print_error;
+    let err = runtime::StructError::from(reason::UvsReason::system_error())
+        .with_detail("disk offline");
+
+    let _ = fn_ptr;
+    assert!(err.display_chain().contains("disk offline"));
+}
+
+#[test]
+fn test_public_surface_grading_stays_split_between_primary_observation_and_secondary_paths() {
+    let err = runtime::StructError::from(reason::UvsReason::system_error())
+        .with_detail("disk offline")
+        .with_source(std::io::Error::other("root cause"));
+
+    // Primary path stays centered on report/snapshot/protocol entry points.
+    let _: report::DiagnosticReport = err.report();
+    let _: snapshot::ErrorSnapshot = err.snapshot();
+    let _: protocol::ErrorProtocolSnapshot =
+        err.exposure_snapshot(&protocol::DefaultExposurePolicy);
+
+    // Observation surface remains explicitly readable but separate.
+    let _: &[runtime::source::SourceFrame] = err.source_frames();
+    let _: Option<runtime::source::SourcePayloadRef<'_>> = err.source_payload();
+    let _: Option<runtime::source::SourcePayloadKind> = err.source_payload_kind();
+
+    // Secondary protocol assembly path remains available without becoming root/runtime API.
+    let report_value = err.report();
+    let identity = err.identity_snapshot();
+    let _: protocol::ErrorProtocolSnapshot =
+        protocol::ErrorProtocolSnapshot::from_report_skeleton(
+            report_value,
+            identity,
+            &protocol::DefaultExposurePolicy,
+        );
 }

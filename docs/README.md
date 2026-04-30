@@ -18,7 +18,8 @@
 10. [与 thiserror 的关系](./thiserror-comparison.md)
 11. [0.8 Breaking Plan](./0.8-breaking-plan.md)
 12. [0.9 Design Plan](./0.9-design-plan.md)
-13. [Release Checklist](./release-checklist.md)
+13. [Public Surface Grading](./public-surface-grading.md)
+14. [Release Checklist](./release-checklist.md)
 
 ## 当前质量锁
 
@@ -71,6 +72,7 @@
   - `orion_error::conversion::*`
   - `orion_error::snapshot::*`
   - `orion_error::report::*`
+  - `orion_error::protocol::*`
   - `orion_error::bridge::*`
   - `orion_error::reason::*`
 
@@ -80,20 +82,26 @@
   面向新业务代码的最小主路径，只放最常用入口。
 - `orion_error::runtime::*`
   运行时传播载体与上下文，如 `StructError`、`OperationContext`。
+  source 观察模型单独放在 `orion_error::runtime::source::*`。
 - `orion_error::conversion::*`
   主路径转换 trait，如 `IntoAs`、`ErrorWith`、`ErrorWrapAs`。
 - `orion_error::snapshot::*`
   快照与稳定 schema，如 `ErrorSnapshot`、`StableErrorSnapshot`。
 - `orion_error::report::*`
-  诊断、redaction、协议投影和各类 projection response。
+  人类诊断与 redaction。
+- `orion_error::cli::*`
+  CLI 输出辅助，如 `print_error(...)`。
+- `orion_error::protocol::*`
+  协议/exposure 投影，如 `ErrorProtocolSnapshot`、`ExposurePolicy`、
+  `DefaultExposurePolicy`、`Visibility`。
 - `orion_error::bridge::*`
   进入标准错误生态的显式 bridge 类型。
 - `orion_error::reason::*`
   reason trait、`UvsReason`、category 与 stable identity 相关能力。
 - `orion_error::advanced_prelude::*`
   只建议用于协议/schema 测试、迁移验证和大范围编译覆盖。
-  当前主要覆盖 snapshot/report/projection 相关表面，不再承担
-  bridge/reason/runtime/conversion 的宽导出。
+  当前只覆盖 snapshot/report/protocol 相关检查表面；
+  runtime、reason、conversion、bridge 仍应显式导入。
 
 ## 设计边界
 

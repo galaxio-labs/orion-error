@@ -41,16 +41,6 @@ struct InternalSourceState {
     frames: Vec<SourceFrame>,
 }
 
-/// Owned source payload.
-///
-/// This is the public write-side counterpart of [`SourcePayloadRef`].  It keeps
-/// ordinary standard errors and already-structured errors in separate payload
-/// channels before attaching them to a [`StructError`].
-#[derive(Debug)]
-pub struct SourcePayload {
-    state: InternalSourceState,
-}
-
 #[derive(Debug, Clone)]
 enum InternalSourcePayload {
     Std {
@@ -68,8 +58,8 @@ pub struct SourcePayloadRef<'a> {
     payload: &'a InternalSourcePayload,
 }
 
-pub trait IntoSourcePayload {
-    fn into_source_payload(self) -> SourcePayload;
+trait IntoSourcePayload {
+    fn into_source_payload(self) -> InternalSourceState;
 }
 
 #[derive(Debug, Clone)]
@@ -246,34 +236,12 @@ impl InternalSourceState {
     }
 }
 
-impl SourcePayload {
-    fn from_state(state: InternalSourceState) -> Self {
-        Self { state }
-    }
-
-    fn into_internal_state(self) -> InternalSourceState {
-        self.state
-    }
-
-    pub fn kind(&self) -> SourcePayloadKind {
-        self.state.kind
-    }
-
-    pub fn source(&self) -> &(dyn StdError + 'static) {
-        self.state.source.as_ref()
-    }
-
-    pub fn frames(&self) -> &[SourceFrame] {
-        &self.state.frames
-    }
-}
-
 impl<E> IntoSourcePayload for E
 where
     E: StdError + Send + Sync + 'static,
 {
-    fn into_source_payload(self) -> SourcePayload {
-        SourcePayload::from_state(InternalSourceState::from_std(self))
+    fn into_source_payload(self) -> InternalSourceState {
+        InternalSourceState::from_std(self)
     }
 }
 
@@ -281,8 +249,8 @@ impl<R> IntoSourcePayload for StructError<R>
 where
     R: DomainReason,
 {
-    fn into_source_payload(self) -> SourcePayload {
-        SourcePayload::from_state(InternalSourceState::from_struct(self))
+    fn into_source_payload(self) -> InternalSourceState {
+        InternalSourceState::from_struct(self)
     }
 }
 
@@ -669,11 +637,11 @@ impl<T: DomainReason> StructError<T> {
     /// Prefer [`with_source`](Self::with_source) for normal application code.
     /// This lower-level entry point stays internal so the public source story
     /// remains centered on `with_source(...)`.
-    pub(crate) fn attach_source<S>(self, source: S) -> Self
+    fn attach_source<S>(self, source: S) -> Self
     where
         S: IntoSourcePayload,
     {
-        self.with_internal_source(source.into_source_payload().into_internal_state())
+        self.with_internal_source(source.into_source_payload())
     }
 
     #[must_use]
@@ -698,6 +666,7 @@ impl<T: DomainReason> StructError<T> {
     /// Use [`with_std_source`](Self::with_std_source) or
     /// [`with_struct_source`](Self::with_struct_source) only when the call site
     /// intentionally wants to make that distinction explicit.
+    #[allow(private_bounds)]
     pub fn with_source<S>(self, source: S) -> Self
     where
         S: IntoSourcePayload,
@@ -751,10 +720,20 @@ impl<T: DomainReason> StructError<T> {
         self.imp.source_frames()
     }
 
+    /// Read-only source payload observation view.
+    ///
+    /// Prefer [`with_source`](Self::with_source), [`with_std_source`](Self::with_std_source),
+    /// and [`with_struct_source`](Self::with_struct_source) when attaching
+    /// sources. This accessor is intended for diagnostics, testing, and bridge
+    /// inspection rather than normal application flow.
     pub fn source_payload(&self) -> Option<SourcePayloadRef<'_>> {
         self.imp.source_payload_ref()
     }
 
+    /// Read-only source payload kind observation helper.
+    ///
+    /// This is a thin convenience wrapper over [`source_payload()`](Self::source_payload)
+    /// for diagnostics and tests.
     pub fn source_payload_kind(&self) -> Option<SourcePayloadKind> {
         self.source_payload().map(|payload| payload.kind())
     }
@@ -880,8 +859,14 @@ impl<T: DomainReason> StructError<T> {
     pub fn err<V>(self) -> Result<V, Self> {
         Err(self)
     }
+
+    /// Main compat target projection across the context stack.
+    ///
+    /// Prefer [`action_main()`](Self::action_main) together with
+    /// [`target_path()`](Self::target_path) in new code. This method remains as
+    /// the compatibility bridge for older `want/target`-shaped consumers.
     pub fn target_main(&self) -> Option<String> {
-        self.imp.context.iter().rev().find_map(OperationContext::target)
+        self.imp.context.iter().rev().find_map(OperationContext::compat_target)
     }
 
     pub fn action_main(&self) -> Option<String> {
@@ -900,7 +885,7 @@ impl<T: DomainReason> StructError<T> {
 
     /// Compatibility alias for `target_main()`.
     ///
-    /// Prefer `target_main()` in new code when pairing it with `target_path()`.
+    /// Prefer `action_main()` and `target_path()` in new code.
     pub fn target(&self) -> Option<String> {
         self.target_main()
     }
@@ -1034,11 +1019,11 @@ impl<T: DomainReason> StructErrorBuilder<T> {
         self
     }
 
-    pub(crate) fn attach_source<S>(self, source: S) -> Self
+    fn attach_source<S>(self, source: S) -> Self
     where
         S: IntoSourcePayload,
     {
-        self.with_internal_source(source.into_source_payload().into_internal_state())
+        self.with_internal_source(source.into_source_payload())
     }
 
     pub fn detail(mut self, detail: impl Into<String>) -> Self {
@@ -1078,6 +1063,7 @@ impl<T: DomainReason> StructErrorBuilder<T> {
     /// This is the recommended builder entry point for attaching sources.
     /// Prefer `source_std(...)` / `source_struct(...)` only when the builder
     /// call site wants to make the source kind explicit.
+    #[allow(private_bounds)]
     pub fn source<S>(self, source: S) -> Self
     where
         S: IntoSourcePayload,
@@ -1122,7 +1108,7 @@ mod tests {
     use std::{error::Error as StdError, fmt};
 
     use crate::{
-        core::context::{CallContext, ContextRecord},
+        core::context::CallContext,
         reason::{DomainReason, ErrorCode},
         UvsReason,
     };

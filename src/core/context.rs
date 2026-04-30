@@ -157,76 +157,34 @@ impl Display for OperationContext {
         Ok(())
     }
 }
-/// Record human-readable key-value context into the context stack.
-///
-/// Values recorded via this trait appear in the error's `Display` output under
-/// the "Context stack" section — they are intended for terminal/console visibility.
-///
-/// For typed metadata that should **not** appear in Display output (e.g.
-/// structured fields for serialization, snapshots, or API responses), use
-/// [`ErrorMetadata`] via [`OperationContext::with_meta()`] instead.
-pub trait ContextRecord<S1, S2> {
-    fn record_field(&mut self, key: S1, val: S2);
-
-    fn record(&mut self, key: S1, val: S2)
-    where
-        Self: Sized,
-    {
-        self.record_field(key, val);
-    }
-}
-
-impl<S1> ContextRecord<S1, String> for OperationContext
-where
-    S1: Into<String>,
-{
-    fn record_field(&mut self, key: S1, val: String) {
-        self.context.items.push((key.into(), val));
-    }
-}
-
-impl<S1> ContextRecord<S1, &str> for OperationContext
-where
-    S1: Into<String>,
-{
-    fn record_field(&mut self, key: S1, val: &str) {
-        self.context.items.push((key.into(), val.into()));
-    }
-}
-
-// Wrapper type for path values to avoid conflicts
-
-impl<S1> ContextRecord<S1, &PathBuf> for OperationContext
-where
-    S1: Into<String>,
-{
-    fn record_field(&mut self, key: S1, val: &PathBuf) {
-        self.context
-            .items
-            .push((key.into(), format!("{}", val.display())));
-    }
-}
-impl<S1> ContextRecord<S1, &Path> for OperationContext
-where
-    S1: Into<String>,
-{
-    fn record_field(&mut self, key: S1, val: &Path) {
-        self.context
-            .items
-            .push((key.into(), format!("{}", val.display())));
-    }
-}
-
 impl OperationContext {
-    fn ensure_path_root(&mut self, root: &str) {
-        if root.is_empty() {
-            return;
-        }
+    pub(crate) fn from_projection_parts(
+        target: Option<String>,
+        action: Option<String>,
+        locator: Option<String>,
+        path: Vec<String>,
+        fields: Vec<(String, String)>,
+        metadata: ErrorMetadata,
+        result: OperationResult,
+    ) -> Self {
+        let mut ctx = Self {
+            context: CallContext { items: fields },
+            result,
+            exit_log: false,
+            mod_path: DEFAULT_MOD_PATH.into(),
+            action,
+            locator,
+            target,
+            path,
+            metadata,
+        };
+        ctx.normalize_compat_target_storage();
+        ctx
+    }
 
-        if self.path.is_empty() {
-            self.path.push(root.to_string());
-        } else if self.path.first().map(String::as_str) != Some(root) {
-            self.path.insert(0, root.to_string());
+    fn normalize_compat_target_storage(&mut self) {
+        if self.target.as_deref() == self.action.as_deref() {
+            self.target = None;
         }
     }
 
@@ -258,12 +216,13 @@ impl OperationContext {
         self.target.clone().or_else(|| self.action.clone())
     }
 
+    #[cfg(test)]
     pub(crate) fn from_target(target: String) -> Self {
         Self {
             action: None,
             locator: None,
             target: Some(target.clone()),
-            path: vec![target],
+            path: Vec::new(),
             context: CallContext::default(),
             result: OperationResult::Fail,
             exit_log: false,
@@ -277,14 +236,17 @@ impl OperationContext {
             return;
         }
 
+        if self.action.is_some() {
+            self.push_path_segment(target);
+            return;
+        }
+
         if self.target.is_none() {
-            self.target = Some(target.clone());
-            self.ensure_path_root(&target);
+            self.target = Some(target);
             return;
         }
 
         let root = self.target.clone().expect("checked above");
-        self.ensure_path_root(&root);
         if root == target {
             return;
         }
@@ -308,6 +270,10 @@ impl OperationContext {
         &self.mod_path
     }
 
+    /// Compatibility projection of the context's main operation target.
+    ///
+    /// Prefer [`action()`](Self::action) and [`path_string()`](Self::path_string)
+    /// when working with the current structured runtime semantics.
     pub fn target(&self) -> Option<String> {
         self.compat_target()
     }
@@ -385,6 +351,7 @@ impl OperationContext {
         if self.action.is_none() {
             self.action = Some(action.clone());
         }
+        self.normalize_compat_target_storage();
         self.push_path_segment(action)
     }
     pub fn with_at<S: Into<String>>(&mut self, locator: S) {
@@ -408,34 +375,18 @@ impl OperationContext {
 
     pub(crate) fn normalized_path_segments(&self) -> Vec<String> {
         let mut path = Vec::new();
-        let target = self.compat_target();
+        if let Some(action) = &self.action {
+            path.push(action.clone());
+        } else if let Some(target) = &self.target {
+            path.push(target.clone());
+        }
 
-        match (&self.action, target.as_ref()) {
-            (Some(action), Some(target)) => {
-                path.push(target.clone());
-                for segment in self.path.iter().skip(1) {
-                    if path.last() != Some(segment) {
-                        path.push(segment.clone());
-                    }
-                }
-                if path.last() != Some(action) && self.path.len() == 1 {
-                    path.push(action.clone());
-                }
+        for segment in &self.path {
+            if path.first() == Some(segment) {
+                continue;
             }
-            (Some(action), None) => {
-                path.push(action.clone());
-                for segment in &self.path {
-                    if path.last() != Some(segment) {
-                        path.push(segment.clone());
-                    }
-                }
-            }
-            _ => {
-                for segment in &self.path {
-                    if path.last() != Some(segment) {
-                        path.push(segment.clone());
-                    }
-                }
+            if path.last() != Some(segment) {
+                path.push(segment.clone());
             }
         }
 
@@ -485,17 +436,27 @@ impl OperationContext {
     ///
     /// The entry will appear in the error's `Display` output.
     /// For typed metadata hidden from console output, use [`record_meta()`] instead.
-    pub fn record_field<S1, S2>(&mut self, key: S1, val: S2)
+    pub fn record_field<K, V>(&mut self, key: K, val: V)
     where
-        Self: ContextRecord<S1, S2>,
+        K: Into<String>,
+        V: Display,
     {
-        <Self as ContextRecord<S1, S2>>::record_field(self, key, val);
+        self.context.items.push((key.into(), val.to_string()));
+    }
+
+    pub fn record<K, V>(&mut self, key: K, val: V)
+    where
+        K: Into<String>,
+        V: Display,
+    {
+        self.record_field(key, val);
     }
 
     /// Builder-pattern version of [`record_field`].
-    pub fn with_field<S1, S2>(mut self, key: S1, val: S2) -> Self
+    pub fn with_field<K, V>(mut self, key: K, val: V) -> Self
     where
-        Self: ContextRecord<S1, S2>,
+        K: Into<String>,
+        V: Display,
     {
         self.record_field(key, val);
         self
@@ -533,27 +494,27 @@ impl OperationContext {
     /// 格式化上下文信息，用于日志输出
     #[cfg_attr(not(any(feature = "log", feature = "tracing")), allow(dead_code))]
     fn format_context(&self) -> String {
-        let want = self.compat_target().unwrap_or_default();
+        let target = self.compat_target().unwrap_or_default();
         let path = self.normalized_path_string().unwrap_or_default();
         let action = self.action.clone().unwrap_or_default();
         let locator = self.locator.clone().unwrap_or_default();
         let mut parts = Vec::new();
         if !action.is_empty() {
             parts.push(format!("doing={action}"));
-        } else if !want.is_empty() {
-            parts.push(format!("want={want}"));
+        } else if !target.is_empty() {
+            parts.push(format!("want={target}"));
         }
         if !locator.is_empty() {
             parts.push(format!("at={locator}"));
         }
-        if !path.is_empty() && path != want && path != locator {
+        if !path.is_empty() && path != target && path != locator {
             parts.push(format!("path={path}"));
         }
         let head = if parts.is_empty() {
-            match (want.is_empty(), path.is_empty() || path == want) {
+            match (target.is_empty(), path.is_empty() || path == target) {
                 (true, true) => String::new(),
-                (false, true) => format!("want={want}"),
-                (false, false) => format!("want={want} path={path}"),
+                (false, true) => format!("want={target}"),
+                (false, false) => format!("want={target} path={path}"),
                 (true, false) => format!("path={path}"),
             }
         } else {
@@ -690,29 +651,6 @@ impl OperationContext {
         self.trace(message)
     }
 
-    pub(crate) fn context_mut_for_report(&mut self) -> &mut CallContext {
-        &mut self.context
-    }
-
-    pub(crate) fn replace_target_for_report(&mut self, target: Option<String>) {
-        self.target = target;
-    }
-
-    pub(crate) fn replace_action_for_report(&mut self, action: Option<String>) {
-        self.action = action;
-    }
-
-    pub(crate) fn replace_locator_for_report(&mut self, locator: Option<String>) {
-        self.locator = locator;
-    }
-
-    pub(crate) fn replace_path_for_report(&mut self, path: Vec<String>) {
-        self.path = path;
-    }
-
-    pub(crate) fn replace_metadata_for_report(&mut self, metadata: ErrorMetadata) {
-        self.metadata = metadata;
-    }
 }
 
 pub struct OperationScope<'a> {
@@ -1024,7 +962,7 @@ mod tests {
     fn test_record_path_value() {
         let mut ctx = OperationContext::new();
         let path = PathBuf::from("/test/path");
-        ctx.record("file_path", &path);
+        ctx.record("file_path", path.display());
 
         assert_eq!(ctx.context().items.len(), 1);
         assert!(ctx.context().items[0].1.contains("/test/path"));
@@ -1433,6 +1371,51 @@ mod tests {
     }
 
     #[test]
+    fn test_normalized_path_prefers_action_head_over_compat_target() {
+        let mut ctx = OperationContext::from_target("legacy_target".to_string());
+        ctx.with_doing("start engine");
+        ctx.with_at("engine.toml");
+
+        assert_eq!(ctx.target().as_deref(), Some("legacy_target"));
+        assert_eq!(
+            ctx.path_string().as_deref(),
+            Some("start engine / engine.toml")
+        );
+    }
+
+    #[test]
+    fn test_set_target_after_doing_only_appends_compat_path_segment() {
+        let mut ctx = OperationContext::doing("start engine");
+        ctx.set_target("legacy_target");
+
+        assert_eq!(ctx.target().as_deref(), Some("start engine"));
+        assert_eq!(
+            ctx.path_string().as_deref(),
+            Some("start engine / legacy_target")
+        );
+    }
+
+    #[test]
+    fn test_set_target_without_action_only_updates_compat_target_projection() {
+        let mut ctx = OperationContext::new();
+        ctx.set_target("legacy_target");
+
+        assert_eq!(ctx.target().as_deref(), Some("legacy_target"));
+        assert!(ctx.path().is_empty());
+        assert_eq!(ctx.path_string().as_deref(), Some("legacy_target"));
+    }
+
+    #[test]
+    fn test_matching_action_clears_redundant_stored_compat_target() {
+        let mut ctx = OperationContext::from_target("start engine".to_string());
+        ctx.with_doing("start engine");
+
+        assert!(ctx.target.is_none());
+        assert_eq!(ctx.target().as_deref(), Some("start engine"));
+        assert_eq!(ctx.path(), &["start engine".to_string()]);
+    }
+
+    #[test]
     fn test_logging_methods() {
         let ctx = OperationContext::doing("test_target");
 
@@ -1692,8 +1675,8 @@ mod tests {
         let path1 = PathBuf::from("/test/path1.txt");
         let path2 = Path::new("/test/path2.txt");
 
-        ctx.record("file1", &path1);
-        ctx.record("file2", path2);
+        ctx.record("file1", path1.display());
+        ctx.record("file2", path2.display());
 
         assert_eq!(ctx.context().items.len(), 2);
         assert_eq!(ctx.context().items[0].0, "file1");
@@ -1709,7 +1692,7 @@ mod tests {
         // 测试混合使用字符串和PathContext类型
         ctx.record("name", "test_user");
         ctx.record("age", 25.to_string());
-        ctx.record("config_file", &PathBuf::from("/etc/config.toml"));
+        ctx.record("config_file", PathBuf::from("/etc/config.toml").display());
         ctx.record("status", "active");
 
         assert_eq!(ctx.context().items.len(), 4);
@@ -1768,8 +1751,8 @@ mod tests {
         ctx.record("key1", "value1");
         ctx.record("key2", "value2");
         ctx.record("key1", "new_value1"); // 覆盖key1
-        ctx.record("key3", &PathBuf::from("/path/file.txt"));
-        ctx.record("key2", &PathBuf::from("/path/file2.txt")); // 覆盖key2
+        ctx.record("key3", PathBuf::from("/path/file.txt").display());
+        ctx.record("key2", PathBuf::from("/path/file2.txt").display()); // 覆盖key2
 
         // 注意：当前实现允许重复的key，这是预期的行为
         assert_eq!(ctx.context().items.len(), 5);
@@ -1798,7 +1781,7 @@ mod tests {
 
         // 使用ContextTake添加更多上下文
         ctx.record("new_key1", "new_value1");
-        ctx.record("new_key2", &PathBuf::from("/new/path.txt"));
+        ctx.record("new_key2", PathBuf::from("/new/path.txt").display());
 
         assert_eq!(ctx.context().items.len(), 3);
         assert_eq!(

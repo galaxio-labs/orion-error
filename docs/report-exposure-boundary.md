@@ -11,7 +11,10 @@
 （`exposure_identity`、`http_status`、`visibility`、`default_hints`、
 `decision`、`exposure_snapshot`、`to_exposure_snapshot_json`）已全部删除。
 
-替代入口为 `ErrorProtocolSnapshot::from_report(report, identity, policy)`。
+替代入口为 `ErrorProtocolSnapshot::from_report_skeleton(report, identity, policy)`。
+注意：该入口只会基于 `report + identity` 构造协议骨架；
+如果调用方还需要完整的 root metadata / source frames / path projection，
+应优先从 `StructError::exposure_snapshot(...)` 进入。
 
 `StructError<T>::report()` 只要求 `DomainReason`，不再需要 `ErrorIdentityProvider`。
 
@@ -117,7 +120,6 @@ let http = proto.to_http_error_json()?;
 建议长期保留：
 
 - `render()`
-- `render_compact()`
 - `redacted(...)`
 - `render_redacted(...)`
 
@@ -129,7 +131,11 @@ let http = proto.to_http_error_json()?;
 
 ```rust,ignore
 impl ErrorProtocolSnapshot {
-    pub fn from_report(report: DiagnosticReport, policy: &impl ExposurePolicy) -> Self;
+    pub fn from_report_skeleton(
+        report: DiagnosticReport,
+        identity: ErrorIdentity,
+        policy: &impl ExposurePolicy,
+    ) -> Self;
 }
 ```
 
@@ -137,6 +143,7 @@ impl ErrorProtocolSnapshot {
 
 - protocol 入口集中到 `ErrorProtocolSnapshot`
 - `DiagnosticReport` 不需要继续挂越来越多的 exposure 方法
+- `DiagnosticReport` 本身也不需要继续持有 protocol projection 数据
 
 ### 5.3 降级 `DiagnosticReport` 上的 exposure bridge
 
@@ -153,7 +160,7 @@ impl ErrorProtocolSnapshot {
 可选做法：
 
 1. 先保留实现，但在文档里降级为 secondary path
-2. 后续改成内部转发到 `ErrorProtocolSnapshot::from_report(...)`
+2. 后续改成内部转发到 `ErrorProtocolSnapshot::from_report_skeleton(...)`
 3. 再决定是否在下一个 breaking window 正式移除
 
 ## 6. 建议迁移后的调用形态
@@ -172,10 +179,12 @@ let http = proto.to_http_error_json()?;
 如果调用方起点不是 `StructError`，而是一个已有的 `DiagnosticReport`，则显式写：
 
 ```rust,ignore
-let proto = ErrorProtocolSnapshot::from_report(report, &policy);
+let proto = ErrorProtocolSnapshot::from_report_skeleton(report, identity, &policy);
 ```
 
 这样可以避免把“诊断对象”和“协议对象”继续混成一层。
+但如果调用方关心完整 projection 数据，仍应直接使用
+`StructError::exposure_snapshot(...)`。
 
 ## 7. 结论
 

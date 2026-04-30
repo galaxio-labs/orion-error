@@ -8,7 +8,7 @@ use super::{DomainReason, StructError};
 /// # Example
 ///
 /// ```rust
-/// use orion_error::{report::print_error, StructError, UvsReason};
+/// use orion_error::{cli::print_error, StructError, UvsReason};
 ///
 /// let err = StructError::from(UvsReason::system_error())
 ///     .with_detail("config not found");

@@ -78,7 +78,8 @@ let stable = StableErrorSnapshot::from(&err);
 
 说明：
 
-- `want` / `path` 继续保留在 snapshot 中，主要是兼容投影
+- `want` 继续保留在 snapshot 中，主要是兼容 target 投影
+- `path` 是稳定导出的路径投影
 - 当前运行时主语义和新代码文档应优先使用 `doing(...)` / `action`
 
 ## 4. `StableErrorSnapshot`
@@ -110,6 +111,11 @@ let stable = StableErrorSnapshot::from(&err);
 - `path`
 - `metadata`
 
+其中：
+
+- `target` 是兼容 root target 投影
+- `action` / `locator` / `path` 更接近当前 runtime 主语义的稳定导出
+
 不属于稳定 schema 的 context 字段：
 
 - `fields`
@@ -132,6 +138,11 @@ let stable = StableErrorSnapshot::from(&err);
 - `is_root_cause`
 
 其中 `want` / `path` 仍属于兼容投影信息。
+
+更具体地说：
+
+- `want` 是兼容 target 投影
+- `path` 是稳定导出的路径投影
 
 不属于稳定 schema 的 source frame 字段：
 

@@ -50,7 +50,6 @@ impl serde::Serialize for ErrorSnapshot {
 
 #[cfg(test)]
 mod tests {
-    use crate::core::context::ContextRecord;
     use crate::core::{
         context::OperationResult, DomainReason, ErrorCategory, ErrorIdentity, ErrorMetadata,
         ErrorSnapshot, OperationContext, SnapshotContextFrame, SnapshotSourceFrame, SourceFrame,

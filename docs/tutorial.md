@@ -260,7 +260,7 @@ assert!(result.is_err());
 
 - `action_main()`
 - `locator_main()`
-- `target_main()`
+- `target_main()`：兼容投影；新代码优先理解 `action_main()`
 - `target_path()`
 
 ## 4. 错误进入和跨层转换
@@ -468,6 +468,8 @@ assert!(user_debug.contains("sys.io_error"));
 - `identity_snapshot()`：稳定身份视图
 - `exposure_snapshot(...)`：最完整的协议输入（携带 identity + decision + report）
 - `proto.render_user_debug()`：用户调试摘要
+
+这里建议把协议边界相关导入放在 `orion_error::protocol::*`，把给人看的诊断导入放在 `orion_error::report::*`。
 - `proto.to_http_error_json()` 等：出口 JSON 投影
 
 ## 7. 测试建议
@@ -503,7 +505,7 @@ use orion_error::reason::ErrorCode;
 use orion_error::{StructError, UvsReason};
 
 let err = StructError::from(UvsReason::system_error());
-assert_eq!(err.error_code(), 201);
+assert_eq!(err.reason().error_code(), 201);
 ```
 
 ## 8. 推荐实践

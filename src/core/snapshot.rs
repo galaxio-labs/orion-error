@@ -1,15 +1,15 @@
 use crate::{core::DomainReason, StructError};
 
 use super::{
-    context::OperationResult, report::{DiagnosticReport, ReportProjectionParts}, ErrorCategory,
-    ErrorIdentityProvider, ErrorMetadata, OperationContext, SourceFrame,
+    context::OperationResult, report::DiagnosticReport, ErrorCategory, ErrorIdentityProvider,
+    ErrorMetadata, OperationContext, SourceFrame,
 };
 
 pub const STABLE_SNAPSHOT_SCHEMA_VERSION: &str = "orion-error.snapshot.v2";
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct SnapshotContextFrame {
-    /// Stable root operation name.
+    /// Compatibility projection of the frame's root target/want value.
     pub target: Option<String>,
     /// Action/phase captured by `doing(...)`.
     pub action: Option<String>,
@@ -78,7 +78,9 @@ pub struct ErrorSnapshot {
     pub reason: String,
     pub detail: Option<String>,
     pub position: Option<String>,
+    /// Compatibility top-level target/want projection.
     pub want: Option<String>,
+    /// Stable exported operation path projection.
     pub path: Option<String>,
     pub category: ErrorCategory,
     pub code: String,
@@ -94,7 +96,9 @@ pub struct StableErrorSnapshot {
     pub reason: String,
     pub detail: Option<String>,
     pub position: Option<String>,
+    /// Compatibility top-level target/want projection.
     pub want: Option<String>,
+    /// Stable exported operation path projection.
     pub path: Option<String>,
     #[cfg_attr(feature = "serde", serde(skip))]
     pub category: ErrorCategory,
@@ -118,7 +122,9 @@ pub struct ErrorIdentity {
     pub reason: String,
     pub detail: Option<String>,
     pub position: Option<String>,
+    /// Compatibility target/want projection preserved for protocol consumers.
     pub want: Option<String>,
+    /// Stable exported operation path projection.
     pub path: Option<String>,
 }
 
@@ -165,50 +171,32 @@ impl ErrorSnapshot {
     }
 
     pub fn into_report(self) -> DiagnosticReport {
-        DiagnosticReport {
-            reason: self.reason,
-            detail: self.detail,
-            position: self.position,
-            context: self.context.into_iter().map(Into::into).collect(),
-            projection: ReportProjectionParts {
-                want: self.want,
-                path: self.path,
-                root_metadata: self.root_metadata,
-                source_frames: self.source_frames.into_iter().map(Into::into).collect(),
-            },
-        }
+        DiagnosticReport::from_parts(
+            self.reason,
+            self.detail,
+            self.position,
+            self.context.into_iter().map(Into::into).collect(),
+        )
     }
 }
 
 impl StableErrorSnapshot {
     pub fn report(&self) -> DiagnosticReport {
-        DiagnosticReport {
-            reason: self.reason.clone(),
-            detail: self.detail.clone(),
-            position: self.position.clone(),
-            context: self.context.iter().cloned().map(Into::into).collect(),
-            projection: ReportProjectionParts {
-                want: self.want.clone(),
-                path: self.path.clone(),
-                root_metadata: self.root_metadata.clone(),
-                source_frames: self.source_frames.iter().cloned().map(Into::into).collect(),
-            },
-        }
+        DiagnosticReport::from_parts(
+            self.reason.clone(),
+            self.detail.clone(),
+            self.position.clone(),
+            self.context.iter().cloned().map(Into::into).collect(),
+        )
     }
 
     pub fn into_report(self) -> DiagnosticReport {
-        DiagnosticReport {
-            reason: self.reason,
-            detail: self.detail,
-            position: self.position,
-            context: self.context.into_iter().map(Into::into).collect(),
-            projection: ReportProjectionParts {
-                want: self.want,
-                path: self.path,
-                root_metadata: self.root_metadata,
-                source_frames: self.source_frames.into_iter().map(Into::into).collect(),
-            },
-        }
+        DiagnosticReport::from_parts(
+            self.reason,
+            self.detail,
+            self.position,
+            self.context.into_iter().map(Into::into).collect(),
+        )
     }
 }
 
@@ -324,23 +312,15 @@ impl From<OperationContext> for SnapshotContextFrame {
 
 impl From<SnapshotContextFrame> for OperationContext {
     fn from(value: SnapshotContextFrame) -> Self {
-        let mut ctx = value
-            .target
-            .clone()
-            .map(OperationContext::from_target)
-            .unwrap_or_default();
-        ctx.replace_target_for_report(value.target);
-        ctx.replace_action_for_report(value.action);
-        ctx.replace_locator_for_report(value.locator);
-        ctx.replace_path_for_report(value.path);
-        ctx.context_mut_for_report().items = value.fields;
-        ctx.replace_metadata_for_report(value.metadata);
-        match value.result {
-            OperationResult::Suc => ctx.mark_suc(),
-            OperationResult::Fail => {}
-            OperationResult::Cancel => ctx.mark_cancel(),
-        }
-        ctx
+        OperationContext::from_projection_parts(
+            value.target,
+            value.action,
+            value.locator,
+            value.path,
+            value.fields,
+            value.metadata,
+            value.result,
+        )
     }
 }
 
@@ -497,7 +477,7 @@ impl From<ErrorSnapshot> for StableErrorSnapshot {
 #[cfg(test)]
 mod tests {
     use crate::{
-        core::{context::ContextRecord, DomainReason, ErrorMetadata, SourceFrame},
+        core::{DomainReason, ErrorMetadata, SourceFrame},
         OperationContext, StructError, UvsReason,
     };
     use crate::reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
@@ -651,8 +631,6 @@ mod tests {
         assert_eq!(report.reason, snapshot.reason);
         assert_eq!(report.detail, snapshot.detail);
         assert_eq!(report.position, snapshot.position);
-        assert_eq!(report.want(), snapshot.want.as_deref());
-        assert_eq!(report.path(), snapshot.path.as_deref());
         assert_eq!(
             report.context,
             snapshot
@@ -661,17 +639,6 @@ mod tests {
                 .into_iter()
                 .map(Into::into)
                 .collect::<Vec<OperationContext>>()
-        );
-        assert_eq!(report.root_metadata(), &snapshot.root_metadata);
-        assert_eq!(
-            report.source_frames(),
-            snapshot
-                .source_frames
-                .clone()
-                .into_iter()
-                .map(Into::into)
-                .collect::<Vec<SourceFrame>>()
-                .as_slice()
         );
     }
 

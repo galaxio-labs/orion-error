@@ -23,7 +23,7 @@
 //! │                                                             │
 //! │  Just need to log and move on?                              │
 //! │    → err.display_chain()                                    │
-//! │    → report::print_error(&err)                              │
+//! │    → cli::print_error(&err)                                 │
 //! └─────────────────────────────────────────────────────────────┘
 //! ```
 //!
@@ -38,6 +38,11 @@
 //! If you only have [`reason::DomainReason`], you can always `report()`. If you
 //! also implement [`reason::ErrorIdentityProvider`] (via `#[derive(OrionError)]`),
 //! you can use `exposure_snapshot()` and the full protocol projection stack.
+//!
+//! Module split:
+//!
+//! - [`report`] is the human-facing diagnostics layer
+//! - [`protocol`] is the protocol/exposure projection layer
 //!
 //! Root-surface guardrails:
 //!
@@ -70,6 +75,49 @@
 //!
 //! ```compile_fail
 //! use orion_error::types::ErrorIdentity;
+//! ```
+//!
+//! ```compile_fail
+//! use orion_error::traits_ext::*;
+//! ```
+//!
+//! ```compile_fail
+//! use orion_error::{StructError, UvsReason};
+//!
+//! let report = StructError::from(UvsReason::system_error()).report();
+//! let _ = report.projection;
+//! ```
+//!
+//! ```compile_fail
+//! use orion_error::report::print_error;
+//! ```
+//!
+//! ```compile_fail
+//! use orion_error::{StructError, UvsReason};
+//!
+//! let report = StructError::from(UvsReason::system_error()).report();
+//! let _ = report.want();
+//! ```
+//!
+//! ```compile_fail
+//! use orion_error::{StructError, UvsReason};
+//!
+//! let report = StructError::from(UvsReason::system_error()).report();
+//! let _ = report.path();
+//! ```
+//!
+//! ```compile_fail
+//! use orion_error::{StructError, UvsReason};
+//!
+//! let report = StructError::from(UvsReason::system_error()).report();
+//! let _ = report.root_metadata();
+//! ```
+//!
+//! ```compile_fail
+//! use orion_error::{StructError, UvsReason};
+//!
+//! let report = StructError::from(UvsReason::system_error()).report();
+//! let _ = report.source_frames();
 //! ```
 //!
 //! ```rust
@@ -119,10 +167,10 @@ pub mod prelude {
 /// snapshot surfaces in one place.
 pub mod advanced_prelude {
     pub use crate::core::{
-        DefaultExposurePolicy, DiagnosticReport, ErrorIdentity, ErrorProtocolSnapshot,
-        ErrorSnapshot, ExposureDecision, ExposurePolicy, RedactPolicy, SnapshotContextFrame,
+        DiagnosticReport, ErrorIdentity, ErrorProtocolSnapshot, ErrorSnapshot,
+        ExposureDecision, ExposurePolicy, RedactPolicy, SnapshotContextFrame,
         SnapshotSourceFrame, StableErrorSnapshot, StableSnapshotContextFrame,
-        StableSnapshotSourceFrame, StructError, UvsReason, Visibility,
+        StableSnapshotSourceFrame, Visibility,
         STABLE_SNAPSHOT_SCHEMA_VERSION,
     };
     #[cfg(feature = "derive")]
@@ -135,10 +183,20 @@ pub mod advanced_prelude {
 /// application code.
 pub mod runtime {
     pub use crate::core::{
-        ContextRecord, ErrorMetadata, MetadataValue, OperationContext, OperationScope, SourceFrame,
-        SourcePayload, SourcePayloadKind, SourcePayloadRef, StructError, StructErrorBuilder,
-        WithContext,
+        ErrorMetadata, MetadataValue, OperationContext, OperationScope, StructError,
+        StructErrorBuilder, WithContext,
     };
+
+    /// Source observation models attached to runtime errors.
+    ///
+    /// Keep source payload inspection under this submodule so the top-level
+    /// `runtime::*` surface stays centered on the main carrier and context
+    /// APIs.
+    pub mod source {
+        pub use crate::core::{
+            SourceFrame, SourcePayloadKind, SourcePayloadRef,
+        };
+    }
 }
 
 /// Explicit bridge types for entering the standard error ecosystem.
@@ -161,10 +219,20 @@ pub mod snapshot {
 /// Report-layer types for rendering and redaction.
 pub mod report {
     pub use crate::core::{
-        DefaultExposurePolicy, DiagnosticReport, ErrorProtocolSnapshot, ExposureDecision,
-        ExposurePolicy, RedactPolicy, Visibility,
+        DiagnosticReport, RedactPolicy,
     };
+}
+
+/// CLI-side output helpers.
+pub mod cli {
     pub use crate::core::cli::print_error;
+}
+
+/// Protocol/exposure-layer types for boundary projections.
+pub mod protocol {
+    pub use crate::core::{
+        DefaultExposurePolicy, ErrorProtocolSnapshot, ExposureDecision, ExposurePolicy, Visibility,
+    };
 }
 
 /// Reason-layer enums and traits.
@@ -178,20 +246,6 @@ pub mod reason {
 /// Conversion traits for the current primary paths.
 pub mod conversion {
     pub use crate::traits::{
-        ErrorConv, ErrorWith, ErrorWrapAs, IntoAs, ToStructError,
-    };
-}
-
-/// Advanced conversion helpers that are not part of the default import path.
-pub mod conversion_ext {
-    pub use crate::traits::ConvStructError;
-}
-
-/// Grouped conversion and context extension traits.
-pub mod traits_ext {
-    pub use crate::runtime::ContextRecord;
-    pub use crate::traits::{
         ConvStructError, ErrorConv, ErrorWith, ErrorWrapAs, IntoAs, ToStructError,
     };
-    pub use crate::reason::ErrorCode;
 }

@@ -12,11 +12,11 @@ mod snapshot;
 mod universal;
 
 pub use context::ContextAdd;
-pub use context::{ContextRecord, OperationContext, OperationScope, WithContext};
+pub use context::{OperationContext, OperationScope, WithContext};
 pub use domain::DomainReason;
 pub use error::{
-    convert_error, OwnedDynStdStructError, OwnedStdStructError, SourceFrame, SourcePayload,
-    SourcePayloadKind, SourcePayloadRef, StdStructRef, StructError, StructErrorBuilder,
+    convert_error, OwnedDynStdStructError, OwnedStdStructError, SourceFrame, SourcePayloadKind,
+    SourcePayloadRef, StdStructRef, StructError, StructErrorBuilder,
 };
 pub use metadata::{ErrorMetadata, MetadataValue};
 pub use reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};

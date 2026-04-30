@@ -4,8 +4,21 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
-ORION_LIB="$(find target/debug/deps -name 'liborion_error-*.rlib' | head -n 1)"
-DERIVE_MORE_LIB="$(find target/debug/deps \( -name 'libderive_more-*.so' -o -name 'libderive_more-*.dylib' -o -name 'libderive_more-*.rlib' \) | head -n 1)"
+latest_match() {
+  local pattern="$1"
+  local match
+  match="$(find target/debug/deps -name "$pattern" -print0 | xargs -0 ls -t 2>/dev/null | head -n 1 || true)"
+  printf '%s' "$match"
+}
+
+ORION_LIB="$(latest_match 'liborion_error-*.rlib')"
+DERIVE_MORE_LIB="$(
+  {
+    latest_match 'libderive_more-*.so'
+    latest_match 'libderive_more-*.dylib'
+    latest_match 'libderive_more-*.rlib'
+  } | sed '/^$/d' | xargs ls -t 2>/dev/null | head -n 1 || true
+)"
 
 if [[ -z "${ORION_LIB:-}" || -z "${DERIVE_MORE_LIB:-}" ]]; then
   echo "[doc-code] missing built dependencies in target/debug/deps"

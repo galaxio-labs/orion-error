@@ -1,6 +1,6 @@
 use derive_more::From;
 use orion_error::{
-    conversion::ErrorConv, report::print_error, DefaultExposurePolicy, ErrorWith, OperationContext,
+    cli::print_error, conversion::ErrorConv, DefaultExposurePolicy, ErrorWith, OperationContext,
     OrionError, StructError, UvsReason,
 };
 

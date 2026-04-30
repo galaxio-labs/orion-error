@@ -337,7 +337,7 @@ impl WithContext {
 use orion_error::{
     conversion::{ErrorWith, IntoAs},
     reason::UvsReason,
-    runtime::{ContextRecord, OperationContext, StructError},
+    runtime::{OperationContext, StructError},
 };
 
 fn place_order(order_txt: &str) -> Result<(), StructError<UvsReason>> {
