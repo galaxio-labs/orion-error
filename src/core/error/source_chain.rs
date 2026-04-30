@@ -7,6 +7,8 @@
 use std::sync::Arc;
 use std::error::Error as StdError;
 
+use smol_str::SmolStr;
+
 use super::carrier::StructError;
 use crate::core::DomainReason;
 
@@ -106,7 +108,7 @@ impl InternalSourcePayload {
     pub(crate) fn source_chain(&self) -> Vec<String> {
         self.frames()
             .iter()
-            .map(|frame| frame.message.clone())
+            .map(|frame| frame.message.to_string())
             .collect()
     }
 }
@@ -150,21 +152,21 @@ impl<'a> SourcePayloadRef<'a> {
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct SourceFrame {
     pub index: usize,
-    pub message: String,
+    pub message: SmolStr,
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
-    pub display: Option<String>,
+    pub display: Option<SmolStr>,
     #[cfg_attr(feature = "serde", serde(skip_serializing))]
-    pub debug: Option<String>,
+    pub debug: Option<SmolStr>,
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
-    pub type_name: Option<String>,
+    pub type_name: Option<SmolStr>,
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub error_code: Option<i32>,
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
-    pub reason: Option<String>,
+    pub reason: Option<SmolStr>,
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
-    pub path: Option<String>,
+    pub path: Option<SmolStr>,
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
-    pub detail: Option<String>,
+    pub detail: Option<SmolStr>,
     #[cfg_attr(feature = "serde", serde(default))]
     #[cfg_attr(
         feature = "serde",
@@ -191,11 +193,11 @@ fn collect_source_frames(
     while let Some(source) = cur {
         frames.push(SourceFrame {
             index,
-            message: source.to_string(),
+            message: source.to_string().into(),
             display: None,
             debug: None,
             type_name: if index == 0 {
-                root_type_name.map(str::to_string)
+                root_type_name.map(SmolStr::from)
             } else {
                 None
             },
@@ -231,14 +233,14 @@ where
     let mut frames = Vec::with_capacity(source.source_frames().len() + 1);
     frames.push(SourceFrame {
         index: 0,
-        message: source.reason().to_string(),
-        display: Some(source.to_string()),
+        message: source.reason().to_string().into(),
+        display: Some(source.to_string().into()),
         debug: None,
-        type_name: Some(std::any::type_name::<StructError<R>>().to_string()),
+        type_name: Some(std::any::type_name::<StructError<R>>().to_string().into()),
         error_code: None,
-        reason: Some(source.reason().to_string()),
-        path: source.target_path(),
-        detail: source.detail().clone(),
+        reason: Some(source.reason().to_string().into()),
+        path: source.target_path().map(Into::into),
+        detail: source.detail().clone().map(Into::into),
         metadata: source.context_metadata(),
         is_root_cause: source.source_frames().is_empty(),
     });

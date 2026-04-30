@@ -1,3 +1,5 @@
+use smol_str::SmolStr;
+
 pub trait RedactPolicy {
     fn redact_key(&self, _key: &str) -> bool {
         false
@@ -113,14 +115,18 @@ fn redact_metadata(metadata: &ErrorMetadata, policy: &impl RedactPolicy) -> Erro
 }
 
 fn redact_frame(mut frame: SourceFrame, policy: &impl RedactPolicy) -> SourceFrame {
-    frame.message = redact_required_text(Some("source.message"), &frame.message, policy);
-    frame.display = redact_optional_text(Some("source.display"), frame.display.as_deref(), policy);
+    frame.message = SmolStr::from(redact_required_text(Some("source.message"), &frame.message, policy));
+    frame.display = redact_optional_text(Some("source.display"), frame.display.as_deref(), policy)
+        .map(SmolStr::from);
     if let Some(ref debug_str) = frame.debug {
-        frame.debug = Some(redact_required_text(Some("source.debug"), debug_str, policy));
+        frame.debug = Some(SmolStr::from(redact_required_text(Some("source.debug"), debug_str, policy)));
     }
-    frame.detail = redact_optional_text(Some("detail"), frame.detail.as_deref(), policy);
-    frame.reason = redact_optional_text(Some("source.reason"), frame.reason.as_deref(), policy);
-    frame.path = redact_optional_text(Some("path"), frame.path.as_deref(), policy);
+    frame.detail = redact_optional_text(Some("detail"), frame.detail.as_deref(), policy)
+        .map(SmolStr::from);
+    frame.reason = redact_optional_text(Some("source.reason"), frame.reason.as_deref(), policy)
+        .map(SmolStr::from);
+    frame.path = redact_optional_text(Some("path"), frame.path.as_deref(), policy)
+        .map(SmolStr::from);
     frame.metadata = redact_metadata(&frame.metadata, policy);
     frame
 }

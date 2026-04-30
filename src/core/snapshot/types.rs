@@ -355,13 +355,13 @@ impl From<SourceFrame> for SnapshotSourceFrame {
     fn from(value: SourceFrame) -> Self {
         Self {
             index: value.index,
-            message: value.message,
-            display: value.display,
-            type_name: value.type_name,
+            message: value.message.to_string(),
+            display: value.display.map(|s| s.to_string()),
+            type_name: value.type_name.map(|s| s.to_string()),
             error_code: value.error_code,
-            reason: value.reason,
-            path: value.path,
-            detail: value.detail,
+            reason: value.reason.map(|s| s.to_string()),
+            path: value.path.map(|s| s.to_string()),
+            detail: value.detail.map(|s| s.to_string()),
             metadata: value.metadata,
             is_root_cause: value.is_root_cause,
         }
@@ -372,14 +372,14 @@ impl From<SnapshotSourceFrame> for SourceFrame {
     fn from(value: SnapshotSourceFrame) -> Self {
         Self {
             index: value.index,
-            message: value.message,
-            display: value.display,
+            message: value.message.into(),
+            display: value.display.map(Into::into),
             debug: None,
-            type_name: value.type_name,
+            type_name: value.type_name.map(Into::into),
             error_code: value.error_code,
-            reason: value.reason,
-            path: value.path,
-            detail: value.detail,
+            reason: value.reason.map(Into::into),
+            path: value.path.map(Into::into),
+            detail: value.detail.map(Into::into),
             metadata: value.metadata,
             is_root_cause: value.is_root_cause,
         }

@@ -63,7 +63,7 @@
                 root_metadata: ErrorMetadata::new(),
                 source_frames: vec![SourceFrame {
                     index: 0,
-                    message: "storage full".to_string(),
+                    message: "storage full".into(),
                     display: None,
                     debug: None,
                     type_name: None,
@@ -111,7 +111,7 @@
                 source_frames: vec![
                     SourceFrame {
                         index: 0,
-                        message: "storage layer failed".to_string(),
+                        message: "storage layer failed".into(),
                         display: None,
                         debug: None,
                         type_name: None,
@@ -124,7 +124,7 @@
                     },
                     SourceFrame {
                         index: 1,
-                        message: "disk offline".to_string(),
+                        message: "disk offline".into(),
                         display: None,
                         debug: None,
                         type_name: None,

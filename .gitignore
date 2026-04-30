@@ -4,3 +4,4 @@ target/
 .report*
 **/.report
 Cargo.lock
+.claude/

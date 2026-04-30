@@ -8,9 +8,16 @@
 
 use std::time::Instant;
 
-use orion_error::{reason::UvsReason, StructError};
+use std::io;
+
+use orion_error::{
+    reason::UvsReason, runtime::source::SourceFrame, runtime::ErrorMetadata, OperationContext,
+    StructError,
+};
 
 const N: u64 = 500_000;
+const M: u64 = 200_000; // for source-heavy cases
+const S: u64 = 1_000_000; // for frame-only benchmarks
 
 #[test]
 fn perf_measure_allocations() {
@@ -44,6 +51,107 @@ fn perf_measure_allocations() {
             .position("src/config.rs:42")
             .finish()
     });
+
+    // === Source-related cases ===
+
+    // 5. With std source (io::Error, cheap Debug)
+    bench_n("with-std-source  ", M, || {
+        StructError::from(UvsReason::system_error())
+            .with_source(io::Error::other("disk offline"))
+    });
+
+    // 6. With std source + long message (Debug cost visible)
+    bench_n("with-std-verbose ", M, || {
+        StructError::from(UvsReason::system_error())
+            .with_source(io::Error::other("x".repeat(256)))
+    });
+
+    // 7. With struct source (expensive Debug — full context stack)
+    bench_n("with-struct-src  ", M, || {
+        let ctx = OperationContext::doing("parse config");
+        let inner = StructError::from(UvsReason::validation_error())
+            .with_detail("port number out of range")
+            .with_position("src/config.rs:42")
+            .with_context(ctx)
+            .with_context(OperationContext::at("config.toml"));
+        StructError::from(UvsReason::system_error())
+            .with_source(inner)
+    });
+
+    // === SourceFrame clone benchmarks ===
+
+    // 8a. SourceFrame clone — short strings only (typical case)
+    let frame_short = SourceFrame {
+        index: 0,
+        message: "validation error".into(),
+        display: None,
+        debug: None,
+        type_name: Some("std::io::Error".into()),
+        error_code: Some(500),
+        reason: Some("validation error".into()),
+        path: Some("load config".into()),
+        detail: Some("field `email` is required".into()),
+        metadata: ErrorMetadata::new(),
+        is_root_cause: true,
+    };
+    bench_n_src("frame-clone-short", S, frame_short);
+
+    // 8b. SourceFrame clone — long strings (worst case)
+    let frame_long = SourceFrame {
+        index: 0,
+        message: "x".repeat(128).into(),
+        display: Some("x".repeat(256).into()),
+        debug: None,
+        type_name: Some("crate::very::long::module::path::StructError".into()),
+        error_code: Some(500),
+        reason: Some("x".repeat(128).into()),
+        path: Some("start engine / load config / parse config / config.toml".into()),
+        detail: Some("x".repeat(128).into()),
+        metadata: ErrorMetadata::new(),
+        is_root_cause: true,
+    };
+    bench_n_src("frame-clone-long ", S, frame_long);
+
+    // 8. Deep struct source chain (3 layers, compounding Debug)
+    bench_n("deep-struct-src  ", M, || {
+        let leaf = StructError::from(UvsReason::validation_error())
+            .with_detail("port number out of range");
+        let mid = StructError::from(UvsReason::data_error())
+            .with_detail("parse failed")
+            .with_source(leaf);
+        StructError::from(UvsReason::system_error())
+            .with_source(mid)
+    });
+}
+
+fn bench_n(name: &str, n: u64, f: impl Fn() -> StructError<UvsReason>) {
+    let start = Instant::now();
+    for _ in 0..n {
+        black_hole(f());
+    }
+    let elapsed = start.elapsed();
+    println!(
+        "  {name}  {throughput:>8}  {ns_per:.1} ns/iter  {ms:>6} ms",
+        throughput = throughput(n, elapsed),
+        ns_per = nanos_per(n, elapsed),
+        ms = elapsed.as_millis(),
+    );
+}
+
+fn bench_n_src(name: &str, n: u64, frame: SourceFrame) {
+    let start = Instant::now();
+    for _ in 0..n {
+        let mut cloned = frame.clone();
+        cloned.index += 1;
+        black_hole(cloned);
+    }
+    let elapsed = start.elapsed();
+    println!(
+        "  frame-{name}  {throughput:>8}  {ns_per:.1} ns/iter  {ms:>6} ms",
+        throughput = throughput(n, elapsed),
+        ns_per = nanos_per(n, elapsed),
+        ms = elapsed.as_millis(),
+    );
 }
 
 fn bench(name: &str, f: impl Fn() -> StructError<UvsReason>) {

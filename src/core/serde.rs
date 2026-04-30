@@ -119,9 +119,9 @@ mod tests {
     fn test_source_frame_serialization_skips_empty_metadata() {
         let frame = SourceFrame {
             index: 0,
-            message: "message".to_string(),
+            message: "message".into(),
             display: None,
-            debug: Some("debug".to_string()),
+            debug: Some("debug".into()),
             type_name: None,
             error_code: None,
             reason: None,
@@ -344,7 +344,7 @@ mod tests {
             },
             source_frames: vec![SnapshotSourceFrame {
                 index: 0,
-                message: "db unavailable".to_string(),
+                message: "db unavailable".into(),
                 display: Some("db unavailable".to_string()),
                 type_name: Some("std::io::Error".to_string()),
                 error_code: None,
