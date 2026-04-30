@@ -195,7 +195,6 @@
         assert_eq!(json["category"], serde_json::json!("sys"));
         assert_eq!(json["reason"], serde_json::json!("system error"));
         assert_eq!(json["detail"], serde_json::json!("disk offline"));
-        assert_eq!(json["operation"], serde_json::json!("load config"));
         assert_eq!(json["path"], serde_json::json!("load config"));
         assert_eq!(json["visibility"], serde_json::json!("internal"));
         assert_eq!(
@@ -314,7 +313,6 @@
             "category",
             "reason",
             "detail",
-            "operation",
             "path",
             "visibility",
             "hints",
@@ -330,7 +328,7 @@
         assert_eq!(keys, expected);
         assert_eq!(json_value["code"], serde_json::json!("sys.io_error"));
         assert_eq!(json_value["reason"], serde_json::json!("system error"));
-        assert_eq!(json_value["operation"], serde_json::json!("load config"));
+        assert_eq!(json_value["path"], serde_json::json!("load config"));
     }
 
     #[cfg(feature = "serde_json")]

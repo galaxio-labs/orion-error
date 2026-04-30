@@ -10,7 +10,7 @@
     use crate::reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
 
     use super::{
-        DiagnosticReport, ErrorProtocolSnapshot, ExposureDecision, RedactPolicy,
+        DiagnosticReport, ErrorProtocolSnapshot, ExposureDecision, ExposurePolicy, RedactPolicy,
         ReportProjectionParts, Visibility,
     };
     #[derive(Debug)]

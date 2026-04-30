@@ -191,12 +191,15 @@ impl UnstructuredSource for anyhow::Error {
     }
 }
 
+// Requires feature: "serde_json"
 #[cfg(feature = "serde_json")]
 impl RawStdError for serde_json::Error {}
 
+// Requires feature: "serde_json"
 #[cfg(feature = "serde_json")]
 impl private::Sealed for serde_json::Error {}
 
+// Requires feature: "serde_json"
 #[cfg(feature = "serde_json")]
 impl UnstructuredSource for serde_json::Error {
     fn into_struct_error<R>(self, reason: R, detail: String) -> StructError<R>

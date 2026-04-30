@@ -169,6 +169,11 @@ impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
 }
 
 impl ErrorProtocolSnapshot {
+    /// Read access to the embedded diagnostic report.
+    pub fn report(&self) -> &DiagnosticReport {
+        &self.report
+    }
+
     /// Render the embedded diagnostic report.
     ///
     /// This keeps protocol-boundary consumers from having to reach through

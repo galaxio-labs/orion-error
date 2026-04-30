@@ -148,7 +148,7 @@
 //! let _ = StructError::from(UvsReason::system_error()).target_main();
 //! ```
 //!
-//! ```compile_fail
+//! ```rust
 //! use orion_error::protocol::DefaultExposurePolicy;
 //! use orion_error::{StructError, UvsReason};
 //!

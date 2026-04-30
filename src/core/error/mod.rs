@@ -2,11 +2,13 @@
 //!
 //! Module structure:
 //!
-//! - [`carrier`] — `StructError<T>`, `StructErrorImpl<T>`, `StructErrorBuilder<T>`
+//! - [`carrier`] — `StructError<T>`, `StructErrorImpl<T>`
+//! - [`builder`] — `StructErrorBuilder<T>`
 //! - [`source_chain`] — source payload types (`SourceFrame`, `InternalSourcePayload`, …)
 //! - [`std_bridge`] — `std::error::Error` ecosystem wrappers
 
 pub mod carrier;
+pub mod builder;
 pub mod source_chain;
 pub mod std_bridge;
 
@@ -19,8 +21,10 @@ macro_rules! location {
 
 // Re-exports from carrier
 pub use carrier::{
-    convert_error, StructError, StructErrorBuilder,
+    convert_error, StructError,
 };
+// Re-exports from builder
+pub use builder::StructErrorBuilder;
 
 // Re-exports from source_chain
 pub use source_chain::{
