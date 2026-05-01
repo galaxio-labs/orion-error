@@ -202,6 +202,73 @@ This keeps normal application code on one predictable entry path while still
 letting larger codebases keep clear module boundaries where that extra
 precision is useful.
 
+## Import Strategy
+
+Three tiers:
+
+**Application code (default)**
+```rust
+use orion_error::prelude::*;
+use orion_error::reason::UvsReason;
+use orion_error::runtime::OperationContext;
+```
+
+**Architecture boundaries** — use layered imports to make module coupling explicit.
+```rust
+// Domain layer
+use orion_error::prelude::*;
+use orion_error::reason::{ErrorCategory, ErrorIdentityProvider};
+
+// Service / adapter layer — struct error is your carrier
+use orion_error::{prelude::*, conversion::*};
+
+// Protocol / boundary layer — output projection only
+use orion_error::protocol::*;
+use orion_error::report::{DiagnosticReport, RedactPolicy};
+use orion_error::snapshot::*;
+
+// Interop — when you must enter std::error::Error ecosystem
+use orion_error::interop::*;
+```
+
+**Test / migration**
+```rust
+use orion_error::dev::prelude::*;
+use orion_error::dev::testing::*;
+```
+
+## Error Flow Paths
+
+There are exactly four ways a `StructError` enters or moves through your system:
+
+```text
+raw std error ──→ into_as(reason, detail) ──→ first entry into structured system
+                                                   │
+                              ┌────────────────────┼────────────────────┐
+                              ▼                    ▼                    ▼
+                     err_conv()              wrap_as(reason,     as_std / into_std
+                     (same semantics,        detail)             / into_dyn_std
+                      only reason type       (new semantic       (boundary needs
+                      remap)                 boundary, wraps     std::error::Error)
+                                              existing as source)
+```
+
+**1. `into_as(reason, detail)`** — entry point. A raw `std::error::Error` enters the structured
+   system for the first time. Use this once per boundary crossing (e.g. at a FFI boundary or
+   when a library error enters your domain layer).
+
+**2. `err_conv()`** — cross-layer conversion preserving semantics. The upstream error is
+   already `StructError<R1>`; you only want to map the reason type to `StructError<R2>` via
+   `From`. All detail, context, source, and metadata survive.
+
+**3. `wrap_as(reason, detail)`** — cross-layer wrapping with a new semantic boundary.
+   The upstream error is already `StructError<R1>` and the upper layer needs its own reason.
+   The original error becomes the *source* of the new one.
+
+**4. `as_std() / into_std() / into_dyn_std()`** — exit point. Bridges the structured error
+   into the `std::error::Error` ecosystem for interop or legacy interfaces. These are
+   explicit; `StructError<T>` does not implement `StdError` directly.
+
 ## Try It
 
 ```bash
