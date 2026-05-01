@@ -35,6 +35,10 @@ pub trait ConvStructError<R: DomainReason>: Sized {
 /// The original error becomes the `source` of the new error. The new error
 /// carries its own `detail` and the original error's chain is preserved
 /// in the structured source frames.
+///
+/// **Deprecated**: use [`into_as`](crate::traits::IntoAs::into_as) instead —
+/// it now handles both raw `std::error::Error` and `StructError` sources.
+#[deprecated(since = "0.8.1", note = "use into_as instead")]
 pub trait ErrorWrapAs<T, R: DomainReason>: Sized {
     fn wrap_as(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>>;
 }
@@ -63,6 +67,7 @@ where
 }
 
 
+#[allow(deprecated)]
 impl<T, R1, R2> ErrorWrapAs<T, R2> for Result<T, StructError<R1>>
 where
     R1: DomainReason,
@@ -244,6 +249,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_wrap_as_preserves_previous_struct_error_chain() {
         let original: Result<i32, StructError<TestReason>> =
             Err(StructError::from(TestReason::TestError)
@@ -296,6 +302,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_wrap_as_preserves_source_frame_metadata() {
         let original: Result<i32, StructError<TestReason>> =
             Err(StructError::from(TestReason::TestError).with_context(
@@ -315,6 +322,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_wrap_as_preserves_detail_source_chain_and_metadata() {
         let original: Result<i32, StructError<TestReason>> =
             Err(StructError::from(TestReason::TestError)

@@ -242,29 +242,24 @@ use orion_error::dev::testing::*;
 
 ## 错误流转路径
 
-`StructError` 进入或穿过你的系统一共有 4 种方式：
-
 ```text
-原始 std 错误 ──→ into_as(reason, detail) ──→ 首次进入结构化体系
-                                                     │
-                              ┌──────────────────────┼──────────────────────┐
-                              ▼                      ▼                      ▼
-                     upcast()                wrap_as(reason,       as_std / into_std
-                     (同语义转换，               detail)               / into_dyn_std
-                      只换 reason 类型)         (新语义边界，          (边界需要
-                                               包裹已有错误           std::error::Error)
-                                               为 source)
+raw std error / StructError ──→ into_as(reason, detail) ──→ 首次进入
+                                                                  │
+                                                            upcast()
+                                                        (reason 转换)
+                                                                  │
+                                    report / snapshot / exposure_snapshot
 ```
 
-**1. `into_as(reason, detail)`** — 入口。原始 `std::error::Error` 第一次进入结构化体系。
-在每次跨越边界时调用一次（如 FFI 边界，或第三方库错误进入领域层时）。
+**1. `into_as(reason, detail)`** — 统一入口。同时支持原始 `std::error::Error`
+和已结构化的 `StructError` 源。在每次错误进入系统时使用。
 
 **2. `upcast()`** — 跨层转换，保留语义。上游已是 `StructError<R1>`，你只需要
 通过 `From` 映射 reason 类型到 `StructError<R2>`。detail、context、source 和
 metadata 全部保留。
 
-**3. `wrap_as(reason, detail)`** — 跨层包裹，建立新语义边界。
-上游已是 `StructError<R1>`，上层需要自己的 reason。原错误成为新错误的 *source*。
+**3. ~~`wrap_as(reason, detail)`~~** — 已废弃，使用 `into_as` 替代。
+`into_as` 现在统一处理 `std::error::Error` 和 `StructError` 两种输入。
 
 **4. `as_std() / into_std() / into_dyn_std()`** — 出口。把结构化错误桥接到
 `std::error::Error` 生态。这些调用是显式的；`StructError<T>` 不直接实现

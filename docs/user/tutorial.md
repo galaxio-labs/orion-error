@@ -319,9 +319,10 @@ let err = result
     .unwrap_err();
 ```
 
-### 4.2 `wrap_as(...)`
+### 4.2 ~~`wrap_as(...)`~~ 已废弃
 
-当上游已经是 `StructError<_>`，而当前层要建立新的语义边界时，使用 `wrap_as(...)`：
+`into_as` 现在统一处理 `std::error::Error` 和 `StructError` 两种源，`wrap_as` 不再需要。
+旧代码中 `wrap_as(reason, detail)` 可以直接替换为 `into_as(reason, detail)`。
 
 ```rust
 use derive_more::From;
@@ -341,7 +342,7 @@ fn repo_call() -> Result<(), StructError<UvsReason>> {
 }
 
 let wrapped = repo_call()
-    .wrap_as(AppReason::system_error(), "service layer failed");
+    .into_as(AppReason::system_error(), "service layer failed");
 
 assert_eq!(
     wrapped.unwrap_err().detail().as_deref(),
@@ -574,7 +575,7 @@ assert_eq!(err.reason().error_code(), 201);
 - 领域 reason 默认 derive `OrionError`
 - 对外稳定协议依赖 stable code，不依赖人类文案
 - 第一次进入结构化体系优先 `into_as(...)`
-- 已结构化错误跨层包装优先 `wrap_as(...)`
+- 所有错误统一使用 `into_as(...)` 进入结构化体系
 - 只做 reason 收敛优先 `upcast()`
 - 需要稳定导出时使用 `snapshot().stable_export()`
 - 需要对外协议时使用 `exposure_snapshot(...)` 或 projection API

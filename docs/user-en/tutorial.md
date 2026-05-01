@@ -69,20 +69,18 @@ fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
 ## The 4 APIs To Learn First
 
 1. `#[derive(OrionError)]` — Define stable business-facing reason enums.
-2. `into_as(reason, detail)` — First entry point: a raw `std::error::Error` enters the structured system.
+2. `into_as(reason, detail)` — Unified entry point: works for both raw `std::error::Error` and already-structured `StructError` sources.
 3. `upcast()` — Cross-layer conversion preserving semantics. The upstream error is already `StructError<R1>`; you only remap the reason type.
-4. `wrap_as(reason, detail)` — Cross-layer wrapping with a new semantic boundary. The upstream error becomes the *source* of the new one.
 
 ## Error Flow Paths
 
 ```text
-raw std error ──→ into_as(reason, detail)
-                       │
-              ┌───────┼───────┐
-              ▼       ▼       ▼
-         upcast()  wrap_as()  as_std / into_std / into_dyn_std
-         (reason   (new       (std::error::Error bridge)
-          remap)    boundary)
+raw std error / StructError ──→ into_as(reason, detail)
+                                      │
+                                 upcast()
+                             (reason remap)
+                                      │
+               report / snapshot / exposure_snapshot
 ```
 
 ## Stable Identity

@@ -21,7 +21,7 @@ Core building blocks:
 - stable business identities via `#[derive(OrionError)]`
 - one runtime carrier: `StructError<R>`
 - explicit first-entry conversion with `into_as(...)`
-- explicit cross-layer wrapping with `wrap_as(...)`
+- unified error entry point: `into_as(...)` for all source types
 - report, snapshot, and exposure helpers for service boundaries
 
 [![CI](https://github.com/galaxio-labs/orion-error/workflows/CI/badge.svg)](https://github.com/galaxio-labs/orion-error/actions)
@@ -111,23 +111,22 @@ For new code, treat `doing(...)` as the standard operation verb.
 1. `#[derive(OrionError)]`
    Define stable business-facing reason enums.
 2. `into_as(reason, detail)`
-   Use when a plain error enters the structured system for the first time.
+   Use when an error enters the structured system — works for both raw
+   `std::error::Error` and already-structured `StructError<_>` sources.
 3. `upcast()`
    Use when the upstream value is already `StructError<R1>` and you only remap
    reason type to `StructError<R2>`.
-4. `wrap_as(reason, detail)`
-   Use when the upstream value is already `StructError<_>` and the upper layer
-   wants a new semantic boundary.
+4. ~~`wrap_as(reason, detail)`~~ **Deprecated**: use `into_as` instead.
 
 ## Typical Flow
 
 ```text
-std::io::Error
-  -> into_as(...)
-StructError<RepoReason>
-  -> upcast() or wrap_as(...)
-StructError<ServiceReason>
-  -> report() / snapshot().stable_export() / exposure_snapshot(...)
+raw std error ──→ into_as(...) ──→ first entry into structured system
+                                          │
+                                    upcast()
+                                (reason remap)
+                                          │
+                  report / snapshot / exposure_snapshot
 ```
 
 This is the important shift:
@@ -242,28 +241,21 @@ use orion_error::dev::testing::*;
 There are exactly four ways a `StructError` enters or moves through your system:
 
 ```text
-raw std error ──→ into_as(reason, detail) ──→ first entry into structured system
-                                                   │
-                              ┌────────────────────┼────────────────────┐
-                              ▼                    ▼                    ▼
-                     upcast()              wrap_as(reason,     as_std / into_std
-                     (same semantics,        detail)             / into_dyn_std
-                      only reason type       (new semantic       (boundary needs
-                      remap)                 boundary, wraps     std::error::Error)
-                                              existing as source)
+raw std error / StructError ──→ into_as(reason, detail) ──→ first entry
+                                                                    │
+                                                              upcast()
+                                                          (reason remap)
+                                                                    │
+                                          report / snapshot / exposure_snapshot
 ```
 
-**1. `into_as(reason, detail)`** — entry point. A raw `std::error::Error` enters the structured
-   system for the first time. Use this once per boundary crossing (e.g. at a FFI boundary or
-   when a library error enters your domain layer).
+**1. `into_as(reason, detail)`** — unified entry point. Works for both raw
+   `std::error::Error` and already-structured `StructError` sources. Use this
+   whenever an error enters your system.
 
 **2. `upcast()`** — cross-layer conversion preserving semantics. The upstream error is
    already `StructError<R1>`; you only want to map the reason type to `StructError<R2>` via
    `From`. All detail, context, source, and metadata survive.
-
-**3. `wrap_as(reason, detail)`** — cross-layer wrapping with a new semantic boundary.
-   The upstream error is already `StructError<R1>` and the upper layer needs its own reason.
-   The original error becomes the *source* of the new one.
 
 **4. `as_std() / into_std() / into_dyn_std()`** — exit point. Bridges the structured error
    into the `std::error::Error` ecosystem for interop or legacy interfaces. These are
