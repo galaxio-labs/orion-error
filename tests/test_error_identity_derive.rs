@@ -131,3 +131,6 @@ fn orion_error_derive_implements_display() {
         "BUG :logic error"
     );
 }
+
+// orphan rule test removed: `impl From<StructError<Local>> for StructError<Local2>`
+// is forbidden from downstream crates. Use `.upcast()` instead.

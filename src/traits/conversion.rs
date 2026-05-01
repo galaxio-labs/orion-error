@@ -3,8 +3,22 @@ use crate::{core::convert_error, core::DomainReason, StructError};
 /// Convert a `Result<T, StructError<R1>>` into `Result<T, StructError<R2>>`.
 ///
 /// Requires `R2: From<R1>`. Preserves all detail, position, context, and source state.
+///
+/// # Design note
+///
+/// A blanket `From<StructError<R1>> for StructError<R2>` is blocked by Rust's
+/// orphan rule: neither `From` (std) nor `StructError` (orion-error) are local
+/// to the user's crate. A newtype wrapper could technically bypass this, but
+/// the cost (wrapping every return type) outweighs the benefit of saving the
+/// `.upcast()` call. An explicit trait method is the intended path forward.
 pub trait Upcast<T, R: DomainReason>: Sized {
     fn upcast(self) -> Result<T, StructError<R>>;
+
+    /// Deprecated: use [`upcast`](Self::upcast) instead.
+    #[deprecated(since = "0.8.1", note = "renamed to upcast")]
+    fn err_conv(self) -> Result<T, StructError<R>> {
+        self.upcast()
+    }
 }
 
 /// Convert a `StructError<R1>` into `StructError<R2>`.
