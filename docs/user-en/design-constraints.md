@@ -4,7 +4,7 @@
 
 ### Problem
 
-Cross-layer error conversion (`StructError<ParseReason>` → `StructError<OrderReason>`) requires an explicit `.upcast()` call. A blanket `From` to make `?` work automatically is blocked by Rust's orphan rule.
+Cross-layer error conversion (`StructError<ParseReason>` → `StructError<OrderReason>`) requires an explicit `.conv_err()` call. A blanket `From` to make `?` work automatically is blocked by Rust's orphan rule.
 
 ```rust
 // Desired but impossible:
@@ -47,4 +47,4 @@ The orphan rule requires at least one local anchor in either the trait or the im
 
 ### Conclusion
 
-`.upcast()` is the recommended path. `err_conv()` is retained as a deprecated alias for backward compatibility. The newtype wrapper can technically bypass the orphan rule but the cost (wrapping every function return type) far outweighs the benefit of saving one explicit call. Rust's orphan rule is a core guarantee for ecosystem compatibility and is unlikely to change for this use case in the foreseeable future.
+.conv_err()` is the recommended path. The newtype wrapper can technically bypass the orphan rule but the cost (wrapping every function return type) far outweighs the benefit of saving one explicit call. Rust's orphan rule is a core guarantee for ecosystem compatibility and is unlikely to change for this use case in the foreseeable future.

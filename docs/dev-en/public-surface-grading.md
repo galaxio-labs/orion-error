@@ -30,7 +30,7 @@
 - `exposure_snapshot(...)`
 - `source_err(...)`
 - `conv_err()`
-- `wrap_as(...)` (deprecated)
+
 - `cli::print_error(...)`
 
 特征：

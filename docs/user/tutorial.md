@@ -319,40 +319,11 @@ let err = result
     .unwrap_err();
 ```
 
-### 4.2 ~~`wrap_as(...)`~~ 已废弃
+> 旧名称迁移（`wrap_as` → `source_err` 等）见 [兼容与迁移](../dev/compat-migration.md)。
 
-`source_err` 现在统一处理 `std::error::Error` 和 `StructError` 两种源，`wrap_as` 不再需要。
-旧代码中 `wrap_as(reason, detail)` 可以直接替换为 .source_err(reason, detail)`。
+### 4.2 `conv_err()`
 
-```rust
-use derive_more::From;
-use orion_error::{OrionError, StructError, UvsReason};
-use orion_error::conversion::ConvErr;
-
-#[derive(Debug, Clone, PartialEq, From, OrionError)]
-enum AppReason {
-    #[orion_error(identity = "sys.repo_failed")]
-    RepoFailed,
-    #[orion_error(transparent)]
-    Uvs(UvsReason),
-}
-
-fn repo_call() -> Result<(), StructError<UvsReason>> {
-    Err(StructError::from(UvsReason::system_error()).with_detail("disk offline"))
-}
-
-let wrapped = repo_call()
-    .source_err(AppReason::system_error(), "service layer failed");
-
-assert_eq!(
-    wrapped.unwrap_err().detail().as_deref(),
-    Some("service layer failed")
-);
-```
-
-### 4.3 `upcast()`
-
-当只是把下层 reason 收敛到上层 reason，而不想新增一层 detail/source 语义时，使用 `upcast()`：
+当只是把下层 reason 收敛到上层 reason，而不想新增一层 detail/source 语义时，使用 `conv_err()`：
 
 ```rust
 use derive_more::From;
@@ -576,7 +547,7 @@ assert_eq!(err.reason().error_code(), 201);
 - 对外稳定协议依赖 stable code，不依赖人类文案
 - 第一次进入结构化体系优先 .source_err(...)`
 - 所有错误统一使用 `source_err(...)` 进入结构化体系
-- 只做 reason 收敛优先 `upcast()`
+- 只做 reason 收敛优先 `conv_err()`
 - 需要稳定导出时使用 `snapshot().stable_export()`
 - 需要对外协议时使用 `exposure_snapshot(...)` 或 projection API
 - 需要进入标准错误生态时使用显式 interop API

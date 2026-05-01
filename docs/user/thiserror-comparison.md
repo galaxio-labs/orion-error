@@ -89,7 +89,7 @@ let err = std::fs::read_to_string("config.toml")
 
 如果你的第三方错误类型不在内建支持列表里，需要显式 `raw_source(...)` opt-in。
 
-## 6. .source_err(...)`、`upcast()` (`wrap_as` deprecated)
+## 6. `source_err(...)`、`conv_err()`
 
 当前推荐分工：
 

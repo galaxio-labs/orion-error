@@ -89,15 +89,13 @@ let err = std::fs::read_to_string("config.toml")
 
 如果你的第三方错误类型不在内建支持列表里，需要显式 `raw_source(...)` opt-in。
 
-## 6. .source_err(...)`、`upcast()` (`wrap_as` deprecated)
+## 6. .source_err(...)`、`upcast()`
 
 当前推荐分工：
 
 - .source_err(...)`
   - 普通错误第一次进入结构化体系
-- `wrap_as(...)` (deprecated)
-  - 上游已经是 `StructError<_>`，当前层要建立新语义边界
-- `upcast()`
+- `conv_err()`
   - 上游已经是 `StructError<_>`，当前层只做 reason 收敛
 
 如果上游已经是 `StructError<_>`，不要再回退到：
