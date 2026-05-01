@@ -205,6 +205,71 @@ use orion_error::prelude::*;
 这样可以把普通业务代码固定在一条可预测主路径上，同时在真正需要时仍然保留
 清晰的分层边界。
 
+## 导入策略
+
+三类场景：
+
+**应用主路径（默认）**
+```rust
+use orion_error::prelude::*;
+use orion_error::reason::UvsReason;
+use orion_error::runtime::OperationContext;
+```
+
+**架构边界** — 分层导入让模块耦合关系显式化。
+```rust
+// 领域层
+use orion_error::prelude::*;
+use orion_error::reason::{ErrorCategory, ErrorIdentityProvider};
+
+// 服务 / 适配器层 — StructError 是你的错误载体
+use orion_error::{prelude::*, conversion::*};
+
+// 协议 / 边界层 — 只用到投影输出
+use orion_error::protocol::*;
+use orion_error::report::{DiagnosticReport, RedactPolicy};
+use orion_error::snapshot::*;
+
+// Interop — 必须进入 std::error::Error 生态时
+use orion_error::interop::*;
+```
+
+**测试 / 迁移**
+```rust
+use orion_error::dev::prelude::*;
+use orion_error::dev::testing::*;
+```
+
+## 错误流转路径
+
+`StructError` 进入或穿过你的系统一共有 4 种方式：
+
+```text
+原始 std 错误 ──→ into_as(reason, detail) ──→ 首次进入结构化体系
+                                                     │
+                              ┌──────────────────────┼──────────────────────┐
+                              ▼                      ▼                      ▼
+                     err_conv()                wrap_as(reason,       as_std / into_std
+                     (同语义转换，               detail)               / into_dyn_std
+                      只换 reason 类型)         (新语义边界，          (边界需要
+                                               包裹已有错误           std::error::Error)
+                                               为 source)
+```
+
+**1. `into_as(reason, detail)`** — 入口。原始 `std::error::Error` 第一次进入结构化体系。
+在每次跨越边界时调用一次（如 FFI 边界，或第三方库错误进入领域层时）。
+
+**2. `err_conv()`** — 跨层转换，保留语义。上游已是 `StructError<R1>`，你只需要
+通过 `From` 映射 reason 类型到 `StructError<R2>`。detail、context、source 和
+metadata 全部保留。
+
+**3. `wrap_as(reason, detail)`** — 跨层包裹，建立新语义边界。
+上游已是 `StructError<R1>`，上层需要自己的 reason。原错误成为新错误的 *source*。
+
+**4. `as_std() / into_std() / into_dyn_std()`** — 出口。把结构化错误桥接到
+`std::error::Error` 生态。这些调用是显式的；`StructError<T>` 不直接实现
+`StdError`。
+
 ## 直接试一下
 
 ```bash
