@@ -5,7 +5,6 @@ struct OrionAttrs {
     identity: Option<Expr>,
     category: Option<TokenStream2>,
     transparent: bool,
-    upcast_from: Vec<Ident>,
 }
 
 impl OrionAttrs {
@@ -40,20 +39,6 @@ impl OrionAttrs {
                 if meta.path.is_ident("category") {
                     let expr: Expr = meta.value()?.parse()?;
                     out.category = Some(category_expr(expr)?);
-                    return Ok(());
-                }
-
-                if meta.path.is_ident("upcast_from") {
-                    let content;
-                    syn::parenthesized!(content in meta.input);
-                    let mut idents = Vec::new();
-                    while !content.is_empty() {
-                        idents.push(content.parse::<Ident>()?);
-                        if !content.is_empty() {
-                            let _ = content.parse::<Token![,]>();
-                        }
-                    }
-                    out.upcast_from = idents;
                     return Ok(());
                 }
 
