@@ -8,7 +8,7 @@ use orion_error::{OperationContext, StructError, UvsReason};
 #[test]
 fn test_snapshot_exposure_flow_for_system_error() {
     let err = std::fs::read_to_string("missing-config.toml")
-        .into_as(UvsReason::system_error(), "read config failed")
+        .source_err(UvsReason::system_error(), "read config failed")
         .doing("read config")
         .unwrap_err();
 

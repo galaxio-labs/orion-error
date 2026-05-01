@@ -192,8 +192,7 @@ pub use core::{convert_error, OperationContext, StructError, UvsReason};
 /// ```
 pub mod prelude {
     pub use crate::core::StructError;
-    #[allow(deprecated)]
-    pub use crate::traits::{ErrorWith, ErrorWrapAs, IntoAs};
+    pub use crate::traits::{ConvErr, ErrorWith, SourceErr};
     #[cfg(feature = "derive")]
     pub use crate::OrionError;
 }
@@ -268,9 +267,8 @@ pub mod reason {
 
 /// Conversion traits for the current primary paths.
 pub mod conversion {
-    #[allow(deprecated)]
     pub use crate::traits::{
-        ConvStructError, Upcast, ErrorWith, ErrorWrapAs, IntoAs, ToStructError,
+        ConvErr, ConvStructError, ErrorWith, SourceErr, ToStructError,
     };
 }
 

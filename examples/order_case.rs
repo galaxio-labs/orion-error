@@ -5,7 +5,7 @@ use orion_error::{
     cli::print_error, conversion::ToStructError, OperationContext, OrionError, StructError,
     UvsReason,
 };
-use orion_error::conversion::Upcast;
+// conv_err is available via prelude
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum ParseReason {
@@ -100,12 +100,12 @@ impl OrderService {
         let draft = Self::parse_order(user_id, amount, raw_order)
             .doing("parse order")
             .with_context(&ctx)
-            .upcast()?;
+            .conv_err()?;
 
         Self::load_user(draft.user_id)
             .doing("load user")
             .with_context(&ctx)
-            .upcast()?;
+            .conv_err()?;
 
         Self::ensure_balance(draft.amount)
             .doing("check balance")
@@ -114,7 +114,7 @@ impl OrderService {
         Self::save_order(&draft)
             .doing("save order")
             .with_context(&ctx)
-            .upcast()?;
+            .conv_err()?;
 
         Ok(draft)
     }

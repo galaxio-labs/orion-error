@@ -10,7 +10,7 @@ mod private {
 ///
 /// This is the explicit escape hatch for downstream crates that have their own raw
 /// `StdError` types and want to route them through `raw_source(...)` before
-/// calling `into_as(...)`.
+/// calling `source_err(...)`.
 ///
 /// Implement this trait only for genuine non-structured raw error types.
 /// Do not implement it for wrappers around `StructError<_>`.
@@ -23,8 +23,8 @@ pub trait UnstructuredSource: private::Sealed {
         R: DomainReason;
 }
 
-pub trait IntoAs<T, R: DomainReason>: Sized {
-    fn into_as(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>>;
+pub trait SourceErr<T, R: DomainReason>: Sized {
+    fn source_err(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>>;
 }
 
 #[derive(Debug)]
@@ -60,7 +60,7 @@ pub struct RawSource<E>(E);
 /// let result: Result<(), ThirdPartyError> = Err(ThirdPartyError);
 /// let err = result
 ///     .map_err(raw_source)
-///     .into_as(UvsReason::system_error(), "load failed")
+///     .source_err(UvsReason::system_error(), "load failed")
 ///     .expect_err("expected structured error");
 ///
 /// assert_eq!(err.source_ref().unwrap().to_string(), "third-party failure");
@@ -105,12 +105,12 @@ where
     }
 }
 
-impl<T, E, R> IntoAs<T, R> for Result<T, E>
+impl<T, E, R> SourceErr<T, R> for Result<T, E>
 where
     E: UnstructuredSource,
     R: DomainReason,
 {
-    fn into_as(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>> {
+    fn source_err(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>> {
         let detail = detail.into();
         self.map_err(|err| err.into_struct_error(reason, detail))
     }
@@ -242,15 +242,15 @@ impl UnstructuredSource for toml::ser::Error {
     }
 }
 
-// Allow `into_as` to work with already-structured `Result<T, StructError<R1>>`
+// Allow `source_err` to work with already-structured `Result<T, StructError<R1>>`
 // sources. Callers no longer need to distinguish between raw std errors and
-// structured errors — `into_as` handles both.
-impl<T, R1, R2> IntoAs<T, R2> for Result<T, StructError<R1>>
+// structured errors — `source_err` handles both.
+impl<T, R1, R2> SourceErr<T, R2> for Result<T, StructError<R1>>
 where
     R1: DomainReason,
     R2: DomainReason,
 {
-    fn into_as(self, reason: R2, detail: impl Into<String>) -> Result<T, StructError<R2>> {
+    fn source_err(self, reason: R2, detail: impl Into<String>) -> Result<T, StructError<R2>> {
         let detail = detail.into();
         self.map_err(|err| {
             StructError::from(reason)
@@ -264,7 +264,7 @@ where
 mod tests {
     use std::{fmt, io};
 
-    use super::{raw_source, IntoAs, RawStdError};
+    use super::{raw_source, SourceErr, RawStdError};
     #[cfg(feature = "anyhow")]
     use crate::StructError;
     use crate::UvsReason;
@@ -283,11 +283,11 @@ mod tests {
     impl RawStdError for ThirdPartyError {}
 
     #[test]
-    fn test_into_as_for_io_error() {
+    fn test_source_err_for_io_error() {
         let result: Result<(), io::Error> = Err(io::Error::other("disk offline"));
 
         let err = result
-            .into_as(UvsReason::system_error(), "load config failed")
+            .source_err(UvsReason::system_error(), "load config failed")
             .expect_err("expected structured error");
 
         assert_eq!(err.detail().as_deref(), Some("load config failed"));
@@ -295,12 +295,12 @@ mod tests {
     }
 
     #[test]
-    fn test_into_as_for_raw_source_wrapper() {
+    fn test_source_err_for_raw_source_wrapper() {
         let result: Result<(), ThirdPartyError> = Err(ThirdPartyError("parser aborted"));
 
         let err = result
             .map_err(raw_source)
-            .into_as(UvsReason::validation_error(), "parse config failed")
+            .source_err(UvsReason::validation_error(), "parse config failed")
             .expect_err("expected structured error");
 
         assert_eq!(err.detail().as_deref(), Some("parse config failed"));
@@ -309,11 +309,11 @@ mod tests {
 
     #[cfg(feature = "anyhow")]
     #[test]
-    fn test_into_as_for_anyhow_defaults_to_unstructured_source() {
+    fn test_source_err_for_anyhow_defaults_to_unstructured_source() {
         let result: Result<(), anyhow::Error> = Err(anyhow::anyhow!("network offline"));
 
         let err = result
-            .into_as(UvsReason::system_error(), "load config failed")
+            .source_err(UvsReason::system_error(), "load config failed")
             .expect_err("expected structured error");
 
         assert_eq!(err.detail().as_deref(), Some("load config failed"));
@@ -323,7 +323,7 @@ mod tests {
 
     #[cfg(feature = "anyhow")]
     #[test]
-    fn test_into_as_for_anyhow_extracts_top_level_official_dyn_bridge() {
+    fn test_source_err_for_anyhow_extracts_top_level_official_dyn_bridge() {
         let structured = StructError::from(UvsReason::validation_error())
             .with_detail("invalid port")
             .with_std_source(io::Error::other("not a number"));
@@ -331,7 +331,7 @@ mod tests {
         let result: Result<(), anyhow::Error> = Err(anyhow::Error::new(structured.into_dyn_std()));
 
         let err = result
-            .into_as(UvsReason::system_error(), "load config failed")
+            .source_err(UvsReason::system_error(), "load config failed")
             .expect_err("expected structured error");
 
         assert_eq!(err.detail().as_deref(), Some("load config failed"));

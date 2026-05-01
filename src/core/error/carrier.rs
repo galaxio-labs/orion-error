@@ -235,6 +235,7 @@ impl<T: DomainReason> StructError<T> {
         self.with_struct_error_source(source)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn wrap<R2>(self, reason: R2) -> StructError<R2>
     where
         R2: DomainReason,

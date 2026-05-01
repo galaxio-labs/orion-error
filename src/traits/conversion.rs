@@ -10,14 +10,14 @@ use crate::{core::convert_error, core::DomainReason, StructError};
 /// orphan rule: neither `From` (std) nor `StructError` (orion-error) are local
 /// to the user's crate. A newtype wrapper could technically bypass this, but
 /// the cost (wrapping every return type) outweighs the benefit of saving the
-/// `.upcast()` call. An explicit trait method is the intended path forward.
-pub trait Upcast<T, R: DomainReason>: Sized {
-    fn upcast(self) -> Result<T, StructError<R>>;
+/// `.conv_err()` call. An explicit trait method is the intended path forward.
+pub trait ConvErr<T, R: DomainReason>: Sized {
+    fn conv_err(self) -> Result<T, StructError<R>>;
 
-    /// Deprecated: use [`upcast`](Self::upcast) instead.
-    #[deprecated(since = "0.8.1", note = "renamed to upcast")]
+    /// Deprecated: use [`conv_err`](Self::conv_err) instead.
+    #[deprecated(since = "0.9.0", note = "renamed to conv_err")]
     fn err_conv(self) -> Result<T, StructError<R>> {
-        self.upcast()
+        self.conv_err()
     }
 }
 
@@ -29,26 +29,12 @@ pub trait ConvStructError<R: DomainReason>: Sized {
 }
 
 
-/// Wrap a `Result<T, StructError<R1>>` into `Result<T, StructError<R2>>`
-/// by attaching the existing error as a structured source under a new reason.
-///
-/// The original error becomes the `source` of the new error. The new error
-/// carries its own `detail` and the original error's chain is preserved
-/// in the structured source frames.
-///
-/// **Deprecated**: use [`into_as`](crate::traits::IntoAs::into_as) instead —
-/// it now handles both raw `std::error::Error` and `StructError` sources.
-#[deprecated(since = "0.8.1", note = "use into_as instead")]
-pub trait ErrorWrapAs<T, R: DomainReason>: Sized {
-    fn wrap_as(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>>;
-}
-
-impl<T, R1, R2> Upcast<T, R2> for Result<T, StructError<R1>>
+impl<T, R1, R2> ConvErr<T, R2> for Result<T, StructError<R1>>
 where
     R1: DomainReason,
     R2: DomainReason + From<R1>,
 {
-    fn upcast(self) -> Result<T, StructError<R2>> {
+    fn conv_err(self) -> Result<T, StructError<R2>> {
         match self {
             Ok(o) => Ok(o),
             Err(e) => Err(convert_error::<R1, R2>(e)),
@@ -63,19 +49,6 @@ where
 {
     fn conv(self) -> StructError<R2> {
         convert_error::<R1, R2>(self)
-    }
-}
-
-
-#[allow(deprecated)]
-impl<T, R1, R2> ErrorWrapAs<T, R2> for Result<T, StructError<R1>>
-where
-    R1: DomainReason,
-    R2: DomainReason,
-{
-    fn wrap_as(self, reason: R2, detail: impl Into<String>) -> Result<T, StructError<R2>> {
-        let detail = detail.into();
-        self.map_err(move |e: StructError<R1>| e.wrap(reason).with_detail(detail.clone()))
     }
 }
 
@@ -175,7 +148,7 @@ mod tests {
         let original_result: Result<i32, StructError<TestReason>> =
             Err(TestReason::TestError.to_err());
 
-        let converted_result: Result<i32, StructError<AnotherReason>> = original_result.upcast();
+        let converted_result: Result<i32, StructError<AnotherReason>> = original_result.conv_err();
 
         assert!(converted_result.is_err());
         let converted_error = converted_result.unwrap_err();
@@ -183,7 +156,7 @@ mod tests {
 
         // 测试成功情况下的转换
         let success_result: Result<i32, StructError<TestReason>> = Ok(42);
-        let converted_success: Result<i32, StructError<AnotherReason>> = success_result.upcast();
+        let converted_success: Result<i32, StructError<AnotherReason>> = success_result.conv_err();
 
         assert!(converted_success.is_ok());
         assert_eq!(converted_success.unwrap(), 42);
@@ -241,47 +214,11 @@ mod tests {
         let original: Result<i32, StructError<TestReason>> =
             Err(StructError::from(TestReason::TestError).with_std_source(source));
 
-        let converted: Result<i32, StructError<AnotherReason>> = original.upcast();
+        let converted: Result<i32, StructError<AnotherReason>> = original.conv_err();
         let err = converted.unwrap_err();
 
         assert_eq!(err.reason().error_code(), 2001);
         assert_eq!(err.source_ref().unwrap().to_string(), "db unavailable");
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_wrap_as_preserves_previous_struct_error_chain() {
-        let original: Result<i32, StructError<TestReason>> =
-            Err(StructError::from(TestReason::TestError)
-                .with_detail("repo layer failed")
-                .with_std_source(std::io::Error::other("db unavailable")));
-
-        let wrapped: Result<i32, StructError<AnotherReason>> =
-            original.wrap_as(AnotherReason::AnotherError, "service layer failed");
-        let err = wrapped.unwrap_err();
-
-        assert_eq!(err.reason().error_code(), 2001);
-        assert_eq!(err.detail().as_deref(), Some("service layer failed"));
-        assert_eq!(
-            err.source_ref().unwrap().to_string(),
-            "test error\n  -> Details: repo layer failed\n  -> Source: db unavailable"
-        );
-        assert_eq!(err.root_cause().unwrap().to_string(), "db unavailable");
-        assert_eq!(err.source_chain().len(), 2);
-        assert_eq!(err.source_frames()[0].message, "test error");
-        assert!(err.source_frames()[0]
-            .display
-            .as_ref()
-            .unwrap()
-            .contains("repo layer failed"));
-        assert_eq!(err.source_frames()[0].error_code, None);
-        assert_eq!(err.source_frames()[0].reason.as_deref(), Some("test error"));
-        assert_eq!(
-            err.source_frames()[0].detail.as_deref(),
-            Some("repo layer failed")
-        );
-        assert_eq!(err.source_frames()[1].message, "db unavailable");
-        assert!(err.source_frames()[1].is_root_cause);
     }
 
     #[test]
@@ -292,7 +229,7 @@ mod tests {
                     .with_meta("config.kind", "sink_defaults"),
             ));
 
-        let converted: Result<i32, StructError<AnotherReason>> = original.upcast();
+        let converted: Result<i32, StructError<AnotherReason>> = original.conv_err();
         let err = converted.unwrap_err();
 
         assert_eq!(
@@ -301,58 +238,4 @@ mod tests {
         );
     }
 
-    #[test]
-    #[allow(deprecated)]
-    fn test_wrap_as_preserves_source_frame_metadata() {
-        let original: Result<i32, StructError<TestReason>> =
-            Err(StructError::from(TestReason::TestError).with_context(
-                OperationContext::doing("load sink defaults")
-                    .with_meta("config.kind", "sink_defaults"),
-            ));
-
-        let wrapped: Result<i32, StructError<AnotherReason>> =
-            original.wrap_as(AnotherReason::AnotherError, "service layer failed");
-        let err = wrapped.unwrap_err();
-
-        assert_eq!(err.detail().as_deref(), Some("service layer failed"));
-        assert_eq!(
-            err.source_frames()[0].metadata.get_str("config.kind"),
-            Some("sink_defaults")
-        );
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_wrap_as_preserves_detail_source_chain_and_metadata() {
-        let original: Result<i32, StructError<TestReason>> =
-            Err(StructError::from(TestReason::TestError)
-                .with_detail("repo layer failed")
-                .with_context(
-                    OperationContext::doing("load sink defaults")
-                        .with_meta("config.kind", "sink_defaults"),
-                )
-                .with_std_source(std::io::Error::other("db unavailable")));
-
-        let wrapped: Result<i32, StructError<AnotherReason>> =
-            original.wrap_as(AnotherReason::AnotherError, "service layer failed");
-        let err = wrapped.unwrap_err();
-
-        assert_eq!(err.reason().error_code(), 2001);
-        assert_eq!(err.detail().as_deref(), Some("service layer failed"));
-        assert!(err.source_ref().unwrap().to_string().contains("test error"));
-        assert_eq!(err.root_cause().unwrap().to_string(), "db unavailable");
-        assert_eq!(err.source_chain().len(), 2);
-        assert_eq!(err.source_frames()[0].message, "test error");
-        assert_eq!(err.source_frames()[0].error_code, None);
-        assert_eq!(
-            err.source_frames()[0].detail.as_deref(),
-            Some("repo layer failed")
-        );
-        assert_eq!(
-            err.source_frames()[0].metadata.get_str("config.kind"),
-            Some("sink_defaults")
-        );
-        assert_eq!(err.source_frames()[1].message, "db unavailable");
-        assert!(err.source_frames()[1].is_root_cause);
-    }
 }

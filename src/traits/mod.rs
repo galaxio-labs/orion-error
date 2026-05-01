@@ -3,8 +3,7 @@ mod conversion;
 mod into_as;
 
 pub use contextual::ErrorWith;
-#[allow(deprecated)]
 pub use conversion::{
-    ConvStructError, Upcast, ErrorWrapAs, ToStructError,
+    ConvErr, ConvStructError, ToStructError,
 };
-pub use into_as::{raw_source, IntoAs, RawSource, RawStdError};
+pub use into_as::{raw_source, SourceErr, RawSource, RawStdError};

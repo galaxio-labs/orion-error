@@ -26,7 +26,7 @@ fn test_layered_modules_and_root_prelude_compile() {
     assert!(std::error::Error::source(&bridge).is_none());
 
     let io_result: Result<(), std::io::Error> = Err(std::io::Error::other("disk offline"));
-    let structured = conversion::IntoAs::into_as(
+    let structured = conversion::SourceErr::source_err(
         io_result,
         reason::UvsReason::system_error(),
         "load config failed",
@@ -43,7 +43,7 @@ fn test_layered_modules_and_root_prelude_compile() {
         ctx.record_field("path", "config.toml");
 
         std::fs::read_to_string("missing-config.toml")
-            .into_as(UvsReason::system_error(), "read config failed")
+            .source_err(UvsReason::system_error(), "read config failed")
             .doing("read config")
             .with_context(&ctx)
             .map(|_| ())
@@ -57,7 +57,7 @@ fn test_layered_modules_and_root_prelude_compile() {
     assert_eq!(err.contexts()[1].action().as_deref(), Some("load config"));
 
     let at_err = std::fs::read_to_string("missing-config.toml")
-        .into_as(UvsReason::system_error(), "read config failed")
+        .source_err(UvsReason::system_error(), "read config failed")
         .at("missing-config.toml")
         .unwrap_err();
     assert_eq!(
@@ -101,7 +101,7 @@ fn test_root_prelude_imports_compile() {
         ctx.record_field("path", "config.toml");
 
         std::fs::read_to_string("missing-config.toml")
-            .into_as(UvsReason::system_error(), "read config failed")
+            .source_err(UvsReason::system_error(), "read config failed")
             .doing("read config")
             .with_context(&ctx)
             .map(|_| ())

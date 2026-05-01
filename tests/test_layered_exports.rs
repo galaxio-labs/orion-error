@@ -34,7 +34,7 @@ fn test_layered_surfaces_compile_and_interoperate() {
     assert_eq!(owned_bridge.into_struct(), err);
 
     let io_result: Result<(), std::io::Error> = Err(std::io::Error::other("disk offline"));
-    let structured = conversion::IntoAs::into_as(
+    let structured = conversion::SourceErr::source_err(
         io_result,
         reason::UvsReason::system_error(),
         "load config failed",
@@ -68,7 +68,7 @@ fn test_root_surface_stays_on_primary_runtime_path() {
     ctx.record_field("path", "config.toml");
 
     let err = std::fs::read_to_string("missing-config.toml")
-        .into_as(UvsReason::system_error(), "read config failed")
+        .source_err(UvsReason::system_error(), "read config failed")
         .doing("read config")
         .with_context(&ctx)
         .unwrap_err();
@@ -93,7 +93,7 @@ fn test_root_conversion_traits_now_live_under_prelude_or_conversion() {
         use orion_error::reason::UvsReason;
 
         std::fs::read_to_string("missing-config.toml")
-            .into_as(UvsReason::system_error(), "read config failed")
+            .source_err(UvsReason::system_error(), "read config failed")
             .map(|_| ())
     }
 
@@ -102,7 +102,7 @@ fn test_root_conversion_traits_now_live_under_prelude_or_conversion() {
         Result<(), std::io::Error>,
         reason::UvsReason,
         &'static str,
-    ) -> Result<(), runtime::StructError<reason::UvsReason>> = conversion::IntoAs::into_as;
+    ) -> Result<(), runtime::StructError<reason::UvsReason>> = conversion::SourceErr::source_err;
 }
 
 #[test]
