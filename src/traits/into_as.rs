@@ -242,6 +242,24 @@ impl UnstructuredSource for toml::ser::Error {
     }
 }
 
+// Allow `into_as` to work with already-structured `Result<T, StructError<R1>>`
+// sources. Callers no longer need to distinguish between raw std errors and
+// structured errors — `into_as` handles both.
+impl<T, R1, R2> IntoAs<T, R2> for Result<T, StructError<R1>>
+where
+    R1: DomainReason,
+    R2: DomainReason,
+{
+    fn into_as(self, reason: R2, detail: impl Into<String>) -> Result<T, StructError<R2>> {
+        let detail = detail.into();
+        self.map_err(|err| {
+            StructError::from(reason)
+                .with_detail(detail)
+                .with_struct_source(err)
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{fmt, io};
