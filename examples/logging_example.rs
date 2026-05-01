@@ -1,5 +1,5 @@
 //! 展示 OperationContext 日志记录功能的示例。
-//! 此示例使用当前更推荐的 `op_context!` + `record_field(...)` + `scoped_success()` 组合。
+//! 此示例使用当前更推荐的 `op_context!` + `with_field(...)` + `scoped_success()` 组合。
 
 use orion_error::op_context;
 
@@ -19,19 +19,21 @@ fn main() {
 }
 
 fn process_order(order_id: &str, amount: f64, customer_id: &str) {
-    let mut ctx = op_context!("process_order").with_auto_log();
-    ctx.record_field("order_id", order_id);
+    let mut ctx = op_context!("process_order")
+        .with_auto_log()
+        .with_field("order_id", order_id);
     {
         let mut scope = ctx.scoped_success();
-        scope.record_field("order_id", order_id);
-        scope.record_field("amount", amount.to_string());
-        scope.record_field("customer_id", customer_id);
+        scope
+            .with_field("order_id", order_id)
+            .with_field("amount", amount.to_string())
+            .with_field("customer_id", customer_id);
 
         scope.info("开始处理订单");
 
         let validation_result = validate_order(amount);
 
-        scope.record_field("validation_result", validation_result.to_string());
+        scope.with_field("validation_result", validation_result.to_string());
         scope.debug("订单验证完成");
 
         if validation_result {
@@ -52,23 +54,25 @@ fn validate_order(amount: f64) -> bool {
 
 fn successful_operation() {
     // 展示在成功操作中如何记录有价值的上下文信息
-    let mut ctx = op_context!("data_processing");
+    let mut ctx = op_context!("data_processing").with_field("mode", "batch");
     {
         let mut scope = ctx.scoped_success();
-        scope.record_field("batch_size", "1000");
-        scope.record_field("processor", "worker_1");
-        scope.record_field("start_time", "2024-01-01T10:00:00Z");
+        scope
+            .with_field("batch_size", "1000")
+            .with_field("processor", "worker_1")
+            .with_field("start_time", "2024-01-01T10:00:00Z");
 
         scope.info("开始数据处理");
 
         for i in 0..5 {
-            scope.record_field("current_item", i.to_string());
+            scope.with_field("current_item", i.to_string());
             scope.debug("处理数据项");
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
 
-        scope.record_field("end_time", "2024-01-01T10:05:00Z");
-        scope.record_field("items_processed", "5");
+        scope
+            .with_field("end_time", "2024-01-01T10:05:00Z")
+            .with_field("items_processed", "5");
 
         scope.info("数据处理完成");
     }

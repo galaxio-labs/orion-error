@@ -93,16 +93,16 @@ Result<T, StructError<OrderReason>>
 入口上下文统一写在服务层：
 
 ```rust
-let mut ctx = OperationContext::doing("place_order");
-ctx.record_field("user_id", user_id.to_string());
-ctx.record_field("order.raw", raw_order);
-ctx.record_meta("component.name", "order_service");
+let ctx = OperationContext::doing("place_order")
+    .with_field("user_id", user_id.to_string())
+    .with_field("order.raw", raw_order)
+    .with_meta("component.name", "order_service");
 ```
 
 它展示的是：
 
-- `record_field(...)` 适合展示型 field
-- `record_meta(...)` 适合结构化 metadata
+- `with_field(...)` 适合链式构建展示型 field
+- `with_meta(...)` 适合链式构建结构化 metadata
 
 最终摘要输出大致会收敛成：
 

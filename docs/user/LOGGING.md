@@ -24,10 +24,10 @@ orion-error = { version = "0.8.0", features = ["tracing"] }
 ```rust
 use orion_error::OperationContext;
 
-let mut ctx = OperationContext::doing("order_processing");
-ctx.record_field("order_id", "123");
-ctx.record_field("amount", "100.0");
-ctx.record_meta("component.name", "order_service");
+let ctx = OperationContext::doing("order_processing")
+    .with_field("order_id", "123")
+    .with_field("amount", "100.0")
+    .with_meta("component.name", "order_service");
 
 ctx.info("start");
 ctx.debug("payload prepared");
@@ -49,8 +49,9 @@ ctx.trace("verbose trace");
 ```rust
 use orion_error::OperationContext;
 
-let mut ctx = OperationContext::doing("sync_user").with_auto_log();
-ctx.record_field("user_id", "42");
+let mut ctx = OperationContext::doing("sync_user")
+    .with_auto_log()
+    .with_field("user_id", "42");
 
 do_sync()?;
 ctx.mark_suc();
@@ -76,7 +77,7 @@ let mut ctx = OperationContext::doing("sync_user").with_auto_log();
 
 {
     let mut scope = ctx.scope();
-    scope.record_field("user_id", "42");
+    scope.with_field("user_id", "42");
     validate()?;
     scope.mark_success();
 }
@@ -134,8 +135,7 @@ scope.mark_success();
 ```rust
 use orion_error::op_context;
 
-let mut ctx = op_context!("load_config").with_auto_log();
-ctx.record_field("path", "config.toml");
+let ctx = op_context!("load_config").with_auto_log().with_field("path", "config.toml");
 ```
 
 这个宏会在调用点展开 `module_path!()`，让自动结果日志带上更准确的模块路径。
@@ -143,8 +143,8 @@ ctx.record_field("path", "config.toml");
 ## 7. 推荐实践
 
 - 用 `doing(...)` 命名操作
-- 用 `record_field(...)` 记录关键诊断字段
-- 用 `record_meta(...)` 记录结构化 metadata
+- 用 `with_field(...)` / `with_meta(...)` 做链式构建
+- `record_field(...)` / `record_meta(...)` 只在已有可变引用时使用
 - 用 `with_auto_log()` 只包裹真正需要结果日志的作用域
 - 对可能 `?` 提前返回的逻辑，优先 `scope() + mark_success()`
 - 只有在失败路径已被显式处理时，再使用 `scoped_success()`

@@ -426,7 +426,7 @@ impl OperationContext {
     /// The entry will appear in the error's `Display` output.
     /// For typed metadata hidden from console output, use [`record_meta()`] instead.
     ///
-    /// Prefer [`with_field`](Self::with_field) for chained construction;
+    /// Prefer [`with_field`](Self::with_field) for chained construction.
     /// `record_field` is for when you already have a mutable reference.
     pub fn record_field<K, V>(&mut self, key: K, val: V)
     where
@@ -459,7 +459,7 @@ impl OperationContext {
     /// Use this for structured fields intended for serialization, snapshots, or
     /// API responses. For user-visible context entries, use [`record_field()`].
     ///
-    /// Prefer [`with_meta`](Self::with_meta) for chained construction;
+    /// Prefer [`with_meta`](Self::with_meta) for chained construction.
     /// `record_meta` is for when you already have a mutable reference.
     pub fn record_meta<K, V>(&mut self, key: K, value: V)
     where
@@ -661,6 +661,26 @@ pub struct OperationScope<'a> {
 }
 
 impl<'a> OperationScope<'a> {
+    /// Builder-style field addition while keeping the scope guard alive.
+    pub fn with_field<K, V>(&mut self, key: K, val: V) -> &mut Self
+    where
+        K: Into<String>,
+        V: Display,
+    {
+        self.ctx.record_field(key, val);
+        self
+    }
+
+    /// Builder-style metadata addition while keeping the scope guard alive.
+    pub fn with_meta<K, V>(&mut self, key: K, value: V) -> &mut Self
+    where
+        K: Into<String>,
+        V: Into<MetadataValue>,
+    {
+        self.ctx.record_meta(key, value);
+        self
+    }
+
     /// Explicitly mark as success.
     pub fn mark_success(&mut self) {
         self.mark_success = true;
