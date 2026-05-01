@@ -35,7 +35,7 @@
 | Context 路径 | 单层 context 链 | 无 | 单层 | **多层嵌套 path 规整**：target_path segments |
 | 自定义元数据 | 无（仅消息） | 无 | `Section` trait | `ErrorMetadata`（typed KV，不进入 Display） |
 | Source 链追踪 | 标准链 | 标准链 | 标准链 + `SpanTrace` | **双通道**（Std/Struct）+ `SourceFrame` 丰富元数据 |
-| 跨类型转换 | `anyhow!()` 宏 | `#[from]` | `eyre!()` 宏 | `convert_error()` + `upcast()` + `wrap_as()` |
+| 跨类型转换 | `anyhow!()` 宏 | `#[from]` | `eyre!()` 宏 | `convert_error()` + `upcast()` |
 
 ### 边界输出
 
@@ -147,7 +147,7 @@ orion-error 设计上不与生态对立。推荐的分工：
 | 边界外（第三方库、FFI） | thiserror / 标准 Error trait |
 | 进入结构化体系 | orion-error `into_as()` |
 | 业务层传播 | orion-error `StructError<R>` |
-| 跨层（repo → service → handler） | orion-error `upcast()` / `wrap_as()` |
+| 跨层（repo → service → handler） | orion-error `upcast()` |
 | 边界输出 | orion-error `exposure_snapshot()` |
 | 快速原型 / 胶水代码 | anyhow（orion-error 提供了 feature `anyhow` 支持） |
 | 终端诊断展示 | orion-error `report().render()` 或 color-eyre（非冲突） |

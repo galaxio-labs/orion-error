@@ -98,7 +98,7 @@ source 挂载的推荐主路径是：
 
 - 上游是普通错误，第一次进入结构化体系：`into_as(reason, detail)`。
 - 上游是 `StructError<R1>`，当前层只改变 reason 类型：`upcast()`。
-- 上游是 `StructError<R1>`，当前层建立新的语义边界：`wrap_as(reason, detail)`。
+- 上游是 `StructError<R1>`，已废弃：`wrap_as` → 统一用 `into_as`。
 - 需要挂载 cause 到已有 `StructError`：`with_source(...)` 或 `builder.source(...)`。
 - 需要进入 `std::error::Error` 生态：`as_std()`、`into_std()`、
   `into_boxed_std()`、`into_dyn_std()`。

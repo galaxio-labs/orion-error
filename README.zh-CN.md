@@ -26,7 +26,7 @@
 - 用 `#[derive(OrionError)]` 定义稳定的业务 reason
 - 用 `StructError<R>` 作为统一运行时载体
 - 普通错误第一次进入系统时，用 `into_as(...)`
-- 已经结构化的错误跨层时，用 `upcast()` 或 `wrap_as(...)`
+- 统一用 `into_as(...)` 进入系统，跨层转换用 `upcast()`
 - 到边界时，再做 `report()` / `snapshot()` / `exposure_snapshot(...)`
 
 [![CI](https://github.com/galaxio-labs/orion-error/workflows/CI/badge.svg)](https://github.com/galaxio-labs/orion-error/actions)
@@ -119,7 +119,7 @@ fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
    普通错误第一次进入结构化体系时使用。
 3. `upcast()`
    上游已经是 `StructError<R1>`，这里只是换 reason 类型时使用。
-4. `wrap_as(reason, detail)`
+4. ~~`wrap_as(reason, detail)`~~ 已废弃
    上游已经是 `StructError<_>`，但上层需要建立新的语义边界时使用。
 
 ## 一张图理解主路径
@@ -128,7 +128,7 @@ fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
 std::io::Error
   -> into_as(...)
 StructError<RepoReason>
-  -> upcast() 或 wrap_as(...)
+  -> into_as() + upcast() (错误进入 + 跨层转换)
 StructError<ServiceReason>
   -> report() / snapshot().stable_export() / exposure_snapshot(...)
 ```

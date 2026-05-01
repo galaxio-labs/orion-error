@@ -30,7 +30,7 @@
 - `exposure_snapshot(...)`
 - `into_as(...)`
 - `upcast()`
-- `wrap_as(...)`
+- `wrap_as(...)` (deprecated)
 - `cli::print_error(...)`
 
 特征：
