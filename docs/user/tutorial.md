@@ -85,7 +85,7 @@ fn load_config() -> Result<String, StructError<AppReason>> {
 这个例子覆盖了当前主路径的四个核心点：
 
 - 领域 reason 用 `OrionError` 定义
-- 普通错误第一次进入结构化体系用 `source_err(...)`
+- 错误进入结构化体系用 `source_err(...)`（统一入口）
 - 运行时语义上下文用 `doing(...)`
 - 诊断字段和 metadata 写到 `OperationContext`
 
@@ -282,7 +282,7 @@ let err = std::fs::read_to_string("config.toml")
     .unwrap_err();
 ```
 
-注意：当前实现没有 blanket `E: std::error::Error` 的通用实现。
+`source_err` 支持常见的标准错误类型和已结构化的 `StructError` 源。
 
 当前支持的是一组受控入口：
 
@@ -347,7 +347,7 @@ fn lower_layer_call() -> Result<(), StructError<RepoReason>> {
 }
 
 fn upper_layer_call() -> Result<(), StructError<ServiceReason>> {
-    lower_layer_call().upcast()?;
+    lower_layer_call().conv_err()?;
     Ok(())
 }
 
@@ -544,7 +544,6 @@ assert_eq!(err.reason().error_code(), 201);
 
 - 领域 reason 默认 derive `OrionError`
 - 对外稳定协议依赖 stable code，不依赖人类文案
-- 第一次进入结构化体系优先 .source_err(...)`
 - 所有错误统一使用 `source_err(...)` 进入结构化体系
 - 只做 reason 收敛优先 `conv_err()`
 - 需要稳定导出时使用 `snapshot().stable_export()`
