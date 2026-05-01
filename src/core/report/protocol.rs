@@ -37,6 +37,31 @@ pub struct ErrorProtocolSnapshot {
     projection: ReportProjectionParts,
 }
 
+/// Policy that maps an error identity to protocol-level exposure decisions.
+///
+/// Implement this to control HTTP status codes, visibility, hints, and
+/// retryability per error identity.
+///
+/// # Example
+///
+/// ```rust
+/// use orion_error::protocol::ExposurePolicy;
+/// use orion_error::snapshot::ErrorIdentity;
+/// use orion_error::report::Visibility;
+///
+/// struct MyPolicy;
+///
+/// impl ExposurePolicy for MyPolicy {
+///     fn http_status(&self, identity: &ErrorIdentity) -> u16 {
+///         match identity.code.as_str() {
+///             "biz.not_found" => 404,
+///             _ => 500,
+///         }
+///     }
+/// }
+/// ```
+///
+/// All methods have defaults — override only what you need.
 pub trait ExposurePolicy {
     fn http_status(&self, _identity: &ErrorIdentity) -> u16 {
         500

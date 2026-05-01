@@ -161,6 +161,28 @@ impl<K: AsRef<str>, V: AsRef<str>> From<(K, V)> for CallContext {
     }
 }
 
+/// Trait for attaching context entries to an error or context object.
+///
+/// Unlike [`ErrorWith::with_context`](crate::traits::ErrorWith::with_context),
+/// which is a builder-pattern (consumes `self`, returns `Self`), this trait
+/// mutates in place (`&mut self`). Prefer `with_context` for new code; use
+/// `add_context` when you already have a mutable reference.
+///
+/// # Implementations
+///
+/// - `ContextAdd<&OperationContext>` — clones an existing context into the error
+/// - `ContextAdd<OperationContext>` — moves an owned context into the error
+/// - `ContextAdd<(K, V)>` on `OperationContext` — records a key-value field
+///
+/// # Example
+///
+/// ```rust
+/// use orion_error::{StructError, UvsReason, OperationContext, runtime::WithContext};
+/// use orion_error::runtime::ContextAdd;
+///
+/// let mut ctx = OperationContext::doing("load");
+/// ctx.add_context(("tenant", "acme"));
+/// ```
 pub trait ContextAdd<T> {
     fn add_context(&mut self, val: T);
 }

@@ -1,5 +1,33 @@
 use smol_str::SmolStr;
 
+/// Policy for redacting sensitive data from error output.
+///
+/// # Example
+///
+/// ```rust
+/// use orion_error::report::RedactPolicy;
+///
+/// struct HideTokens;
+///
+/// impl RedactPolicy for HideTokens {
+///     fn redact_key(&self, key: &str) -> bool {
+///         key.contains("token") || key.contains("secret")
+///     }
+///
+///     fn redact_value(&self, key: Option<&str>, value: &str) -> Option<String> {
+///         match key {
+///             Some("detail") | Some("source.message") => {
+///                 Some(value.replace("token=", "token=<redacted>"))
+///             }
+///             _ => Some(value.to_string()),
+///         }
+///     }
+/// }
+/// ```
+///
+/// - [`redact_key`](RedactPolicy::redact_key) returns `true` to drop the entire entry.
+/// - [`redact_value`](RedactPolicy::redact_value) transforms or replaces individual values.
+///   Return `None` to drop the entry, `Some(...)` to replace it.
 pub trait RedactPolicy {
     fn redact_key(&self, _key: &str) -> bool {
         false
