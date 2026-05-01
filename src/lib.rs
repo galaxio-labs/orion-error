@@ -182,7 +182,7 @@ extern crate self as orion_error;
 #[cfg(feature = "derive")]
 pub use orion_error_derive::{ErrorCode, ErrorIdentityProvider, OrionError};
 
-pub use core::{OperationContext, StructError, UvsReason};
+pub use core::{convert_error, OperationContext, StructError, UvsReason};
 
 /// Primary-path traits and types for convenient wildcard imports.
 ///
@@ -268,7 +268,7 @@ pub mod reason {
 /// Conversion traits for the current primary paths.
 pub mod conversion {
     pub use crate::traits::{
-        ConvStructError, ErrorConv, ErrorWith, ErrorWrapAs, IntoAs, ToStructError,
+        ConvStructError, Upcast, ErrorWith, ErrorWrapAs, IntoAs, ToStructError,
     };
 }
 

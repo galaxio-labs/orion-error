@@ -348,9 +348,9 @@ assert_eq!(
 );
 ```
 
-### 4.3 `err_conv()`
+### 4.3 `upcast()`
 
-当只是把下层 reason 收敛到上层 reason，而不想新增一层 detail/source 语义时，使用 `err_conv()`：
+当只是把下层 reason 收敛到上层 reason，而不想新增一层 detail/source 语义时，使用 `upcast()`：
 
 ```rust
 use derive_more::From;
@@ -375,7 +375,7 @@ fn lower_layer_call() -> Result<(), StructError<RepoReason>> {
 }
 
 fn upper_layer_call() -> Result<(), StructError<ServiceReason>> {
-    lower_layer_call().err_conv()?;
+    lower_layer_call().upcast()?;
     Ok(())
 }
 
@@ -522,7 +522,7 @@ assert_eq!(err.reason().error_code(), 201);
 - 对外稳定协议依赖 stable code，不依赖人类文案
 - 第一次进入结构化体系优先 `into_as(...)`
 - 已结构化错误跨层包装优先 `wrap_as(...)`
-- 只做 reason 收敛优先 `err_conv()`
+- 只做 reason 收敛优先 `upcast()`
 - 需要稳定导出时使用 `snapshot().stable_export()`
 - 需要对外协议时使用 `exposure_snapshot(...)` 或 projection API
 - 需要进入标准错误生态时使用显式 interop API

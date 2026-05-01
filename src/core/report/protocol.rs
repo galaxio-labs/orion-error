@@ -45,9 +45,8 @@ pub struct ErrorProtocolSnapshot {
 /// # Example
 ///
 /// ```rust
-/// use orion_error::protocol::ExposurePolicy;
+/// use orion_error::protocol::{ExposurePolicy, Visibility};
 /// use orion_error::snapshot::ErrorIdentity;
-/// use orion_error::report::Visibility;
 ///
 /// struct MyPolicy;
 ///

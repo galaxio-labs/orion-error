@@ -112,7 +112,7 @@ For new code, treat `doing(...)` as the standard operation verb.
    Define stable business-facing reason enums.
 2. `into_as(reason, detail)`
    Use when a plain error enters the structured system for the first time.
-3. `err_conv()`
+3. `upcast()`
    Use when the upstream value is already `StructError<R1>` and you only remap
    reason type to `StructError<R2>`.
 4. `wrap_as(reason, detail)`
@@ -125,7 +125,7 @@ For new code, treat `doing(...)` as the standard operation verb.
 std::io::Error
   -> into_as(...)
 StructError<RepoReason>
-  -> err_conv() or wrap_as(...)
+  -> upcast() or wrap_as(...)
 StructError<ServiceReason>
   -> report() / snapshot().stable_export() / exposure_snapshot(...)
 ```
@@ -246,7 +246,7 @@ raw std error ──→ into_as(reason, detail) ──→ first entry into struc
                                                    │
                               ┌────────────────────┼────────────────────┐
                               ▼                    ▼                    ▼
-                     err_conv()              wrap_as(reason,     as_std / into_std
+                     upcast()              wrap_as(reason,     as_std / into_std
                      (same semantics,        detail)             / into_dyn_std
                       only reason type       (new semantic       (boundary needs
                       remap)                 boundary, wraps     std::error::Error)
@@ -257,7 +257,7 @@ raw std error ──→ into_as(reason, detail) ──→ first entry into struc
    system for the first time. Use this once per boundary crossing (e.g. at a FFI boundary or
    when a library error enters your domain layer).
 
-**2. `err_conv()`** — cross-layer conversion preserving semantics. The upstream error is
+**2. `upcast()`** — cross-layer conversion preserving semantics. The upstream error is
    already `StructError<R1>`; you only want to map the reason type to `StructError<R2>` via
    `From`. All detail, context, source, and metadata survive.
 

@@ -29,7 +29,7 @@
 - `identity_snapshot()`
 - `exposure_snapshot(...)`
 - `into_as(...)`
-- `err_conv()`
+- `upcast()`
 - `wrap_as(...)`
 - `cli::print_error(...)`
 

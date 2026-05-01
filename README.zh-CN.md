@@ -26,7 +26,7 @@
 - 用 `#[derive(OrionError)]` 定义稳定的业务 reason
 - 用 `StructError<R>` 作为统一运行时载体
 - 普通错误第一次进入系统时，用 `into_as(...)`
-- 已经结构化的错误跨层时，用 `err_conv()` 或 `wrap_as(...)`
+- 已经结构化的错误跨层时，用 `upcast()` 或 `wrap_as(...)`
 - 到边界时，再做 `report()` / `snapshot()` / `exposure_snapshot(...)`
 
 [![CI](https://github.com/galaxio-labs/orion-error/workflows/CI/badge.svg)](https://github.com/galaxio-labs/orion-error/actions)
@@ -117,7 +117,7 @@ fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
    定义稳定的业务 reason。
 2. `into_as(reason, detail)`
    普通错误第一次进入结构化体系时使用。
-3. `err_conv()`
+3. `upcast()`
    上游已经是 `StructError<R1>`，这里只是换 reason 类型时使用。
 4. `wrap_as(reason, detail)`
    上游已经是 `StructError<_>`，但上层需要建立新的语义边界时使用。
@@ -128,7 +128,7 @@ fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
 std::io::Error
   -> into_as(...)
 StructError<RepoReason>
-  -> err_conv() 或 wrap_as(...)
+  -> upcast() 或 wrap_as(...)
 StructError<ServiceReason>
   -> report() / snapshot().stable_export() / exposure_snapshot(...)
 ```
@@ -249,7 +249,7 @@ use orion_error::dev::testing::*;
                                                      │
                               ┌──────────────────────┼──────────────────────┐
                               ▼                      ▼                      ▼
-                     err_conv()                wrap_as(reason,       as_std / into_std
+                     upcast()                wrap_as(reason,       as_std / into_std
                      (同语义转换，               detail)               / into_dyn_std
                       只换 reason 类型)         (新语义边界，          (边界需要
                                                包裹已有错误           std::error::Error)
@@ -259,7 +259,7 @@ use orion_error::dev::testing::*;
 **1. `into_as(reason, detail)`** — 入口。原始 `std::error::Error` 第一次进入结构化体系。
 在每次跨越边界时调用一次（如 FFI 边界，或第三方库错误进入领域层时）。
 
-**2. `err_conv()`** — 跨层转换，保留语义。上游已是 `StructError<R1>`，你只需要
+**2. `upcast()`** — 跨层转换，保留语义。上游已是 `StructError<R1>`，你只需要
 通过 `From` 映射 reason 类型到 `StructError<R2>`。detail、context、source 和
 metadata 全部保留。
 

@@ -3,8 +3,8 @@ use crate::{core::convert_error, core::DomainReason, StructError};
 /// Convert a `Result<T, StructError<R1>>` into `Result<T, StructError<R2>>`.
 ///
 /// Requires `R2: From<R1>`. Preserves all detail, position, context, and source state.
-pub trait ErrorConv<T, R: DomainReason>: Sized {
-    fn err_conv(self) -> Result<T, StructError<R>>;
+pub trait Upcast<T, R: DomainReason>: Sized {
+    fn upcast(self) -> Result<T, StructError<R>>;
 }
 
 /// Convert a `StructError<R1>` into `StructError<R2>`.
@@ -25,12 +25,12 @@ pub trait ErrorWrapAs<T, R: DomainReason>: Sized {
     fn wrap_as(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>>;
 }
 
-impl<T, R1, R2> ErrorConv<T, R2> for Result<T, StructError<R1>>
+impl<T, R1, R2> Upcast<T, R2> for Result<T, StructError<R1>>
 where
     R1: DomainReason,
     R2: DomainReason + From<R1>,
 {
-    fn err_conv(self) -> Result<T, StructError<R2>> {
+    fn upcast(self) -> Result<T, StructError<R2>> {
         match self {
             Ok(o) => Ok(o),
             Err(e) => Err(convert_error::<R1, R2>(e)),
@@ -152,11 +152,11 @@ mod tests {
 
     #[test]
     fn test_error_conv_trait() {
-        // 测试 ErrorConv trait 的 err_conv 方法
+        // 测试 ErrorConv trait 的 upcast 方法
         let original_result: Result<i32, StructError<TestReason>> =
             Err(TestReason::TestError.to_err());
 
-        let converted_result: Result<i32, StructError<AnotherReason>> = original_result.err_conv();
+        let converted_result: Result<i32, StructError<AnotherReason>> = original_result.upcast();
 
         assert!(converted_result.is_err());
         let converted_error = converted_result.unwrap_err();
@@ -164,7 +164,7 @@ mod tests {
 
         // 测试成功情况下的转换
         let success_result: Result<i32, StructError<TestReason>> = Ok(42);
-        let converted_success: Result<i32, StructError<AnotherReason>> = success_result.err_conv();
+        let converted_success: Result<i32, StructError<AnotherReason>> = success_result.upcast();
 
         assert!(converted_success.is_ok());
         assert_eq!(converted_success.unwrap(), 42);
@@ -217,12 +217,12 @@ mod tests {
     }
 
     #[test]
-    fn test_err_conv_preserves_source() {
+    fn test_upcast_preserves_source() {
         let source = std::io::Error::other("db unavailable");
         let original: Result<i32, StructError<TestReason>> =
             Err(StructError::from(TestReason::TestError).with_std_source(source));
 
-        let converted: Result<i32, StructError<AnotherReason>> = original.err_conv();
+        let converted: Result<i32, StructError<AnotherReason>> = original.upcast();
         let err = converted.unwrap_err();
 
         assert_eq!(err.reason().error_code(), 2001);
@@ -265,14 +265,14 @@ mod tests {
     }
 
     #[test]
-    fn test_err_conv_preserves_context_metadata() {
+    fn test_upcast_preserves_context_metadata() {
         let original: Result<i32, StructError<TestReason>> =
             Err(StructError::from(TestReason::TestError).with_context(
                 OperationContext::doing("load sink defaults")
                     .with_meta("config.kind", "sink_defaults"),
             ));
 
-        let converted: Result<i32, StructError<AnotherReason>> = original.err_conv();
+        let converted: Result<i32, StructError<AnotherReason>> = original.upcast();
         let err = converted.unwrap_err();
 
         assert_eq!(

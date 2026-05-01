@@ -1,10 +1,11 @@
 use derive_more::From;
-use orion_error::{
-    cli::print_error, conversion::ErrorConv, OperationContext, OrionError,
-    StructError, UvsReason,
-};
 use orion_error::prelude::*;
 use orion_error::protocol::DefaultExposurePolicy;
+use orion_error::{
+    cli::print_error, conversion::ToStructError, OperationContext, OrionError, StructError,
+    UvsReason,
+};
+use orion_error::conversion::Upcast;
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum ParseReason {
@@ -78,6 +79,7 @@ type UserError = StructError<UserReason>;
 type StoreError = StructError<StoreReason>;
 type OrderError = StructError<OrderReason>;
 
+
 #[derive(Debug, Clone)]
 struct OrderDraft {
     user_id: u32,
@@ -98,12 +100,12 @@ impl OrderService {
         let draft = Self::parse_order(user_id, amount, raw_order)
             .doing("parse order")
             .with_context(&ctx)
-            .err_conv()?;
+            .upcast()?;
 
         Self::load_user(draft.user_id)
             .doing("load user")
             .with_context(&ctx)
-            .err_conv()?;
+            .upcast()?;
 
         Self::ensure_balance(draft.amount)
             .doing("check balance")
@@ -112,19 +114,21 @@ impl OrderService {
         Self::save_order(&draft)
             .doing("save order")
             .with_context(&ctx)
-            .err_conv()?;
+            .upcast()?;
 
         Ok(draft)
     }
 
     fn parse_order(user_id: u32, amount: u64, raw_order: &str) -> Result<OrderDraft, ParseError> {
         if raw_order.trim().is_empty() {
-            return Err(StructError::from(ParseReason::InvalidText)
+            return Err(ParseReason::InvalidText
+                .to_err()
                 .with_detail("order text must not be empty"));
         }
 
         if amount == 0 {
-            return Err(StructError::from(ParseReason::InvalidAmount)
+            return Err(ParseReason::InvalidAmount
+                .to_err()
                 .with_detail("amount must be greater than zero"));
         }
 
@@ -139,7 +143,8 @@ impl OrderService {
         if user_id == 42 {
             Ok(())
         } else {
-            Err(StructError::from(UserReason::NotFound)
+            Err(UserReason::NotFound
+                .to_err()
                 .with_detail(format!("user {user_id} does not exist")))
         }
     }
@@ -147,7 +152,8 @@ impl OrderService {
     fn ensure_balance(amount: u64) -> Result<(), OrderError> {
         let balance = 300;
         if amount > balance {
-            Err(StructError::from(OrderReason::InsufficientFunds)
+            Err(OrderReason::InsufficientFunds
+                .to_err()
                 .with_detail(format!("balance={balance}, required={amount}")))
         } else {
             Ok(())
@@ -161,10 +167,12 @@ impl OrderService {
 
 fn persist_order(item: &str) -> Result<(), StoreError> {
     write_impl(item).map_err(|err| match err.kind() {
-        std::io::ErrorKind::OutOfMemory => StructError::from(StoreReason::StorageFull)
+        std::io::ErrorKind::OutOfMemory => StoreReason::StorageFull
+            .to_err()
             .with_detail("storage quota exceeded")
             .with_source(err),
-        _ => StructError::from(StoreReason::from(UvsReason::system_error()))
+        _ => StoreReason::from(UvsReason::system_error())
+            .to_err()
             .with_detail("write order record failed")
             .with_source(err),
     })
@@ -184,7 +192,10 @@ fn print_protocol_views(err: &OrderError) {
     print_error(err);
     println!();
     let exposure_policy = DefaultExposurePolicy;
-    println!("{}", err.exposure_snapshot(&exposure_policy).render_user_debug());
+    println!(
+        "{}",
+        err.exposure_snapshot(&exposure_policy).render_user_debug()
+    );
 }
 
 fn run_case(name: &str, user_id: u32, amount: u64, raw_order: &str) {

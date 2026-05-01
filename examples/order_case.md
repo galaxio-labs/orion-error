@@ -50,7 +50,7 @@ persist_order(...)
 ```rust
 .doing("parse order")
 .with_context(&ctx)
-.err_conv()?
+.upcast()?
 ```
 
 这展示的是：
@@ -140,7 +140,7 @@ component     : order_service
 
 - 原始 I/O 只存在于更底层 helper
 - 存储层公开边界直接返回 `StoreError`
-- 服务层再通过 `err_conv()` 把 `StoreError` 收敛成 `OrderError`
+- 服务层再通过 `upcast()` 把 `StoreError` 收敛成 `OrderError`
 
 ## 为什么不再用更复杂的老版本写法
 

@@ -165,8 +165,10 @@ impl<K: AsRef<str>, V: AsRef<str>> From<(K, V)> for CallContext {
 ///
 /// Unlike [`ErrorWith::with_context`](crate::traits::ErrorWith::with_context),
 /// which is a builder-pattern (consumes `self`, returns `Self`), this trait
-/// mutates in place (`&mut self`). Prefer `with_context` for new code; use
-/// `add_context` when you already have a mutable reference.
+/// mutates in place (`&mut self`). Prefer public APIs such as
+/// `with_context(...)` and `record_field(...)` for new code; `add_context`
+/// is an internal compatibility helper for implementations that already have
+/// a mutable reference.
 ///
 /// # Implementations
 ///
@@ -177,11 +179,12 @@ impl<K: AsRef<str>, V: AsRef<str>> From<(K, V)> for CallContext {
 /// # Example
 ///
 /// ```rust
-/// use orion_error::{StructError, UvsReason, OperationContext, runtime::WithContext};
-/// use orion_error::runtime::ContextAdd;
+/// use orion_error::OperationContext;
 ///
 /// let mut ctx = OperationContext::doing("load");
-/// ctx.add_context(("tenant", "acme"));
+/// ctx.record_field("tenant", "acme");
+///
+/// assert!(format!("{ctx}").contains("tenant: acme"));
 /// ```
 pub trait ContextAdd<T> {
     fn add_context(&mut self, val: T);

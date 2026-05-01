@@ -8,8 +8,9 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use syn::{
     parse_macro_input, spanned::Spanned, Attribute, Data, DeriveInput, Error, Expr, ExprLit,
-    ExprPath, Fields, Lit, LitStr, Result, Variant,
+    ExprPath, Fields, Lit, LitStr, Result, Token, Variant,
 };
+use syn::Ident;
 
 #[proc_macro_derive(ErrorCode, attributes(orion_error))]
 pub fn derive_error_code(input: TokenStream) -> TokenStream {
@@ -41,10 +42,17 @@ fn expand_error_identity_provider(input: DeriveInput) -> TokenStream2 {
 }
 
 fn expand_orion_error(input: DeriveInput) -> TokenStream2 {
+    let input_for_attrs = input.clone();
     let display = impl_display(input.clone());
     let error_code = impl_error_code(input.clone(), MissingCode::Default);
     let identity_provider = impl_error_identity_provider(input.clone());
-    let domain_reason = impl_domain_reason(input);
+    let domain_reason = impl_domain_reason(input.clone());
+
+    let ident = input.ident;
+    let attrs = OrionAttrs::from_attrs(&input_for_attrs.attrs);
+    let upcast_from: Vec<TokenStream2> = attrs
+        .map(|a| impl_upcast_from(&ident, &a).unwrap_or_default())
+        .unwrap_or_default();
 
     let mut out = TokenStream2::new();
     let mut errors = Vec::new();
@@ -53,6 +61,9 @@ fn expand_orion_error(input: DeriveInput) -> TokenStream2 {
             Ok(tokens) => out.extend(tokens),
             Err(err) => errors.push(err),
         }
+    }
+    for tokens in upcast_from {
+        out.extend(tokens);
     }
 
     match errors.into_iter().reduce(|mut first, second| {
@@ -70,3 +81,4 @@ include!("error_code.rs");
 include!("identity.rs");
 include!("attrs.rs");
 include!("patterns.rs");
+include!("upcast.rs");
