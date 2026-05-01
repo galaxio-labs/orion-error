@@ -283,11 +283,11 @@ cargo run --example logging_example --features log
 - [English README](./README.md)
 - [变更记录](./CHANGELOG.md)
 - [文档导航](./docs/README.md)
-- [使用教程](./docs/tutorial.md)
-- [OrionError 与稳定身份](./docs/reason-identity-guide.md)
-- [协议契约](./docs/protocol-contract.md)
-- [Stable Snapshot Schema](./docs/stable-snapshot-schema.md)
-- [与 thiserror 的关系](./docs/thiserror-comparison.md)
+- [使用教程](./docs/user/tutorial.md)
+- [OrionError 与稳定身份](./docs/user/reason-identity-guide.md)
+- [协议契约](./docs/user/protocol-contract.md)
+- [Stable Snapshot Schema](./docs/user/stable-snapshot-schema.md)
+- [与 thiserror 的关系](./docs/user/thiserror-comparison.md)
 - [orion-error-derive README](./orion-error-derive/README.md)
 
 ## 维护者说明
