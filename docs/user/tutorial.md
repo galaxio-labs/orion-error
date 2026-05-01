@@ -47,7 +47,7 @@ use orion_error::runtime::OperationContext;
 
 其中：
 
-- `prelude::*` 只导出主路径：`OrionError`、`StructError`、`IntoAs`、`ErrorWith`、`ErrorWrapAs`
+- `prelude::*` 只导出主路径：`OrionError`、`StructError`、`SourceErr`、`ErrorWith`、`ConvErr`
 - 新业务代码默认先用 `prelude::*`；只有在模块要显式表达 runtime / conversion / protocol 等边界时，再补 layered imports
 - `DefaultExposurePolicy` 只从 `protocol::*` 导入，因为它只属于 exposure/projection 边界
 - 需要更明确边界时，再按职责补 `runtime` / `conversion` / `snapshot` / `report` / `bridge` / `reason` / `protocol`
@@ -76,7 +76,7 @@ fn load_config() -> Result<String, StructError<AppReason>> {
         .with_meta("component.name", "config_loader");
 
     std::fs::read_to_string("config.toml")
-        .into_as(AppReason::system_error(), "read config failed")
+        .source_err(AppReason::system_error(), "read config failed")
         .doing("read config file")
         .with_context(&ctx)
 }
@@ -85,7 +85,7 @@ fn load_config() -> Result<String, StructError<AppReason>> {
 这个例子覆盖了当前主路径的四个核心点：
 
 - 领域 reason 用 `OrionError` 定义
-- 普通错误第一次进入结构化体系用 `into_as(...)`
+- 普通错误第一次进入结构化体系用 `source_err(...)`
 - 运行时语义上下文用 `doing(...)`
 - 诊断字段和 metadata 写到 `OperationContext`
 
@@ -269,16 +269,16 @@ assert!(result.is_err());
 
 ## 4. 错误进入和跨层转换
 
-### 4.1 `into_as(...)`
+### 4.1 .source_err(...)`
 
-`into_as(...)` 用于“普通错误第一次进入结构化体系”。
+.source_err(...)` 用于“普通错误第一次进入结构化体系”。
 
 ```rust
 use orion_error::prelude::*;
 use orion_error::UvsReason;
 
 let err = std::fs::read_to_string("config.toml")
-    .into_as(UvsReason::system_error(), "read config failed")
+    .source_err(UvsReason::system_error(), "read config failed")
     .unwrap_err();
 ```
 
@@ -315,14 +315,14 @@ impl RawStdError for ThirdPartyError {}
 let result: Result<(), ThirdPartyError> = Err(ThirdPartyError);
 let err = result
     .map_err(raw_source)
-    .into_as(UvsReason::system_error(), "load failed")
+    .source_err(UvsReason::system_error(), "load failed")
     .unwrap_err();
 ```
 
 ### 4.2 ~~`wrap_as(...)`~~ 已废弃
 
-`into_as` 现在统一处理 `std::error::Error` 和 `StructError` 两种源，`wrap_as` 不再需要。
-旧代码中 `wrap_as(reason, detail)` 可以直接替换为 `into_as(reason, detail)`。
+`source_err` 现在统一处理 `std::error::Error` 和 `StructError` 两种源，`wrap_as` 不再需要。
+旧代码中 `wrap_as(reason, detail)` 可以直接替换为 .source_err(reason, detail)`。
 
 ```rust
 use derive_more::From;
@@ -342,7 +342,7 @@ fn repo_call() -> Result<(), StructError<UvsReason>> {
 }
 
 let wrapped = repo_call()
-    .into_as(AppReason::system_error(), "service layer failed");
+    .source_err(AppReason::system_error(), "service layer failed");
 
 assert_eq!(
     wrapped.unwrap_err().detail().as_deref(),
@@ -554,7 +554,7 @@ use orion_error::reason::ErrorCategory;
 use orion_error::dev::testing::assert_err_identity;
 
 let err = std::fs::read_to_string("config.toml")
-    .into_as(UvsReason::system_error(), "read config failed")
+    .source_err(UvsReason::system_error(), "read config failed")
     .unwrap_err();
 
 assert_err_identity(&err, "sys.io_error", ErrorCategory::Sys);
@@ -574,8 +574,8 @@ assert_eq!(err.reason().error_code(), 201);
 
 - 领域 reason 默认 derive `OrionError`
 - 对外稳定协议依赖 stable code，不依赖人类文案
-- 第一次进入结构化体系优先 `into_as(...)`
-- 所有错误统一使用 `into_as(...)` 进入结构化体系
+- 第一次进入结构化体系优先 .source_err(...)`
+- 所有错误统一使用 `source_err(...)` 进入结构化体系
 - 只做 reason 收敛优先 `upcast()`
 - 需要稳定导出时使用 `snapshot().stable_export()`
 - 需要对外协议时使用 `exposure_snapshot(...)` 或 projection API

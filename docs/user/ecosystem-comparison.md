@@ -53,7 +53,7 @@
 |------|--------|-----------|------------|-------------|
 | 实现 `StdError` | 是 | 是 | 是 | **显式 Bridge**（`as_std()` / `into_std()` / `into_dyn_std()`） |
 | `dyn Error` 兼容 | 天然 | 天然 | 天然 | 有损转换（`OwnedDynStdStructError`） |
-| 与第三方错误互操作 | `.context()` / `anyhow!()` | `#[from]` | `.sections()` / `eyre!()` | `into_as()` / `raw_source()` |
+| 与第三方错误互操作 | `.context()` / `anyhow!()` | `#[from]` | `.sections()` / `eyre!()` | `source_err()`` / `raw_source()` |
 
 ---
 
@@ -145,7 +145,7 @@ orion-error 设计上不与生态对立。推荐的分工：
 | 层 | 推荐方案 |
 |----|---------|
 | 边界外（第三方库、FFI） | thiserror / 标准 Error trait |
-| 进入结构化体系 | orion-error `into_as()` |
+| 进入结构化体系 | orion-error .source_err()` |
 | 业务层传播 | orion-error `StructError<R>` |
 | 跨层（repo → service → handler） | orion-error `upcast()` |
 | 边界输出 | orion-error `exposure_snapshot()` |

@@ -78,22 +78,22 @@ enum AppReason {
 例如：
 
 ```rust
-use orion_error::{IntoAs, UvsReason};
+use orion_error::{SourceErr, UvsReason};
 
 let err = std::fs::read_to_string("config.toml")
-    .into_as(UvsReason::system_error(), "read config failed")
+    .source_err(UvsReason::system_error(), "read config failed")
     .unwrap_err();
 ```
 
-注意：当前 `into_as(...)` 不是 blanket `E: std::error::Error` 实现。
+注意：当前 .source_err(...)` 不是 blanket `E: std::error::Error` 实现。
 
 如果你的第三方错误类型不在内建支持列表里，需要显式 `raw_source(...)` opt-in。
 
-## 6. `into_as(...)`、`upcast()` (`wrap_as` deprecated)
+## 6. .source_err(...)`、`upcast()` (`wrap_as` deprecated)
 
 当前推荐分工：
 
-- `into_as(...)`
+- .source_err(...)`
   - 普通错误第一次进入结构化体系
 - `wrap_as(...)` (deprecated)
   - 上游已经是 `StructError<_>`，当前层要建立新语义边界
@@ -102,7 +102,7 @@ let err = std::fs::read_to_string("config.toml")
 
 如果上游已经是 `StructError<_>`，不要再回退到：
 
-- `.into_as(...)`
+- `.source_err(...)`
 
 ## 7. source 建议
 

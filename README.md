@@ -20,8 +20,8 @@ Core building blocks:
 
 - stable business identities via `#[derive(OrionError)]`
 - one runtime carrier: `StructError<R>`
-- explicit first-entry conversion with `into_as(...)`
-- unified error entry point: `into_as(...)` for all source types
+- explicit first-entry conversion with `source_err(...)`
+- unified error entry point: .source_err(...)` for all source types
 - report, snapshot, and exposure helpers for service boundaries
 
 [![CI](https://github.com/galaxio-labs/orion-error/workflows/CI/badge.svg)](https://github.com/galaxio-labs/orion-error/actions)
@@ -91,7 +91,7 @@ fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
         .with_field("path", path);
 
     std::fs::read_to_string(path)
-        .into_as(AppReason::system_error(), "read config failed")
+        .source_err(AppReason::system_error(), "read config failed")
         .doing("read file")
         .with_context(&ctx)
 }
@@ -101,7 +101,7 @@ What happens here:
 
 - `AppReason` is your domain reason enum
 - `StructError<AppReason>` is the runtime error carrier
-- `into_as(...)` converts a normal Rust error into the structured system
+- .source_err(...)` converts a normal Rust error into the structured system
 - `doing(...)` and `with_context(...)` add operation context
 
 For new code, treat `doing(...)` as the standard operation verb.
@@ -110,18 +110,18 @@ For new code, treat `doing(...)` as the standard operation verb.
 
 1. `#[derive(OrionError)]`
    Define stable business-facing reason enums.
-2. `into_as(reason, detail)`
+2. .source_err(reason, detail)`
    Use when an error enters the structured system — works for both raw
    `std::error::Error` and already-structured `StructError<_>` sources.
 3. `upcast()`
    Use when the upstream value is already `StructError<R1>` and you only remap
    reason type to `StructError<R2>`.
-4. ~~`wrap_as(reason, detail)`~~ **Deprecated**: use `into_as` instead.
+4. ~~`wrap_as(reason, detail)`~~ **Deprecated**: use `source_err` instead.
 
 ## Typical Flow
 
 ```text
-raw std error ──→ into_as(...) ──→ first entry into structured system
+raw std error ──→.source_err(...) ──→ first entry into structured system
                                           │
                                     upcast()
                                 (reason remap)
@@ -241,7 +241,7 @@ use orion_error::dev::testing::*;
 There are exactly four ways a `StructError` enters or moves through your system:
 
 ```text
-raw std error / StructError ──→ into_as(reason, detail) ──→ first entry
+raw std error / StructError ──→.source_err(reason, detail) ──→ first entry
                                                                     │
                                                               upcast()
                                                           (reason remap)
@@ -249,7 +249,7 @@ raw std error / StructError ──→ into_as(reason, detail) ──→ first en
                                           report / snapshot / exposure_snapshot
 ```
 
-**1. `into_as(reason, detail)`** — unified entry point. Works for both raw
+**1. .source_err(reason, detail)`** — unified entry point. Works for both raw
    `std::error::Error` and already-structured `StructError` sources. Use this
    whenever an error enters your system.
 

@@ -96,9 +96,9 @@ source 挂载的推荐主路径是：
 
 当前推荐的错误流转决策：
 
-- 上游是普通错误，第一次进入结构化体系：`into_as(reason, detail)`。
-- 上游是 `StructError<R1>`，当前层只改变 reason 类型：`upcast()`。
-- 上游是 `StructError<R1>`，当前层建立新的语义边界：~~`wrap_as(reason, detail)`~~（已废弃，用 `into_as`）。
+- 上游是普通错误，第一次进入结构化体系：`source_err(reason, detail)`。
+- 上游是 `StructError<R1>`，当前层只改变 reason 类型：`conv_err()`。
+- 上游是 `StructError<R1>`，当前层建立新的语义边界：~~`wrap_as(reason, detail)`~~（已废弃，用 `source_err`）。
 - 需要挂载 cause 到已有 `StructError`：`with_source(...)` 或 `builder.source(...)`。
 - 需要进入 `std::error::Error` 生态：`as_std()`、`into_std()`、
   `into_boxed_std()`、`into_dyn_std()`。
@@ -129,10 +129,10 @@ source 挂载的推荐主路径是：
   `to_stable_snapshot_json()`、`to_http_error_json()`、`to_cli_error_json()`、
   `to_log_error_json()`、`to_rpc_error_json()`。
 - `anyhow`
-  开启 `anyhow::Error` 进入 `into_as(...)` 的适配，并支持官方 dyn interop
+  开启 `anyhow::Error` 进入 `source_err(...)` 的适配，并支持官方 dyn interop
   wrapper 的结构化 source 恢复。
 - `toml`
-  开启 `toml::de::Error` / `toml::ser::Error` 进入 `into_as(...)` 的适配。
+  开启 `toml::de::Error` / `toml::ser::Error` 进入 `source_err(...)` 的适配。
 
 文档示例如果依赖 feature，应显式说明或用测试门控覆盖。
 

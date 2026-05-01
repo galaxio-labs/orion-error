@@ -38,7 +38,7 @@
 
 ```rust
 persist_order(...)
-    .into_as(UvsReason::system_error(), "write order record failed")
+    .source_err(UvsReason::system_error(), "write order record failed")
 ```
 
 这展示的是“普通错误第一次进入结构化体系”的主路径。

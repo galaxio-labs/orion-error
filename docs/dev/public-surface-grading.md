@@ -28,8 +28,8 @@
 - `snapshot().stable_export()`
 - `identity_snapshot()`
 - `exposure_snapshot(...)`
-- `into_as(...)`
-- `upcast()`
+- `source_err(...)`
+- `conv_err()`
 - `wrap_as(...)` (deprecated)
 - `cli::print_error(...)`
 
