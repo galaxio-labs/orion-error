@@ -25,8 +25,12 @@ Suggested reading order: start with `user/` or `user-en/` to learn concepts and 
 | Document | Description |
 |----------|-------------|
 | [Tutorial](./user-en/tutorial.md) | Getting started tutorial |
+| [Protocol Contract](./user-en/protocol-contract.md) | Exposure projection contract |
+| [Stable Snapshot Schema](./user-en/stable-snapshot-schema.md) | Snapshot structure and versioning |
+| [Report / Exposure Boundary](./user-en/report-exposure-boundary.md) | Diagnostic vs exposure boundary |
 | [Comparison with thiserror](./user-en/thiserror-comparison.md) | Differences and coexistence |
 | [Ecosystem Comparison](./user-en/ecosystem-comparison.md) | anyhow / thiserror / color-eyre / orion-error |
+| [Design Constraints](./user-en/design-constraints.md) | Known design constraints |
 
 ## [dev/](./dev/) — Developer Guide (中文)
 
