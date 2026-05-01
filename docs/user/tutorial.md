@@ -39,7 +39,7 @@ use orion_error::runtime::OperationContext;
 
 ```rust
 use orion_error::{StructError, OrionError};
-use orion_error::conversion::{ErrorWith, IntoAs, ErrorWrapAs};
+use orion_error::conversion::{ErrorWith, SourceErr, ConvErr};
 use orion_error::protocol::DefaultExposurePolicy;
 use orion_error::reason::UvsReason;
 use orion_error::runtime::OperationContext;
@@ -327,7 +327,7 @@ let err = result
 ```rust
 use derive_more::From;
 use orion_error::{OrionError, StructError, UvsReason};
-use orion_error::conversion::ErrorWrapAs;
+use orion_error::conversion::ConvErr;
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum AppReason {
@@ -357,7 +357,7 @@ assert_eq!(
 ```rust
 use derive_more::From;
 use orion_error::{OrionError, StructError, UvsReason};
-use orion_error::conversion::ErrorConv;
+use orion_error::conversion::ConvErr;
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum RepoReason {

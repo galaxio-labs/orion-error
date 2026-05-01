@@ -32,7 +32,7 @@ interop type 或测试 helper。它们的正式归属在分层模块中。
 
 - `StructError`
 - `ErrorWith`
-- `ErrorWrapAs`
+- `ConvErr`
 - `SourceErr`
 - derive feature 开启时的 `OrionError`
 
@@ -49,7 +49,7 @@ interop type 或测试 helper。它们的正式归属在分层模块中。
 - `runtime::source`
   source 观察模型：`SourceFrame`、`SourcePayloadKind`、`SourcePayloadRef`。
 - `conversion`
-  主路径转换 trait：`SourceErr`、`ErrorWith`、`ErrorWrapAs`、`ErrorConv`、
+  主路径转换 trait：`SourceErr`、`ErrorWith`、`ConvErr`、
   `ConvStructError`、`ToStructError`。
 - `reason`
   reason trait、分类和内置 reason：`DomainReason`、`ErrorCode`、
