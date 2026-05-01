@@ -269,9 +269,9 @@ assert!(result.is_err());
 
 ## 4. 错误进入和跨层转换
 
-### 4.1 .source_err(...)`
+### 4.1 `source_err(reason, detail)`
 
-.source_err(...)` 用于“普通错误第一次进入结构化体系”。
+`source_err(reason, detail)` 是统一入口，同时支持原始 `std::error::Error` 和已结构化的 `StructError<_>` 源。
 
 ```rust
 use orion_error::prelude::*;
@@ -319,7 +319,6 @@ let err = result
     .unwrap_err();
 ```
 
-> 旧名称迁移（`wrap_as` → `source_err` 等）见 [兼容与迁移](../dev/compat-migration.md)。
 
 ### 4.2 `conv_err()`
 

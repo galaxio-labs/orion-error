@@ -69,7 +69,7 @@ fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
 ## The 4 APIs To Learn First
 
 1. `#[derive(OrionError)]` — Define stable business-facing reason enums.
-2. .source_err(reason, detail)` — Unified entry point: works for both raw `std::error::Error` and already-structured `StructError` sources.
+2. `source_err(reason, detail)` — Unified entry point: works for both raw `std::error::Error` and already-structured `StructError` sources.
 3. `upcast()` — Cross-layer conversion preserving semantics. The upstream error is already `StructError<R1>`; you only remap the reason type.
 
 ## Error Flow Paths

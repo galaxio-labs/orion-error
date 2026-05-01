@@ -25,7 +25,7 @@
 
 - 用 `#[derive(OrionError)]` 定义稳定的业务 reason
 - 用 `StructError<R>` 作为统一运行时载体
-- 普通错误第一次进入系统时，用 `source_err(...)`
+- 错误进入系统用 `source_err(...)`（统一入口，支持 std 和 StructError 源）
 - 统一用 `source_err(...)` 进入系统，跨层转换用 `upcast()`
 - 到边界时，再做 `report()` / `snapshot()` / `exposure_snapshot(...)`
 
@@ -106,7 +106,7 @@ fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
 
 - `AppReason` 是你的领域错误语义
 - `StructError<AppReason>` 是统一传播载体
-- `source_err(...)` 把普通 Rust 错误接进结构化体系
+- `source_err(...)` 把错误接进结构化体系（统一入口）
 - `doing(...)` / `with_context(...)` 把操作上下文补进去
 
 对新代码来说，操作语义统一使用 `doing(...)`。
