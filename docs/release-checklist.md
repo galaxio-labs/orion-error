@@ -15,6 +15,7 @@
    - `bash scripts/check-feature-matrix.sh`
    - `bash scripts/check-doc-code.sh`
    - `bash scripts/check-v3-policy.sh`
+   - `cargo test --doc --no-default-features`
 4. 在可联网环境中运行：
    - `cargo package --manifest-path orion-error-derive/Cargo.toml`
    - `cargo package`
