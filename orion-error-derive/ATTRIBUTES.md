@@ -16,7 +16,7 @@
 
 ```rust
 #[derive(OrionError)]
-enum AppError {
+enum AppReason {
     #[orion_error(identity = "biz.invalid_input")]
     InvalidInput,
 }
@@ -37,7 +37,7 @@ enum AppError {
 
 ```rust
 #[derive(OrionError)]
-enum AppError {
+enum AppReason {
     #[orion_error(identity = "biz.invalid", category = Logic)]
     InvalidInput,
 }
@@ -51,7 +51,7 @@ enum AppError {
 
 ```rust
 #[derive(OrionError)]
-enum AppError {
+enum AppReason {
     #[orion_error(transparent)]
     Uvs(UvsReason),           // stable_code() 委托给 UvsReason
 }

@@ -63,20 +63,20 @@ use orion_error::{
 };
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
-enum AppError {
+enum AppReason {
     #[orion_error(identity = "biz.invalid_request")]
     InvalidRequest,
     #[orion_error(transparent)]
     Uvs(UvsReason),
 }
 
-fn load_config() -> Result<String, StructError<AppError>> {
+fn load_config() -> Result<String, StructError<AppReason>> {
     let mut ctx = OperationContext::doing("load config");
     ctx.record_field("path", "config.toml");
     ctx.record_meta("component.name", "config_loader");
 
     std::fs::read_to_string("config.toml")
-        .into_as(AppError::from(UvsReason::system_error()), "read config failed")
+        .into_as(AppReason::from(UvsReason::system_error()), "read config failed")
         .doing("read config file")
         .with_context(&ctx)
 }
