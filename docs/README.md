@@ -1,121 +1,31 @@
 # 文档导航
 
-这组文档只描述 `orion-error 0.8.x` 当前已经落地的设计和用法。
+建议阅读顺序：先看"使用者"部分了解概念和用法，遇到边界问题再查"设计开发者"部分。
 
-如果文档和实现冲突，以 `src/`、`tests/`、`examples/` 为准。
+## 使用者
 
-建议阅读顺序：
+| 文档 | 内容 |
+|------|------|
+| [使用教程](./tutorial.md) | 从零开始，推荐第一份文档 |
+| [OrionError 与稳定身份](./reason-identity-guide.md) | 如何定义和设计领域 reason |
+| [协议契约](./protocol-contract.md) | exposure 投影的输出契约 |
+| [Stable Snapshot Schema](./stable-snapshot-schema.md) | 稳定快照的结构和版本化 |
+| [Report / Exposure Boundary](./report-exposure-boundary.md) | 诊断报告与 exposure 的分界 |
+| [日志说明](./LOGGING.md) | OperationContext 日志集成 |
+| [与 thiserror 的关系](./thiserror-comparison.md) | 与 thiserror 的差异和配合 |
+| [与生态方案对比](./ecosystem-comparison.md) | anyhow / thiserror / color-eyre / orion-error |
+| [设计约束](./design-constraints.md) | orphan rule 限制等已知约束 |
 
-1. [README](../README.md)
-2. [README 中文版](../README.zh-CN.md)
-3. [变更记录](../CHANGELOG.md)
-4. [使用教程](./tutorial.md)
-5. [OrionError 与稳定身份](./reason-identity-guide.md)
-6. [0.8 API Contract](./api-contract.md)
-7. [协议契约](./protocol-contract.md)
-8. [Stable Snapshot Schema](./stable-snapshot-schema.md)
-9. [Report / Exposure Boundary](./report-exposure-boundary.md)
-10. [日志说明](./LOGGING.md)
-11. [与 thiserror 的关系](./thiserror-comparison.md)
-12. [0.8 Breaking Plan](./0.8-breaking-plan.md)
-13. [0.9 Design Plan](./0.9-design-plan.md)
-14. [Public Surface Grading](./public-surface-grading.md)
-15. [Release Checklist](./release-checklist.md)
+## 设计 / 开发者
 
-## 当前质量锁
+| 文档 | 内容 |
+|------|------|
+| [API Contract](./api-contract.md) | 当前公开 API 的职责和边界 |
+| [Public Surface Grading](./public-surface-grading.md) | 分层导出的评分和守卫 |
+| [Release Checklist](./release-checklist.md) | 发布前的检查列表 |
+| [性能基准](./perf/structerror-allocation.md) | StructError 堆分配性能 |
+| [Source Debug 性能](./perf/structerror-source-debug.md) | SourceFrame Debug 格式化性能 |
 
-当前仓库已经把下面这些边界收成固定检查：
+---
 
-- root surface compile-fail guard
-  - 锁住 root 不再重新暴露 `DomainReason`
-  - 锁住 root 不再重新暴露 trait 形态 `ErrorCode`
-  - 锁住 root 不再重新暴露 trait 形态 `ErrorIdentityProvider`
-- layered export regression tests
-  - 锁住 root / `prelude` / `runtime` / `conversion` / `snapshot` / `report` /
-    `protocol` / `interop` / `reason` 的当前职责边界
-- feature matrix
-  - `bash scripts/check-feature-matrix.sh`
-- docs code compile
-  - `bash scripts/check-doc-code.sh`
-- policy scan
-  - `bash scripts/check-v3-policy.sh`
-
-如果后续 public surface、feature、文档主路径发生变化，需要同步更新这些锁，
-而不是只改实现或只改 README。
-
-## crates.io 发布顺序
-
-如果发布 `0.8.x` 当前这一组 crate：
-
-1. 先发布 `orion-error-derive`
-2. 等 crates.io 索引传播完成
-3. 再发布 `orion-error`
-
-原因是 `orion-error` 的默认 `derive` feature 依赖 `orion-error-derive`
-的同版本发布包。
-
-## 当前推荐入口
-
-- 运行时传播：`StructError<R>`
-- 领域 reason 定义：`#[derive(OrionError)]`
-- 普通错误第一次进入结构化体系：`into_as(...)`
-- 已结构化错误跨层包装：`wrap_as(...)`
-- source 挂载：`with_source(...)` / `StructErrorBuilder::source(...)`
-- 完整上下文：`with_context(...)`
-- 语义上下文：`doing(...)` / `at(...)`
-- 稳定导出：`snapshot().stable_export()`
-- 协议投影：`identity_snapshot()` / `exposure_snapshot(...)` / `.to_*_error_json()`
-
-## 当前推荐导入方式
-
-- 新业务代码默认使用：`orion_error::prelude::*`
-- 分层导入：
-  - `orion_error::runtime::*`
-  - `orion_error::conversion::*`
-  - `orion_error::snapshot::*`
-  - `orion_error::report::*`
-  - `orion_error::protocol::*`
-  - `orion_error::interop::*`
-  - `orion_error::reason::*`
-
-## 分层导入边界
-
-- `orion_error::prelude::*`
-  面向新业务代码的最小主路径，只放最常用入口。
-  如果模块不是在表达明确边界，一般不要跳过它直接拼 layered imports。
-- `orion_error::runtime::*`
-  运行时传播载体与上下文，如 `StructError`、`OperationContext`。
-  source 观察模型单独放在 `orion_error::runtime::source::*`。
-- `orion_error::conversion::*`
-  主路径转换 trait，如 `IntoAs`、`ErrorWith`、`ErrorWrapAs`。
-- `orion_error::snapshot::*`
-  快照与稳定 schema，如 `ErrorSnapshot`、`StableErrorSnapshot`。
-- `orion_error::report::*`
-  人类诊断与 redaction。
-- `orion_error::cli::*`
-  CLI 输出辅助，如 `print_error(...)`。
-- `orion_error::protocol::*`
-  协议/exposure 投影，如 `ErrorProtocolSnapshot`、`ExposurePolicy`、
-  `DefaultExposurePolicy`、`Visibility`。
-- `orion_error::interop::*`
-  进入标准错误生态的显式 interop 类型。
-- `orion_error::reason::*`
-  reason trait、`UvsReason`、category 与 stable identity 相关能力。
-- `orion_error::dev::testing::*`
-  测试断言 helper 与测试专用辅助 trait，不属于业务主路径。
-- `orion_error::dev::prelude::*`
-  只建议用于协议/schema 测试、迁移验证和大范围编译覆盖。
-  当前只覆盖 snapshot/report/protocol 的对象级检查表面；
-  不再承载 snapshot frame 级类型的宽导出。
-  runtime、reason、conversion、interop 仍应显式导入。
-
-## 设计边界
-
-- `StructError<R>` 不再直接实现 `std::error::Error`。
-- 标准错误生态边界通过显式 interop API 进入：
-  - `as_std()`
-  - `into_std()`
-  - `into_boxed_std()`
-  - `into_dyn_std()`
-- `ErrorCode` 是兼容数值码。
-- 对外稳定主键是 `ErrorIdentity.code`，也就是 stable code。
+*文档和实现冲突时，以 `src/`、`tests/`、`examples/` 为准。*
