@@ -85,26 +85,64 @@ raw std error ──→ into_as(reason, detail)
           remap)    boundary)
 ```
 
-## Boundary Output
+## Stable Identity
+
+Every error variant has a **stable machine-readable name** that never changes, even if the display text is updated:
+
+```rust
+#[derive(OrionError)]
+enum ApiReason {
+    #[orion_error(identity = "biz.invalid_input")]
+    InvalidInput,
+}
+
+// This string is the contract — monitoring, clients, and gateways all rely on it:
+assert_eq!(ApiReason::InvalidInput.stable_code(), "biz.invalid_input");
+assert_eq!(ApiReason::InvalidInput.error_category().as_str(), "biz");
+```
+
+Compare unstable vs stable:
+
+| Unstable | Stable |
+|----------|--------|
+| `"invalid input"` (display text may change) | `"biz.invalid_input"` (permanent) |
+| `100` (numeric code collision) | `"biz.invalid_input"` (namespaced) |
+| `ApiReason::InvalidInput` (Rust path may be refactored) | `"biz.invalid_input"` (independent of source code layout) |
+
+The identity prefix (`biz`, `sys`, `conf`, `logic`) also determines the default `ExposurePolicy` behaviour.
+
+## Protocol Projection
+
+The same error produces **different JSON shapes** for different protocol boundaries — no manual mapping needed:
 
 ```rust
 use orion_error::protocol::DefaultExposurePolicy;
 
-let err: StructError<AppReason> = /* ... */;
+let err = StructError::from(ApiReason::system_error())
+    .with_detail("disk offline at /dev/sda");
+
 let proto = err.exposure_snapshot(&DefaultExposurePolicy);
 
-// HTTP response
-proto.to_http_error_json();
+// HTTP response — minimal, safe for external clients
+let http = proto.to_http_error_json().unwrap();
+assert_eq!(http["status"], 500);           // internal error
+assert_eq!(http["message"], "system error"); // uses reason, NOT detail
 
-// RPC response
-proto.to_rpc_error_json();
+// Log output — full context for debugging
+let log = proto.to_log_error_json().unwrap();
+assert_eq!(log["detail"], "disk offline at /dev/sda");   // full detail
+assert!(log["source_frames"].is_array());                  // source chain
 
-// CLI output
-proto.to_cli_error_json();
+// RPC response — hides internal detail
+let rpc = proto.to_rpc_error_json().unwrap();
+assert_eq!(rpc["detail"], serde_json::Value::Null); // internal → detail hidden
 
-// Log output
-proto.to_log_error_json();
+// CLI output — human-readable summary
+let cli = proto.to_cli_error_json().unwrap();
+assert_eq!(cli["summary"], "system error: disk offline at /dev/sda");
 ```
+
+**The key insight**: the error is a 3D object; each protocol boundary sees a different 2D shadow. The `ExposurePolicy` decides which surface is visible to whom.
 
 ## Stable Snapshot
 

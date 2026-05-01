@@ -450,35 +450,87 @@ assert_eq!(report.reason(), "system error");
 
 ## 6. 稳定身份和协议投影
 
-如果 reason 实现了 `ErrorIdentityProvider`，可以直接做稳定身份和协议投影：
+### 6.1 稳定身份
+
+每个错误变体都有一个**永久的机器可读名称**，不随文案或重构改变：
+
+```rust
+#[derive(OrionError)]
+enum ApiReason {
+    #[orion_error(identity = "biz.invalid_input")]
+    InvalidInput,
+}
+
+// 这个字符串是契约——监控、客户端、网关都依赖它：
+assert_eq!(ApiReason::InvalidInput.stable_code(), "biz.invalid_input");
+assert_eq!(ApiReason::InvalidInput.error_category().as_str(), "biz");
+```
+
+对比不稳定 vs 稳定：
+
+| 不稳定 | 稳定 |
+|--------|------|
+| `"invalid input"`（显示文案可能改） | `"biz.invalid_input"`（永久） |
+| `100`（数值码可能冲突） | `"biz.invalid_input"`（带命名空间） |
+| `ApiReason::InvalidInput`（Rust 路径可能重构） | `"biz.invalid_input"`（独立于源代码） |
+
+```
+    biz    .    invalid_input
+   ────         ────────────
+  category      stable code
+  (conf/biz     不变的业务语义
+   /logic/sys)
+```
+
+### 6.2 协议投影
+
+同一个错误，对不同的协议边界输出**不同的 JSON 形状**，不需要手写映射：
 
 ```rust
 use orion_error::protocol::DefaultExposurePolicy;
-use orion_error::prelude::*;
-use orion_error::{StructError, UvsReason};
-use orion_error::reason::ErrorCategory;
 
-let err = StructError::from(UvsReason::system_error())
-    .with_detail("read config failed")
-    .doing("load config");
+let err = StructError::from(ApiReason::system_error())
+    .with_detail("disk offline at /dev/sda");
 
-let identity = err.identity_snapshot();
 let proto = err.exposure_snapshot(&DefaultExposurePolicy);
-let user_debug = proto.render_user_debug();
 
-assert_eq!(identity.code, "sys.io_error");
-assert_eq!(identity.category, ErrorCategory::Sys);
-assert!(user_debug.contains("sys.io_error"));
+// HTTP 响应——最小字段，对外安全
+let http = proto.to_http_error_json().unwrap();
+assert_eq!(http["status"], 500);                // 内部错误
+assert_eq!(http["message"], "system error");    // 用 reason，不用 detail
+
+// 日志输出——完整上下文，方便排查
+let log = proto.to_log_error_json().unwrap();
+assert_eq!(log["detail"], "disk offline at /dev/sda");  // 完整 detail
+assert!(log["source_frames"].is_array());                  // source 链
+
+// RPC 响应——隐藏内部细节
+let rpc = proto.to_rpc_error_json().unwrap();
+assert_eq!(rpc["detail"], serde_json::Value::Null); // internal → 隐藏 detail
+
+// CLI 输出——人类可读摘要
+let cli = proto.to_cli_error_json().unwrap();
+assert_eq!(cli["summary"], "system error: disk offline at /dev/sda");
 ```
 
-这几层的职责分别是：
+**核心概念**：错误是一个三维物体，每个协议边界看到的是它投下的不同形状的影子。`ExposurePolicy` 决定哪一面对外可见。
 
-- `identity_snapshot()`：稳定身份视图
-- `exposure_snapshot(...)`：最完整的协议输入（携带 identity + decision + report）
-- `proto.render_user_debug()`：用户调试摘要
+```
+      错误本身（StructError<R>）
+              │
+    ┌─────────┼──────────┐
+    │         │          │
+    ▼         ▼          ▼
+  HTTP      RPC        Log
+  {status,  {code,     {code, detail,
+   message}  detail}    source_frames}
+```
 
-这里建议把协议边界相关导入放在 `orion_error::protocol::*`，把给人看的诊断导入放在 `orion_error::report::*`。
-- `proto.to_http_error_json()` 等：出口 JSON 投影
+### 6.3 入口选择
+
+- `identity_snapshot()`：只看稳定身份
+- `exposure_snapshot(...)`：完整协议输入（identity + decision + report）
+- `to_*_error_json()`：协议边界出口 JSON
 
 ## 7. 测试建议
 
