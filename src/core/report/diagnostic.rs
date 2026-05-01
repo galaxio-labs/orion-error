@@ -16,6 +16,7 @@ pub(crate) struct ReportProjectionParts {
 }
 
 impl ReportProjectionParts {
+    #[allow(dead_code)]
     fn from_identity_skeleton(identity: &ErrorIdentity) -> Self {
         Self {
             path: identity.path.clone(),

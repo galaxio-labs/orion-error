@@ -17,6 +17,14 @@ run_case \
   cargo test --lib --tests
 
 run_case \
+  "no-default-features (doc)" \
+  cargo test --doc --no-default-features
+
+run_case \
+  "derive (doc)" \
+  cargo test --doc --no-default-features --features derive
+
+run_case \
   "serde" \
   cargo test --lib --tests --no-default-features --features serde,derive
 
@@ -27,6 +35,22 @@ run_case \
 run_case \
   "tracing" \
   cargo test --lib --tests --no-default-features --features tracing,derive
+
+run_case \
+  "serde only (no derive)" \
+  cargo test --lib --tests --no-default-features --features serde
+
+run_case \
+  "serde_json only (no derive)" \
+  cargo test --lib --tests --no-default-features --features serde_json,serde
+
+run_case \
+  "anyhow" \
+  cargo test --lib --tests --no-default-features --features anyhow,derive
+
+run_case \
+  "toml" \
+  cargo test --lib --tests --no-default-features --features toml,derive
 
 run_case \
   "all-features" \

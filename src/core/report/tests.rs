@@ -10,9 +10,11 @@
     use crate::reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
 
     use super::{
-        DiagnosticReport, ErrorProtocolSnapshot, ExposureDecision, ExposurePolicy, RedactPolicy,
+        DiagnosticReport, ErrorProtocolSnapshot, ExposureDecision, RedactPolicy,
         ReportProjectionParts, Visibility,
     };
+    #[cfg(feature = "serde_json")]
+    use super::ExposurePolicy;
     #[derive(Debug)]
     struct TestPolicy;
 

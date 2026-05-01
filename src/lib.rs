@@ -157,7 +157,8 @@
 //! let _ = proto.report();
 //! ```
 //!
-//! ```rust
+//! ```rust,ignore
+//! // This example requires the `derive` feature (enabled by default).
 //! use orion_error::OrionError;
 //! use orion_error::reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
 //!

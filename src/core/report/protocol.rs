@@ -210,6 +210,7 @@ impl ErrorProtocolSnapshot {
     ///
     /// Prefer `StructError::exposure_snapshot(...)` for normal business code
     /// and boundary output.
+    #[allow(dead_code)]
     pub(crate) fn from_report_skeleton(
         report: DiagnosticReport,
         identity: ErrorIdentity,
