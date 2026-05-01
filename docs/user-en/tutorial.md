@@ -60,7 +60,7 @@ fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
         .with_field("path", path);
 
     std::fs::read_to_string(path)
-        .into_as(AppReason::from(UvsReason::system_error()), "read failed")
+        .into_as(AppReason::system_error(), "read failed")
         .doing("read file")
         .with_context(&ctx)
 }

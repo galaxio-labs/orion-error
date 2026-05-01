@@ -76,7 +76,7 @@ fn load_config() -> Result<String, StructError<AppReason>> {
         .with_meta("component.name", "config_loader");
 
     std::fs::read_to_string("config.toml")
-        .into_as(AppReason::from(UvsReason::system_error()), "read config failed")
+        .into_as(AppReason::system_error(), "read config failed")
         .doing("read config file")
         .with_context(&ctx)
 }
@@ -341,7 +341,7 @@ fn repo_call() -> Result<(), StructError<UvsReason>> {
 }
 
 let wrapped = repo_call()
-    .wrap_as(AppReason::from(UvsReason::system_error()), "service layer failed");
+    .wrap_as(AppReason::system_error(), "service layer failed");
 
 assert_eq!(
     wrapped.unwrap_err().detail().as_deref(),

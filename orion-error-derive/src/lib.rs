@@ -8,7 +8,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use syn::{
     parse_macro_input, spanned::Spanned, Attribute, Data, DeriveInput, Error, Expr, ExprLit,
-    ExprPath, Fields, Lit, LitStr, Result, Variant,
+    ExprPath, Fields, Ident, Lit, LitStr, Result, Variant,
 };
 
 #[proc_macro_derive(ErrorCode, attributes(orion_error))]
@@ -46,6 +46,12 @@ fn expand_orion_error(input: DeriveInput) -> TokenStream2 {
     let identity_provider = impl_error_identity_provider(input.clone());
     let domain_reason = impl_domain_reason(input.clone());
 
+    // Generate UvsReason delegate constructors if a transparent UvsReason variant exists
+    let uvs_ctors = impl_uvs_constructors(&input)
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+
     let mut out = TokenStream2::new();
     let mut errors = Vec::new();
     for result in [display, error_code, identity_provider, domain_reason] {
@@ -54,6 +60,7 @@ fn expand_orion_error(input: DeriveInput) -> TokenStream2 {
             Err(err) => errors.push(err),
         }
     }
+    out.extend(uvs_ctors);
 
     match errors.into_iter().reduce(|mut first, second| {
         first.combine(second);
@@ -70,3 +77,4 @@ include!("error_code.rs");
 include!("identity.rs");
 include!("attrs.rs");
 include!("patterns.rs");
+include!("constructors.rs");
