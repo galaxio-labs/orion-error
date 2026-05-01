@@ -207,7 +207,7 @@ assert_eq!(err.source_ref().unwrap().to_string(), "disk offline");
 - 普通 `StdError`
 - 已结构化的 `StructError<_>`
 
-如果你在少数场景下希望把 source 通道写得更显式，再使用：
+下面这些显式 API 属于底层/诊断/测试入口，不作为新业务代码主路径：
 
 - `with_std_source(...)`
 - `with_struct_source(...)`
@@ -525,4 +525,4 @@ assert_eq!(err.reason().error_code(), 201);
 - 只做 reason 收敛优先 `err_conv()`
 - 需要稳定导出时使用 `snapshot().stable_export()`
 - 需要对外协议时使用 `exposure_snapshot(...)` 或 projection API
-- 需要进入标准错误生态时使用显式 bridge API
+- 需要进入标准错误生态时使用显式 interop API

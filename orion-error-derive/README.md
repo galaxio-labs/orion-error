@@ -12,7 +12,7 @@ Most users should depend on `orion-error` and use its default `derive` feature:
 
 ```toml
 [dependencies]
-orion-error = "0.7.0"
+orion-error = "0.8"
 ```
 
 Use this crate directly only when you need to pin or inspect the proc-macro crate separately.

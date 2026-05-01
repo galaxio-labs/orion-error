@@ -23,7 +23,7 @@
 
 ## 2. 稳定身份
 
-稳定身份结构是 [`ErrorIdentity`](/Users/zuowenjian/devspace/wp-labs/dev/crates/orion-error/src/core/snapshot.rs:134)。
+稳定身份结构是 `snapshot::ErrorIdentity`。
 
 字段：
 
@@ -54,7 +54,7 @@
 
 ## 3. Exposure
 
-exposure 决策结构是 [`ExposureDecision`](/Users/zuowenjian/devspace/wp-labs/dev/crates/orion-error/src/core/report.rs:82)。
+exposure 决策结构是 `protocol::ExposureDecision`。
 
 字段：
 
@@ -83,13 +83,7 @@ exposure 决策结构是 [`ExposureDecision`](/Users/zuowenjian/devspace/wp-labs
 - `ExposurePolicy::decide(...)`
 - `StructError::exposure_snapshot(...)`
 - `StructError::into_exposure_snapshot(...)`
-- `ErrorProtocolSnapshot::from_report_skeleton(report, identity, policy)`
-
-说明：
-
-- `from_report_skeleton(...)` 适合“已有 report + identity，需要补一个协议骨架”的场景
-- 它更偏向测试、适配器和中间层拼装，不是正常业务主路径
-- 完整 projection 数据仍以 `StructError::exposure_snapshot(...)` 为主路径
+- 完整 projection 数据以 `StructError::exposure_snapshot(...)` 为主路径
 
 ## 4. `ErrorProtocolSnapshot`
 
@@ -99,13 +93,12 @@ exposure 决策结构是 [`ExposureDecision`](/Users/zuowenjian/devspace/wp-labs
 
 - `identity`
 - `decision`
-- 内嵌诊断 report（内部持有，不再向外暴露 `report()` 穿透）
+- 内嵌诊断 report，可通过 `report()` 只读访问
 
 入口：
 
 - `StructError::exposure_snapshot(...)`
 - `StructError::into_exposure_snapshot(...)`
-- `ErrorProtocolSnapshot::from_report_skeleton(report, identity, policy)`
 
 适用场景：
 

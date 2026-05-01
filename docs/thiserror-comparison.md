@@ -111,7 +111,7 @@ let err = std::fs::read_to_string("config.toml")
 - `with_source(...)`
 - `builder.source(...)`
 
-当你想在 call site 明确写出 source 通道时，也可以使用：
+下面这些显式 API 只在维护旧代码、测试 source 分类或调试 auto-routing 时使用：
 
 - `with_std_source(...)`
 - `with_struct_source(...)`

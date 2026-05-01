@@ -155,11 +155,11 @@ That matters because large systems usually fail at the boundary:
 
 `orion-error` gives those boundaries one consistent projection model.
 
-## Standard Error Bridge
+## Standard Error Interop
 
 `StructError<R>` no longer directly implements `std::error::Error`.
 
-Use the explicit bridge APIs when you need that ecosystem:
+Use the explicit interop APIs when you need that ecosystem:
 
 ```rust
 use orion_error::{StructError, UvsReason};

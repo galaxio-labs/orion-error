@@ -69,7 +69,6 @@ fn test_layered_modules_and_root_prelude_compile() {
 #[cfg(feature = "serde_json")]
 #[test]
 fn test_dev_prelude_exports_cli_projection_types() {
-    use orion_error::dev::prelude::*;
     use orion_error::protocol::DefaultExposurePolicy;
     use orion_error::{StructError, UvsReason};
 

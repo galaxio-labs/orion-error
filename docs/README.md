@@ -11,15 +11,16 @@
 3. [变更记录](../CHANGELOG.md)
 4. [使用教程](./tutorial.md)
 5. [OrionError 与稳定身份](./reason-identity-guide.md)
-6. [协议契约](./protocol-contract.md)
-7. [Stable Snapshot Schema](./stable-snapshot-schema.md)
-8. [Report / Exposure Boundary](./report-exposure-boundary.md)
-9. [日志说明](./LOGGING.md)
-10. [与 thiserror 的关系](./thiserror-comparison.md)
-11. [0.8 Breaking Plan](./0.8-breaking-plan.md)
-12. [0.9 Design Plan](./0.9-design-plan.md)
-13. [Public Surface Grading](./public-surface-grading.md)
-14. [Release Checklist](./release-checklist.md)
+6. [0.8 API Contract](./api-contract.md)
+7. [协议契约](./protocol-contract.md)
+8. [Stable Snapshot Schema](./stable-snapshot-schema.md)
+9. [Report / Exposure Boundary](./report-exposure-boundary.md)
+10. [日志说明](./LOGGING.md)
+11. [与 thiserror 的关系](./thiserror-comparison.md)
+12. [0.8 Breaking Plan](./0.8-breaking-plan.md)
+13. [0.9 Design Plan](./0.9-design-plan.md)
+14. [Public Surface Grading](./public-surface-grading.md)
+15. [Release Checklist](./release-checklist.md)
 
 ## 当前质量锁
 
@@ -31,7 +32,7 @@
   - 锁住 root 不再重新暴露 trait 形态 `ErrorIdentityProvider`
 - layered export regression tests
   - 锁住 root / `prelude` / `runtime` / `conversion` / `snapshot` / `report` /
-    `bridge` / `reason` 的当前职责边界
+    `protocol` / `interop` / `reason` 的当前职责边界
 - feature matrix
   - `bash scripts/check-feature-matrix.sh`
 - docs code compile
@@ -59,6 +60,7 @@
 - 领域 reason 定义：`#[derive(OrionError)]`
 - 普通错误第一次进入结构化体系：`into_as(...)`
 - 已结构化错误跨层包装：`wrap_as(...)`
+- source 挂载：`with_source(...)` / `StructErrorBuilder::source(...)`
 - 完整上下文：`with_context(...)`
 - 语义上下文：`doing(...)` / `at(...)`
 - 稳定导出：`snapshot().stable_export()`
@@ -110,7 +112,7 @@
 ## 设计边界
 
 - `StructError<R>` 不再直接实现 `std::error::Error`。
-- 标准错误生态边界通过显式 bridge API 进入：
+- 标准错误生态边界通过显式 interop API 进入：
   - `as_std()`
   - `into_std()`
   - `into_boxed_std()`

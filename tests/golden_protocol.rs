@@ -9,17 +9,10 @@
 use orion_error::{
     prelude::*,
     protocol::DefaultExposurePolicy,
-    reason::{ErrorCategory, UvsReason},
+    reason::UvsReason,
     runtime::{OperationContext, StructError},
     snapshot::StableErrorSnapshot,
 };
-
-/// A reason enum for testing.
-#[derive(Debug, Clone, PartialEq, OrionError)]
-enum TestReason {
-    #[orion_error(identity = "biz.test_reason")]
-    TestReason,
-}
 
 // ---------------------------------------------------------------------------
 // Helpers

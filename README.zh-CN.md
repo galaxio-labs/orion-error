@@ -162,7 +162,7 @@ StructError<ServiceReason>
 
 `StructError<R>` 现在不再直接实现 `std::error::Error`。
 
-如果某个边界必须进入标准错误生态，走 bridge API：
+如果某个边界必须进入标准错误生态，走 interop API：
 
 ```rust
 use orion_error::{StructError, UvsReason};
