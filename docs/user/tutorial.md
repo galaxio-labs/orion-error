@@ -371,7 +371,7 @@ enum ServiceReason {
 }
 
 fn lower_layer_call() -> Result<(), StructError<RepoReason>> {
-    Err(StructError::from(RepoReason::from(UvsReason::system_error()))
+    Err(RepoReason::system_error().to_err()
         .with_detail("read config failed"))
 }
 

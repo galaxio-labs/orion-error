@@ -171,8 +171,7 @@ fn persist_order(item: &str) -> Result<(), StoreError> {
             .to_err()
             .with_detail("storage quota exceeded")
             .with_source(err),
-        _ => StoreReason::from(UvsReason::system_error())
-            .to_err()
+        _ => StoreReason::system_error().to_err()
             .with_detail("write order record failed")
             .with_source(err),
     })
