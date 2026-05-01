@@ -166,7 +166,7 @@ impl<K: AsRef<str>, V: AsRef<str>> From<(K, V)> for CallContext {
 /// Unlike [`ErrorWith::with_context`](crate::traits::ErrorWith::with_context),
 /// which is a builder-pattern (consumes `self`, returns `Self`), this trait
 /// mutates in place (`&mut self`). Prefer public APIs such as
-/// `with_context(...)` and `record_field(...)` for new code; `add_context`
+/// `with_context(...)` and builder methods (`with_field`, `with_meta`) for new code; `add_context`
 /// is an internal compatibility helper for implementations that already have
 /// a mutable reference.
 ///
@@ -181,8 +181,8 @@ impl<K: AsRef<str>, V: AsRef<str>> From<(K, V)> for CallContext {
 /// ```rust
 /// use orion_error::OperationContext;
 ///
-/// let mut ctx = OperationContext::doing("load");
-/// ctx.record_field("tenant", "acme");
+/// let ctx = OperationContext::doing("load")
+///     .with_field("tenant", "acme");
 ///
 /// assert!(format!("{ctx}").contains("tenant: acme"));
 /// ```

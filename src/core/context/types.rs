@@ -425,6 +425,9 @@ impl OperationContext {
     ///
     /// The entry will appear in the error's `Display` output.
     /// For typed metadata hidden from console output, use [`record_meta()`] instead.
+    ///
+    /// Prefer [`with_field`](Self::with_field) for chained construction;
+    /// `record_field` is for when you already have a mutable reference.
     pub fn record_field<K, V>(&mut self, key: K, val: V)
     where
         K: Into<String>,
@@ -455,6 +458,9 @@ impl OperationContext {
     ///
     /// Use this for structured fields intended for serialization, snapshots, or
     /// API responses. For user-visible context entries, use [`record_field()`].
+    ///
+    /// Prefer [`with_meta`](Self::with_meta) for chained construction;
+    /// `record_meta` is for when you already have a mutable reference.
     pub fn record_meta<K, V>(&mut self, key: K, value: V)
     where
         K: Into<String>,

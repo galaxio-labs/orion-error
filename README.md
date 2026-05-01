@@ -87,8 +87,8 @@ enum AppReason {
 }
 
 fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
-    let mut ctx = OperationContext::doing("load_config");
-    ctx.record_field("path", path);
+    let ctx = OperationContext::doing("load_config")
+        .with_field("path", path);
 
     std::fs::read_to_string(path)
         .into_as(AppReason::from(UvsReason::system_error()), "read config failed")

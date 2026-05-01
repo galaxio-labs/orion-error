@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 #[cfg_attr(feature = "serde", serde(transparent))]
 /// Typed structured metadata attached to an error context.
 ///
-/// Unlike [`OperationContext::record_field`](crate::OperationContext::record_field)
+/// Unlike [`OperationContext::with_field`](crate::OperationContext::with_field)
 /// and [`OperationContext::record`](crate::OperationContext::record), whose
 /// entries appear in the error's `Display` output, metadata stored here is **not** visible in
 /// terminal output. It is intended for programmatic consumers: serialization,

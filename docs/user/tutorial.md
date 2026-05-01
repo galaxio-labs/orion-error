@@ -71,9 +71,9 @@ enum AppReason {
 }
 
 fn load_config() -> Result<String, StructError<AppReason>> {
-    let mut ctx = OperationContext::doing("load config");
-    ctx.record_field("path", "config.toml");
-    ctx.record_meta("component.name", "config_loader");
+    let ctx = OperationContext::doing("load config")
+        .with_field("path", "config.toml")
+        .with_meta("component.name", "config_loader");
 
     std::fs::read_to_string("config.toml")
         .into_as(AppReason::from(UvsReason::system_error()), "read config failed")
@@ -221,17 +221,18 @@ assert_eq!(err.source_ref().unwrap().to_string(), "disk offline");
 ```rust
 use orion_error::OperationContext;
 
-let mut ctx = OperationContext::doing("place_order");
-ctx.record_field("order_id", "A-1001");
-ctx.record_field("user_id", "42");
-ctx.record_meta("component.name", "order_service");
-ctx.record_meta("tenant.id", "demo");
+let ctx = OperationContext::doing("place_order")
+    .with_field("order_id", "A-1001")
+    .with_field("user_id", "42")
+    .with_meta("component.name", "order_service")
+    .with_meta("tenant.id", "demo");
 ```
 
 推荐区分两类写法：
 
-- `record_field(...)`：给人看的诊断字段
-- `record_meta(...)`：机器消费的结构化 metadata
+- `with_field(...)`：给人看的诊断字段（chain 模式）
+- `with_meta(...)`：机器消费的结构化 metadata（chain 模式）
+- `record_field(...)` / `record_meta(...)`：当已有可变引用时使用
 
 ### 3.1 错误侧挂载上下文
 

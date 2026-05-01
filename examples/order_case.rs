@@ -91,11 +91,11 @@ struct OrderService;
 
 impl OrderService {
     fn place_order(user_id: u32, amount: u64, raw_order: &str) -> Result<OrderDraft, OrderError> {
-        let mut ctx = OperationContext::doing("place_order");
-        ctx.record_field("user_id", user_id.to_string());
-        ctx.record_field("order.raw", raw_order);
-        ctx.record_meta("component.name", "order_service");
-        ctx.record_meta("trace.secret", "prod-token");
+        let ctx = OperationContext::doing("place_order")
+            .with_field("user_id", user_id.to_string())
+            .with_field("order.raw", raw_order)
+            .with_meta("component.name", "order_service")
+            .with_meta("trace.secret", "prod-token");
 
         let draft = Self::parse_order(user_id, amount, raw_order)
             .doing("parse order")
