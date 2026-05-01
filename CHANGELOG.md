@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.8.1
+
+### Added
+
+- **`Upcast` trait** (renamed from `ErrorConv`) with deprecated `err_conv` compat alias
+- **`upcast_from!` macro** for internal crate-level `From<StructError<A>> for StructError<B>` generation
+- **`ErrorProtocolSnapshot::report()`** public getter for the embedded diagnostic report
+- **`convert_error()`** re-exported from crate root
+- **Import Strategy** and **Error Flow Paths** documentation in README (EN + ZH)
+- **9 golden protocol tests** covering stable_export, HTTP/RPC JSON, redaction, source frame metadata
+- **10 path_segments edge case tests** (empty chain, locator-only, repeated segments, pending locators, nested merge)
+- **2 snapshot round-trip tests** (StableSnapshotSourceFrame, StableSnapshotContextFrame)
+- **Derive attribute reference** (`orion-error-derive/ATTRIBUTES.md`)
+- **Design constraints document** (`docs/design-constraints.md`) explaining orphan rule limitation
+- **Ecosystem comparison** (`docs/ecosystem-comparison.md`) vs anyhow/thiserror/color-eyre
+
+### Performance
+
+- **#52/#53: Lazy `context` allocation** — `Arc<Vec<>>` → `Option<Arc<Vec<>>>`. `StructError::from(reason)`: 35.9→17.3 ns (-52%)
+- **#54: Lazy `Debug` formatting** — `SourceFrame.debug` → `Option<String>`. struct source attach: 2184.8→1177.8 ns (-46%)
+- **#55: SmolStr for SourceFrame strings** — `String` → `SmolStr`. frame clone: 93.4→11.5 ns (8x)
+
+### Changed
+
+- **`err_conv()` → `.upcast()`** — trait and method renamed. Old name available with `#[deprecated]`
+- **`error/` module restructured** — `include!` split → proper `carrier`/`builder`/`source_chain`/`std_bridge` modules
+- **`from_report_skeleton` → `pub(crate)`** — not part of public API
+- **`CallContext.items` → `pub(crate)`** — encapsulated
+- **`derive_more` → `[dev-dependencies]`** — no longer a library dependency
+
+### Removed
+
+- **`NullReason`** — placeholder type removed (use `UvsReason` directly)
+- **`error/source.rs` and `error/runtime.rs`** — merged into proper module structure
+- **`docs/archive/` → `docs/_archive/`** — hidden from user navigation
+
+### Docs
+
+- README EN/ZH synced with Import Strategy and Error Flow Paths
+- `RedactPolicy`, `ExposurePolicy`, `ContextAdd` doc comments with examples
+- `StableSnapshotContextFrame` conversion commented with design rationale
+- Feature-gated methods annotated with `Requires feature: "serde_json"`
+- `docs/_archive/rfc/` hidden (historical design docs)
+
+### CI
+
+- Release checklist extended with `cargo test --doc --no-default-features`
+- Feature matrix extended with doc-test and single-feature cases
+- Dead code warnings suppressed for test helper APIs
+- ExposurePolicy import in tests gated on `serde_json` feature
+
 ## 0.8.0
 
 本版是 API 收口版本：删除所有 `0.7.x` 已废弃（deprecated）的兼容路径，缩减根导出，清理公开模块。
