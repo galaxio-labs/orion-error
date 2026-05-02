@@ -31,7 +31,6 @@ orion-error = { version = "0.8.0", features = ["serde_json"] }
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UnifiedReason;
 use orion_error::runtime::OperationContext;
 ```
 
@@ -58,7 +57,6 @@ use orion_error::runtime::OperationContext;
 use derive_more::From;
 use orion_error::{
     prelude::*,
-    reason::UnifiedReason,
     runtime::OperationContext,
 };
 
@@ -275,7 +273,6 @@ assert!(result.is_err());
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::UnifiedReason;
 
 let err = std::fs::read_to_string("config.toml")
     .source_err(UnifiedReason::system_error(), "read config failed")
@@ -297,7 +294,6 @@ let err = std::fs::read_to_string("config.toml")
 ```rust
 use std::fmt;
 use orion_error::prelude::*;
-use orion_error::UnifiedReason;
 use orion_error::interop::{raw_source, RawStdError};
 
 #[derive(Debug)]
@@ -511,7 +507,6 @@ assert_eq!(cli["summary"], "system error: disk offline at /dev/sda");
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::UnifiedReason;
 use orion_error::reason::ErrorCategory;
 use orion_error::dev::testing::assert_err_identity;
 

@@ -280,7 +280,36 @@ let exposure = err.exposure(&policy);
 - 边界只记录一次失败，避免重复噪声。
 - 结构化字段可以被日志系统、监控系统和告警系统查询。
 
-`OperationContext` 也可以在需要生命周期日志的地方配合 `with_auto_log()` 使用，但它不应替代错误对象本身的结构化信息。推荐原则是：少量生命周期日志 + 边界错误投影，而不是每层重复 `error!`。
+### `OperationContext` 日志
+
+`OperationContext` 提供结构化日志方法，输出时自动带上当前操作的 field 和 metadata：
+
+```rust
+use orion_error::OperationContext;
+
+let ctx = OperationContext::doing("order_processing")
+    .with_field("order_id", "123")
+    .with_meta("component.name", "order_service");
+
+ctx.info("start");
+ctx.warn("slow upstream");
+ctx.error("final failure");
+```
+
+对于需要生命周期日志的作用域，使用 `with_auto_log()`：
+
+```rust
+let mut ctx = OperationContext::doing("sync_user")
+    .with_auto_log()
+    .with_field("user_id", "42");
+
+do_sync()?;
+ctx.mark_suc();
+```
+
+如果作用域在 Drop 前没有标记成功或取消，自动输出失败日志。更详细的用法参考 [日志说明](./LOGGING.md)。
+
+推荐原则：**少量生命周期日志 + 边界错误投影**，而不是每层重复 `error!`。
 
 ---
 

@@ -55,18 +55,7 @@ In short:
 orion-error = "0.8"
 ```
 
-Default features include `derive` and `log`.
-
-Common optional features:
-
-```toml
-[dependencies]
-orion-error = { version = "0.8", features = ["serde"] }
-orion-error = { version = "0.8", features = ["serde_json"] }
-orion-error = { version = "0.8", features = ["tracing"] }
-orion-error = { version = "0.8", features = ["anyhow"] }
-orion-error = { version = "0.8", features = ["toml"] }
-```
+Default features include `derive` and `log` — add a feature only when you need it.
 
 ## Quick Start
 
@@ -74,7 +63,6 @@ orion-error = { version = "0.8", features = ["toml"] }
 use derive_more::From;
 use orion_error::{
     prelude::*,
-    reason::UnifiedReason,
     runtime::OperationContext,
 };
 
@@ -163,7 +151,6 @@ That matters because large systems usually fail at the boundary:
 ```rust
 use orion_error::interop::{raw_source, RawStdError};
 use orion_error::prelude::*;
-use orion_error::UnifiedReason;
 
 #[derive(Debug)]
 struct MyError;
@@ -200,7 +187,6 @@ and you cannot implement `RawStdError` directly (orphan rule), use a newtype:
 ```rust
 use orion_error::interop::{raw_source, RawStdError};
 use orion_error::prelude::*;
-use orion_error::UnifiedReason;
 
 #[derive(Debug)]
 struct ForeignError;
@@ -269,7 +255,6 @@ or test/schema checks.
 
 Then add only the layered imports you need, for example:
 
-- `orion_error::reason::UnifiedReason`
 - `orion_error::runtime::OperationContext`
 - `orion_error::runtime::source::*`
 - `orion_error::report::*`
@@ -286,7 +271,6 @@ Three tiers:
 **Application code (default)**
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UnifiedReason;
 use orion_error::runtime::OperationContext;
 ```
 
@@ -338,6 +322,21 @@ raw std error / StructError ──→.source_err(reason, detail) ──→ first
 **3. `as_std() / into_std() / into_dyn_std()`** — exit point. Bridges the structured error
    into the `std::error::Error` ecosystem for interop or legacy interfaces. These are
    explicit; `StructError<T>` does not implement `StdError` directly.
+
+## Optional Features
+
+Add features only when your project needs them:
+
+```toml
+[dependencies]
+orion-error = { version = "0.8", features = ["serde"] }       # Serialize/Deserialize
+orion-error = { version = "0.8", features = ["serde_json"] }  # Protocol JSON projections
+orion-error = { version = "0.8", features = ["tracing"] }     # Tracing integration
+orion-error = { version = "0.8", features = ["anyhow"] }      # anyhow::Error interop
+orion-error = { version = "0.8", features = ["toml"] }        # toml::Error interop
+```
+
+`serde`, `serde_json`, `tracing`, `anyhow`, `toml` are optional. The default (`derive` + `log`) covers the core path.
 
 ## Try It
 

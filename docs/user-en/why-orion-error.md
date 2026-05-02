@@ -239,7 +239,36 @@ let exposure = err.exposure(&policy);
 
 The business code does not need to concatenate log strings at every layer. The boundary can log one structured view containing identity, reason, detail, context, and chain.
 
-`OperationContext` can still support lifecycle logging when needed, but it should not replace the structure in the error object itself.
+### `OperationContext` logging
+
+`OperationContext` provides structured log methods that automatically include current fields and metadata:
+
+```rust
+use orion_error::OperationContext;
+
+let ctx = OperationContext::doing("order_processing")
+    .with_field("order_id", "123")
+    .with_meta("component.name", "order_service");
+
+ctx.info("start");
+ctx.warn("slow upstream");
+ctx.error("final failure");
+```
+
+For lifecycle-scoped logging, use `with_auto_log()`:
+
+```rust
+let mut ctx = OperationContext::doing("sync_user")
+    .with_auto_log()
+    .with_field("user_id", "42");
+
+do_sync()?;
+ctx.mark_suc();
+```
+
+If the scope drops without `mark_suc()` or `mark_cancel()`, a failure log is emitted automatically. See [LOGGING.md](https://github.com/galaxio-labs/orion-error/blob/main/docs/user-en/LOGGING.md) for details.
+
+The principle: **sparse lifecycle logs + boundary error projection**, not repetitive `error!` at every layer.
 
 ---
 

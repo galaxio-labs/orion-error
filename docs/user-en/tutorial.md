@@ -27,7 +27,6 @@ Prefer one of these two approaches:
 **Application code (default):**
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UnifiedReason;
 use orion_error::runtime::OperationContext;
 ```
 
@@ -44,7 +43,6 @@ use orion_error::interop::*;       // std::error::Error bridge
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UnifiedReason;
 use orion_error::runtime::OperationContext;
 
 #[derive(Debug, Clone, PartialEq, OrionError)]
@@ -119,7 +117,6 @@ AppReason::validation_error()
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UnifiedReason;
 
 let err = StructError::from(UnifiedReason::validation_error())
     .with_detail("field `email` is required");
@@ -129,7 +126,6 @@ let err = StructError::from(UnifiedReason::validation_error())
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UnifiedReason;
 use orion_error::runtime::OperationContext;
 
 let ctx = OperationContext::doing("validate input");
@@ -144,7 +140,6 @@ let err = StructError::builder(UnifiedReason::validation_error())
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UnifiedReason;
 
 let err = StructError::from(UnifiedReason::system_error())
     .with_detail("read config failed")
@@ -159,7 +154,6 @@ Preferred APIs: `with_source(...)`, `builder.source(...)`. These auto-route betw
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UnifiedReason;
 use orion_error::runtime::OperationContext;
 
 let ctx = OperationContext::doing("place_order")
@@ -181,7 +175,6 @@ Attach context to an error:
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UnifiedReason;
 use orion_error::runtime::OperationContext;
 
 let ctx = OperationContext::doing("place_order")
@@ -211,7 +204,6 @@ Works for both raw `std::error::Error` and already-structured `StructError` sour
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UnifiedReason;
 
 let err = std::fs::read_to_string("config.toml")
     .source_err(UnifiedReason::system_error(), "read config failed")
@@ -229,7 +221,6 @@ use derive_more::From;
 use orion_error::conversion::ConvErr;
 use orion_error::conversion::ToStructError;
 use orion_error::prelude::*;
-use orion_error::reason::UnifiedReason;
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum RepoReason {

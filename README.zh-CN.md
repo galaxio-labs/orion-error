@@ -60,18 +60,7 @@
 orion-error = "0.8"
 ```
 
-默认 feature 包含 `derive` 和 `log`。
-
-常见可选 feature：
-
-```toml
-[dependencies]
-orion-error = { version = "0.8", features = ["serde"] }
-orion-error = { version = "0.8", features = ["serde_json"] }
-orion-error = { version = "0.8", features = ["tracing"] }
-orion-error = { version = "0.8", features = ["anyhow"] }
-orion-error = { version = "0.8", features = ["toml"] }
-```
+默认 feature 包含 `derive` 和 `log`——只有需要时才加 feature。
 
 ## 5 分钟上手
 
@@ -79,7 +68,6 @@ orion-error = { version = "0.8", features = ["toml"] }
 use derive_more::From;
 use orion_error::{
     prelude::*,
-    reason::UnifiedReason,
     runtime::OperationContext,
 };
 
@@ -166,7 +154,6 @@ StructError<ServiceReason>
 ```rust
 use orion_error::interop::{raw_source, RawStdError};
 use orion_error::prelude::*;
-use orion_error::UnifiedReason;
 
 #[derive(Debug)]
 struct MyError;
@@ -200,7 +187,6 @@ assert_eq!(err.source_ref().unwrap().to_string(), "my custom error");
 ```rust
 use orion_error::interop::{raw_source, RawStdError};
 use orion_error::prelude::*;
-use orion_error::UnifiedReason;
 
 #[derive(Debug)]
 struct ForeignError;
@@ -269,7 +255,6 @@ use orion_error::prelude::*;
 
 然后按需补少量分层导入，例如：
 
-- `orion_error::reason::UnifiedReason`
 - `orion_error::runtime::OperationContext`
 - `orion_error::runtime::source::*`
 - `orion_error::report::*`
@@ -285,7 +270,6 @@ use orion_error::prelude::*;
 **应用主路径（默认）**
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UnifiedReason;
 use orion_error::runtime::OperationContext;
 ```
 
@@ -334,6 +318,21 @@ metadata 全部保留。
 **3. `as_std() / into_std() / into_dyn_std()`** — 出口。把结构化错误桥接到
 `std::error::Error` 生态。这些调用是显式的；`StructError<T>` 不直接实现
 `StdError`。
+
+## 可选 Feature
+
+只有项目确实需要时才加：
+
+```toml
+[dependencies]
+orion-error = { version = "0.8", features = ["serde"] }       # Serialize/Deserialize
+orion-error = { version = "0.8", features = ["serde_json"] }  # Protocol JSON 投影
+orion-error = { version = "0.8", features = ["tracing"] }     # Tracing 集成
+orion-error = { version = "0.8", features = ["anyhow"] }      # anyhow::Error 互操作
+orion-error = { version = "0.8", features = ["toml"] }        # toml::Error 互操作
+```
+
+`serde`、`serde_json`、`tracing`、`anyhow`、`toml` 都是可选的。默认值（`derive` + `log`）覆盖核心路径。
 
 ## 直接试一下
 
