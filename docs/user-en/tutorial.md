@@ -108,7 +108,7 @@ enum OrderReason {
 
 If your domain reason has a transparent `UnifiedReason` variant, all `UnifiedReason` constructors are generated automatically:
 
-```rust
+```text
 AppReason::system_error()          // instead of AppReason::from(UnifiedReason::system_error())
 AppReason::validation_error()
 ```
@@ -118,6 +118,9 @@ AppReason::validation_error()
 ### 2.1 Direct Construction
 
 ```rust
+use orion_error::prelude::*;
+use orion_error::reason::UnifiedReason;
+
 let err = StructError::from(UnifiedReason::validation_error())
     .with_detail("field `email` is required");
 ```
@@ -125,6 +128,12 @@ let err = StructError::from(UnifiedReason::validation_error())
 ### 2.2 Builder
 
 ```rust
+use orion_error::prelude::*;
+use orion_error::reason::UnifiedReason;
+use orion_error::runtime::OperationContext;
+
+let ctx = OperationContext::doing("validate input");
+
 let err = StructError::builder(UnifiedReason::validation_error())
     .detail("field `email` is required")
     .context_ref(&ctx)
@@ -134,6 +143,9 @@ let err = StructError::builder(UnifiedReason::validation_error())
 ### 2.3 Attaching Source
 
 ```rust
+use orion_error::prelude::*;
+use orion_error::reason::UnifiedReason;
+
 let err = StructError::from(UnifiedReason::system_error())
     .with_detail("read config failed")
     .with_source(std::io::Error::other("disk offline"));
@@ -146,18 +158,45 @@ Preferred APIs: `with_source(...)`, `builder.source(...)`. These auto-route betw
 `OperationContext` carries runtime context:
 
 ```rust
+use orion_error::prelude::*;
+use orion_error::reason::UnifiedReason;
+use orion_error::runtime::OperationContext;
+
 let ctx = OperationContext::doing("place_order")
     .with_field("order_id", "A-1001")
     .with_field("user_id", "42")
     .with_meta("component.name", "order_service");
+
+let result: Result<(), StructError<UnifiedReason>> =
+    Err(StructError::from(UnifiedReason::system_error()));
+
+let result = result
+    .doing("check inventory")
+    .with_context(&ctx);
+
+assert!(result.is_err());
 ```
 
 Attach context to an error:
 
 ```rust
-let result = check_inventory()
+use orion_error::prelude::*;
+use orion_error::reason::UnifiedReason;
+use orion_error::runtime::OperationContext;
+
+let ctx = OperationContext::doing("place_order")
+    .with_field("order_id", "A-1001")
+    .with_field("user_id", "42")
+    .with_meta("component.name", "order_service");
+
+let result: Result<(), StructError<UnifiedReason>> =
+    Err(StructError::from(UnifiedReason::system_error()));
+
+let result = result
     .doing("check inventory")
     .with_context(&ctx);
+
+assert!(result.is_err());
 ```
 
 Common field types:
@@ -171,6 +210,9 @@ Common field types:
 Works for both raw `std::error::Error` and already-structured `StructError` sources:
 
 ```rust
+use orion_error::prelude::*;
+use orion_error::reason::UnifiedReason;
+
 let err = std::fs::read_to_string("config.toml")
     .source_err(UnifiedReason::system_error(), "read config failed")
     .unwrap_err();
@@ -183,6 +225,28 @@ Supported source types: `std::io::Error`, `anyhow::Error` (with `anyhow` feature
 When the upstream error is already structured and you only need to change the reason type:
 
 ```rust
+use derive_more::From;
+use orion_error::conversion::ConvErr;
+use orion_error::conversion::ToStructError;
+use orion_error::prelude::*;
+use orion_error::reason::UnifiedReason;
+
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
+enum RepoReason {
+    #[orion_error(transparent)]
+    General(UnifiedReason),
+}
+
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
+enum ServiceReason {
+    #[orion_error(transparent)]
+    Repo(RepoReason),
+}
+
+fn lower_layer_call() -> Result<(), StructError<RepoReason>> {
+    Err(RepoReason::system_error().to_err().with_detail("read config failed"))
+}
+
 fn upper_layer_call() -> Result<(), StructError<ServiceReason>> {
     lower_layer_call().conv_err()?;
     Ok(())
@@ -208,6 +272,19 @@ Standard Error interop: `as_std()`, `into_std()`, `into_boxed_std()`, `into_dyn_
 Each error variant has a permanent machine-readable name:
 
 ```rust
+use orion_error::{OrionError, StructError};
+use orion_error::reason::ErrorIdentityProvider;
+use orion_error::protocol::DefaultExposurePolicy;
+use orion_error::UnifiedReason;
+
+#[derive(Debug, PartialEq, OrionError)]
+enum ApiReason {
+    #[orion_error(identity = "biz.invalid_input")]
+    InvalidInput,
+    #[orion_error(transparent)]
+    General(UnifiedReason),
+}
+
 assert_eq!(ApiReason::InvalidInput.stable_code(), "biz.invalid_input");
 assert_eq!(ApiReason::InvalidInput.error_category().as_str(), "biz");
 ```
@@ -221,6 +298,21 @@ The identity prefix (`biz`, `sys`, `conf`, `logic`) also determines the default 
 The same error produces different JSON shapes for different protocol boundaries:
 
 ```rust
+use orion_error::{OrionError, StructError};
+use orion_error::protocol::DefaultExposurePolicy;
+use orion_error::UnifiedReason;
+
+#[derive(Debug, PartialEq, OrionError)]
+enum ApiReason {
+    #[orion_error(identity = "biz.invalid_input")]
+    InvalidInput,
+    #[orion_error(transparent)]
+    General(UnifiedReason),
+}
+
+let err = StructError::from(ApiReason::system_error())
+    .with_detail("disk offline at /dev/sda");
+
 let proto = err.exposure(&DefaultExposurePolicy);
 
 // HTTP response — minimal, safe for external clients
@@ -240,7 +332,9 @@ proto.to_cli_error_json();
 
 ```rust
 use orion_error::dev::testing::assert_err_identity;
+use orion_error::prelude::SourceErr;
 use orion_error::reason::ErrorCategory;
+use orion_error::reason::UnifiedReason;
 
 let err = std::fs::read_to_string("config.toml")
     .source_err(UnifiedReason::system_error(), "read config failed")

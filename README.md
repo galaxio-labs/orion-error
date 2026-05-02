@@ -162,6 +162,8 @@ That matters because large systems usually fail at the boundary:
 
 ```rust
 use orion_error::interop::{raw_source, RawStdError};
+use orion_error::prelude::*;
+use orion_error::UnifiedReason;
 
 #[derive(Debug)]
 struct MyError;
@@ -181,7 +183,7 @@ impl RawStdError for MyError {}
 let result: Result<(), MyError> = Err(MyError);
 let err = result
     .map_err(raw_source)
-    .source_err(AppReason::system_error(), "my operation failed")
+    .source_err(UnifiedReason::system_error(), "my operation failed")
     .unwrap_err();
 
 assert_eq!(err.source_ref().unwrap().to_string(), "my custom error");
@@ -197,8 +199,21 @@ and you cannot implement `RawStdError` directly (orphan rule), use a newtype:
 
 ```rust
 use orion_error::interop::{raw_source, RawStdError};
+use orion_error::prelude::*;
+use orion_error::UnifiedReason;
 
-struct WrappedError(reqwest::Error);
+#[derive(Debug)]
+struct ForeignError;
+
+impl std::fmt::Display for ForeignError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "foreign failure")
+    }
+}
+impl std::error::Error for ForeignError {}
+
+#[derive(Debug)]
+struct WrappedError(ForeignError);
 
 impl std::fmt::Display for WrappedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -209,10 +224,13 @@ impl std::error::Error for WrappedError {}
 impl RawStdError for WrappedError {}
 
 // Usage
-let result: Result<(), WrappedError> = Err(WrappedError(error));
+let result: Result<(), WrappedError> = Err(WrappedError(ForeignError));
 let err = result
     .map_err(raw_source)
-    .source_err(AppReason::system_error(), "api call failed")?;
+    .source_err(UnifiedReason::system_error(), "api call failed")
+    .unwrap_err();
+
+assert_eq!(err.source_ref().unwrap().to_string(), "foreign failure");
 ```
 
 ## Standard Error Interop

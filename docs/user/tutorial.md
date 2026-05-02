@@ -328,6 +328,7 @@ let err = result
 use derive_more::From;
 use orion_error::{OrionError, StructError, UnifiedReason};
 use orion_error::conversion::ConvErr;
+use orion_error::conversion::ToStructError;
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum RepoReason {
@@ -404,7 +405,10 @@ assert_eq!(report.reason(), "system error");
 每个错误变体都有一个**永久的机器可读名称**，不随文案或重构改变：
 
 ```rust
-#[derive(OrionError)]
+use orion_error::{OrionError, StructError};
+use orion_error::reason::ErrorIdentityProvider;
+
+#[derive(Debug, PartialEq, OrionError)]
 enum ApiReason {
     #[orion_error(identity = "biz.invalid_input")]
     InvalidInput,
@@ -423,12 +427,12 @@ assert_eq!(ApiReason::InvalidInput.error_category().as_str(), "biz");
 | `100`（数值码可能冲突） | `"biz.invalid_input"`（带命名空间） |
 | `ApiReason::InvalidInput`（Rust 路径可能重构） | `"biz.invalid_input"`（独立于源代码） |
 
-```
+```text
     biz    .    invalid_input
    ────         ────────────
-  category      stable code
-  (conf/biz     不变的业务语义
-   /logic/sys)
+   category      stable code
+   (conf/biz     不变的业务语义
+    /logic/sys)
 ```
 
 ### 6.2 协议投影
@@ -436,7 +440,17 @@ assert_eq!(ApiReason::InvalidInput.error_category().as_str(), "biz");
 同一个错误，对不同的协议边界输出**不同的 JSON 形状**，不需要手写映射：
 
 ```rust
+use orion_error::{OrionError, StructError};
 use orion_error::protocol::DefaultExposurePolicy;
+use orion_error::UnifiedReason;
+
+#[derive(Debug, PartialEq, OrionError)]
+enum ApiReason {
+    #[orion_error(identity = "biz.invalid_input")]
+    InvalidInput,
+    #[orion_error(transparent)]
+    General(UnifiedReason),
+}
 
 let err = StructError::from(ApiReason::system_error())
     .with_detail("disk offline at /dev/sda");
@@ -455,7 +469,7 @@ assert!(log["source_frames"].is_array());                  // source 链
 
 // RPC 响应——隐藏内部细节
 let rpc = proto.to_rpc_error_json().unwrap();
-assert_eq!(rpc["detail"], serde_json::Value::Null); // internal → 隐藏 detail
+assert!(rpc["detail"].is_null()); // internal → 隐藏 detail
 
 // CLI 输出——人类可读摘要
 let cli = proto.to_cli_error_json().unwrap();
@@ -464,7 +478,7 @@ assert_eq!(cli["summary"], "system error: disk offline at /dev/sda");
 
 **核心概念**：错误是一个三维物体，每个协议边界看到的是它投下的不同形状的影子。`ExposurePolicy` 决定哪一面对外可见。
 
-```
+```text
       错误本身（StructError<R>）
               │
     ┌─────────┼──────────┐
