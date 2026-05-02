@@ -25,7 +25,6 @@
 - `StructErrorBuilder::source(...)`
 - `report()`
 - `render()`
-- `snapshot().stable_export()`
 - `identity_snapshot()`
 - `exposure(...)`
 - `source_err(...)`
@@ -69,7 +68,6 @@
 - `dev::testing::*`
 - `interop::*`
 - `runtime::source::*`
-- snapshot / stable snapshot 之间的兼容转换路径
 
 特征：
 

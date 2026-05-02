@@ -22,7 +22,7 @@ Core building blocks:
 - one runtime carrier: `StructError<R>`
 - explicit first-entry conversion with `source_err(...)`
 - unified error entry point: .source_err(...)` for all source types
-- report, snapshot, and exposure helpers for service boundaries
+- report and exposure helpers for service boundaries
 
 [![CI](https://github.com/galaxio-labs/orion-error/workflows/CI/badge.svg)](https://github.com/galaxio-labs/orion-error/actions)
 [![Coverage Status](https://codecov.io/gh/galaxio-labs/orion-error/branch/main/graph/badge.svg)](https://codecov.io/gh/galaxio-labs/orion-error)
@@ -126,7 +126,7 @@ raw std error ──→.source_err(...) ──→ first entry into structured sy
                                     upcast()
                                 (reason remap)
                                           │
-                  report / snapshot / exposure
+                  report / exposure
 ```
 
 This is the important shift:
@@ -141,7 +141,7 @@ This is the important shift:
 When you reach HTTP/RPC/log/CLI boundaries, these are the main entry points:
 
 - `report()` for human-oriented diagnostics
-- `snapshot().stable_export()` for stable machine export
+- `identity_snapshot()` for stable identity inspection
 - `exposure(...)` with `to_http_error_json()`, `to_cli_error_json()`, `to_log_error_json()`, `to_rpc_error_json()`
 
 Current protocol naming is `Exposure*`, not `ErrorPolicy*`.
@@ -255,7 +255,7 @@ Then add only the layered imports you need, for example:
 - `orion_error::runtime::source::*`
 - `orion_error::report::*`
 - `orion_error::protocol::*`
-- `orion_error::snapshot::*`
+- `orion_error::protocol::*`
 
 This keeps normal application code on one predictable entry path while still
 letting larger codebases keep clear module boundaries where that extra
@@ -284,7 +284,7 @@ use orion_error::{prelude::*, conversion::*};
 // Protocol / boundary layer — output projection only
 use orion_error::protocol::*;
 use orion_error::report::{DiagnosticReport, RedactPolicy};
-use orion_error::snapshot::*;
+use orion_error::protocol::*;
 
 // Interop — when you must enter std::error::Error ecosystem
 use orion_error::interop::*;
@@ -306,7 +306,7 @@ raw std error / StructError ──→.source_err(reason, detail) ──→ first
                                                               upcast()
                                                           (reason remap)
                                                                     │
-                                          report / snapshot / exposure
+                                          report / exposure
 ```
 
 **1. .source_err(reason, detail)`** — unified entry point. Works for both raw
@@ -337,7 +337,7 @@ cargo run --example logging_example --features log
 - [Tutorial](./docs/user/tutorial.md)
 - [Reason Identity Guide](./docs/user/reason-identity-guide.md)
 - [Protocol Contract](./docs/user/protocol-contract.md)
-- [Stable Snapshot Schema](./docs/user/stable-snapshot-schema.md)
+- [Protocol Contract](./docs/user/protocol-contract.md)
 - [thiserror Comparison](./docs/user/thiserror-comparison.md)
 - [orion-error-derive README](./orion-error-derive/README.md)
 

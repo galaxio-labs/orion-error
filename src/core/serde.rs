@@ -226,7 +226,6 @@ mod tests {
         assert_eq!(value["reason"], serde_json::json!("system error"));
     }
 
-    #[test]
     // ── Tests from report.rs ──
     #[test]
     fn test_report_serialization_supports_structured_export() {

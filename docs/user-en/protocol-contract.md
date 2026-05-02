@@ -15,7 +15,7 @@ Roles:
 
 ## 2. Stable Identity
 
-`snapshot::ErrorIdentity`
+`ErrorIdentity`
 
 Fields:
 
@@ -137,7 +137,7 @@ Not: HTTP message, stable JSON schema.
 
 `DiagnosticReport` does not require `ErrorIdentityProvider`. Suitable for text rendering, redaction, human diagnostics.
 
-Entry: `StructError::report()`, `StructError::into_report()`, `ErrorSnapshot::report()`, `StableErrorSnapshot::report()`
+Entry: `StructError::report()`, `StructError::into_report()`
 
 ## 11. Recommended Consumption Path
 

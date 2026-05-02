@@ -23,7 +23,7 @@
 
 ## 2. 稳定身份
 
-稳定身份结构是 `snapshot::ErrorIdentity`。
+稳定身份结构是 `ErrorIdentity`。
 
 字段：
 
@@ -229,8 +229,7 @@ JSON 字段：
 
 - `StructError::report()`
 - `StructError::into_report()`
-- `ErrorSnapshot::report()`
-- `StableErrorSnapshot::report()`
+- `StructError::report()` / `into_report()`
 
 如果启用了 `serde_json` feature，还可以使用：
 

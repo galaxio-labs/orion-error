@@ -50,7 +50,7 @@ use orion_error::runtime::OperationContext;
 - `prelude::*` 只导出主路径：`OrionError`、`StructError`、`SourceErr`、`ErrorWith`、`ConvErr`
 - 新业务代码默认先用 `prelude::*`；只有在模块要显式表达 runtime / conversion / protocol 等边界时，再补 layered imports
 - `DefaultExposurePolicy` 只从 `protocol::*` 导入，因为它只属于 exposure/projection 边界
-- 需要更明确边界时，再按职责补 `runtime` / `conversion` / `snapshot` / `report` / `bridge` / `reason` / `protocol`
+- 需要更明确边界时，再按职责补 `runtime` / `conversion` / `report` / `bridge` / `reason` / `protocol`
 
 ## 一分钟上手
 
@@ -359,7 +359,7 @@ assert_eq!(err.detail().as_deref(), Some("read config failed"));
 
 - `R2: From<R1>`
 
-## 5. source、snapshot、report、bridge 的边界
+## 5. source、report、bridge 的边界
 
 ### 5.1 运行时对象
 
@@ -367,29 +367,7 @@ assert_eq!(err.detail().as_deref(), Some("read config failed"));
 
 - `StructError<R>`
 
-### 5.2 稳定导出对象
-
-稳定机器导出使用：
-
-- `ErrorSnapshot`
-- `StableErrorSnapshot`
-
-常用入口：
-
-```rust
-use orion_error::{StructError, UnifiedReason};
-
-let err = StructError::from(UnifiedReason::system_error())
-    .with_detail("read config failed");
-
-let snapshot = err.snapshot();
-let stable = snapshot.stable_export();
-
-assert_eq!(snapshot.reason, "system error");
-assert_eq!(stable.reason(), "system error");
-```
-
-### 5.3 人类诊断对象
+### 5.2 人类诊断对象
 
 人类诊断使用：
 
@@ -499,7 +477,7 @@ assert_eq!(cli["summary"], "system error: disk offline at /dev/sda");
 
 ### 6.3 入口选择
 
-- `identity_snapshot()`：只看稳定身份
+- `identity_snapshot()`：查看稳定身份
 - `exposure(...)`：完整协议输入（identity + decision + report）
 - `to_*_error_json()`：协议边界出口 JSON
 
@@ -546,6 +524,6 @@ assert_eq!(err.reason().error_code(), 201);
 - 对外稳定协议依赖 stable code，不依赖人类文案
 - 所有错误统一使用 `source_err(...)` 进入结构化体系
 - 只做 reason 收敛优先 `conv_err()`
-- 需要稳定导出时使用 `snapshot().stable_export()`
+- 需要协议暴露时使用 `exposure(&policy)`
 - 需要对外协议时使用 `exposure(...)` 或 projection API
 - 需要进入标准错误生态时使用显式 interop API

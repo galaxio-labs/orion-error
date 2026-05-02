@@ -36,7 +36,7 @@ use orion_error::runtime::OperationContext;
 use orion_error::prelude::*;
 use orion_error::conversion::*;    // cross-layer conversion
 use orion_error::protocol::*;      // boundary output
-use orion_error::snapshot::*;      // stable snapshot
+use orion_error::protocol::*;      // boundary output
 use orion_error::interop::*;       // std::error::Error bridge
 ```
 
@@ -196,8 +196,6 @@ Requires `ServiceReason: From<RepoReason>`.
 | Object | Purpose | Entry Point |
 |--------|---------|-------------|
 | `StructError<R>` | Runtime carrier | Propagation |
-| `ErrorSnapshot` | Rich snapshot (all data) | `err.snapshot()` |
-| `StableErrorSnapshot` | Stable machine export | `snapshot.stable_export()` |
 | `DiagnosticReport` | Human diagnostics | `err.report()` |
 | `ErrorProtocolSnapshot` | Protocol projection | `err.exposure(&policy)` |
 
@@ -258,6 +256,6 @@ Test helpers: `assert_err_code()`, `assert_err_category()`, `assert_err_identity
 - Define domain reasons with `#[derive(OrionError)]`
 - Use `source_err(reason, detail)` as the unified error entry point
 - Use `conv_err()` for cross-layer reason conversion
-- Use `snapshot().stable_export()` for stable machine export
+- Use `identity_snapshot()` for stable identity inspection
 - Use `exposure(...)` for protocol boundary output
 - Use explicit interop APIs when entering `std::error::Error` ecosystem
