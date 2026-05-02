@@ -40,7 +40,7 @@ use orion_error::snapshot::*;      // stable snapshot
 use orion_error::interop::*;       // std::error::Error bridge
 ```
 
-## 3-Minute Example
+## 1-Minute Example
 
 ```rust
 use orion_error::prelude::*;
@@ -57,7 +57,8 @@ enum AppReason {
 
 fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
     let ctx = OperationContext::doing("load_config")
-        .with_field("path", path);
+        .with_field("path", path)
+        .with_meta("component.name", "config_loader");
 
     std::fs::read_to_string(path)
         .source_err(AppReason::system_error(), "read failed")
@@ -66,102 +67,197 @@ fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
 }
 ```
 
-## The 4 APIs To Learn First
+This covers the four core points:
 
-1. `#[derive(OrionError)]` — Define stable business-facing reason enums.
-2. `source_err(reason, detail)` — Unified entry point: works for both raw `std::error::Error` and already-structured `StructError` sources.
-3. `conv_err()` — Cross-layer conversion preserving semantics. The upstream error is already `StructError<R1>`; you only remap the reason type.
+- Domain reason defined with `OrionError`
+- Error entry via `source_err(reason, detail)` (unified entry)
+- Semantic context via `doing(...)`
+- Diagnostic fields and metadata on `OperationContext`
 
-## Error Flow Paths
+## 1. Defining Reason
 
-```text
-raw std error / StructError ──→.source_err(reason, detail)
-                                      │
-                                 conv_err()
-                             (reason remap)
-                                      │
-               report / snapshot / exposure_snapshot
-```
+### 1.1 Domain Reason
 
-## Stable Identity
-
-Every error variant has a **stable machine-readable name** that never changes, even if the display text is updated:
+New code should use `#[derive(OrionError)]`:
 
 ```rust
-#[derive(OrionError)]
-enum ApiReason {
-    #[orion_error(identity = "biz.invalid_input")]
-    InvalidInput,
-}
+use orion_error::{OrionError, UvsReason};
 
-// This string is the contract — monitoring, clients, and gateways all rely on it:
+#[derive(Debug, Clone, PartialEq, OrionError)]
+enum OrderReason {
+    #[orion_error(identity = "biz.order_not_found")]
+    OrderNotFound,
+    #[orion_error(identity = "biz.insufficient_funds")]
+    InsufficientFunds,
+    #[orion_error(transparent)]
+    Uvs(UvsReason),
+}
+```
+
+`OrionError` generates: `Display`, `DomainReason`, `ErrorCode`, `ErrorIdentityProvider`.
+
+### 1.2 Universal Reason
+
+`UvsReason` is the built-in universal reason classification. Common constructors:
+
+- `UvsReason::validation_error()`, `UvsReason::business_error()`
+- `UvsReason::system_error()`, `UvsReason::network_error()`, `UvsReason::timeout_error()`
+- `UvsReason::core_conf()`, `UvsReason::logic_error()`
+
+### 1.3 Delegate Constructors
+
+If your domain reason has a transparent `UvsReason` variant, all `UvsReason` constructors are generated automatically:
+
+```rust
+AppReason::system_error()          // instead of AppReason::from(UvsReason::system_error())
+AppReason::validation_error()
+```
+
+## 2. Constructing StructError
+
+### 2.1 Direct Construction
+
+```rust
+let err = StructError::from(UvsReason::validation_error())
+    .with_detail("field `email` is required");
+```
+
+### 2.2 Builder
+
+```rust
+let err = StructError::builder(UvsReason::validation_error())
+    .detail("field `email` is required")
+    .context_ref(&ctx)
+    .finish();
+```
+
+### 2.3 Attaching Source
+
+```rust
+let err = StructError::from(UvsReason::system_error())
+    .with_detail("read config failed")
+    .with_source(std::io::Error::other("disk offline"));
+```
+
+Preferred APIs: `with_source(...)`, `builder.source(...)`. These auto-route between `StdError` and `StructError` source types.
+
+## 3. Using Context
+
+`OperationContext` carries runtime context:
+
+```rust
+let ctx = OperationContext::doing("place_order")
+    .with_field("order_id", "A-1001")
+    .with_field("user_id", "42")
+    .with_meta("component.name", "order_service");
+```
+
+Attach context to an error:
+
+```rust
+let result = check_inventory()
+    .doing("check inventory")
+    .with_context(&ctx);
+```
+
+Common field types:
+- `with_field(...)` — human-readable diagnostic entries (appears in Display output)
+- `with_meta(...)` — machine-oriented metadata (serialization only)
+
+## 4. Error Entry and Cross-Layer Conversion
+
+### 4.1 `source_err(reason, detail)` — Unified Entry
+
+Works for both raw `std::error::Error` and already-structured `StructError` sources:
+
+```rust
+let err = std::fs::read_to_string("config.toml")
+    .source_err(UvsReason::system_error(), "read config failed")
+    .unwrap_err();
+```
+
+Supported source types: `std::io::Error`, `anyhow::Error` (with `anyhow` feature), `serde_json::Error` (with `serde_json` feature), `toml::de::Error` / `toml::ser::Error` (with `toml` feature), and custom `RawStdError` types via `raw_source(...)`.
+
+### 4.2 `conv_err()` — Cross-Layer Reason Remap
+
+When the upstream error is already structured and you only need to change the reason type:
+
+```rust
+fn upper_layer_call() -> Result<(), StructError<ServiceReason>> {
+    lower_layer_call().conv_err()?;
+    Ok(())
+}
+```
+
+Requires `ServiceReason: From<RepoReason>`.
+
+## 5. Error Objects Summary
+
+| Object | Purpose | Entry Point |
+|--------|---------|-------------|
+| `StructError<R>` | Runtime carrier | Propagation |
+| `ErrorSnapshot` | Rich snapshot (all data) | `err.snapshot()` |
+| `StableErrorSnapshot` | Stable machine export | `snapshot.stable_export()` |
+| `DiagnosticReport` | Human diagnostics | `err.report()` |
+| `ErrorProtocolSnapshot` | Protocol projection | `err.exposure_snapshot(&policy)` |
+
+Standard Error interop: `as_std()`, `into_std()`, `into_boxed_std()`, `into_dyn_std()`.
+
+## 6. Stable Identity and Protocol Projection
+
+### 6.1 Stable Identity
+
+Each error variant has a permanent machine-readable name:
+
+```rust
 assert_eq!(ApiReason::InvalidInput.stable_code(), "biz.invalid_input");
 assert_eq!(ApiReason::InvalidInput.error_category().as_str(), "biz");
 ```
 
-Compare unstable vs stable:
-
-| Unstable | Stable |
-|----------|--------|
-| `"invalid input"` (display text may change) | `"biz.invalid_input"` (permanent) |
-| `100` (numeric code collision) | `"biz.invalid_input"` (namespaced) |
-| `ApiReason::InvalidInput` (Rust path may be refactored) | `"biz.invalid_input"` (independent of source code layout) |
+Stable identity never changes — unlike display text, numeric codes, or Rust paths.
 
 The identity prefix (`biz`, `sys`, `conf`, `logic`) also determines the default `ExposurePolicy` behaviour.
 
-## Protocol Projection
+### 6.2 Protocol Projection
 
-The same error produces **different JSON shapes** for different protocol boundaries — no manual mapping needed:
+The same error produces different JSON shapes for different protocol boundaries:
 
 ```rust
-use orion_error::protocol::DefaultExposurePolicy;
-
-let err = StructError::from(ApiReason::system_error())
-    .with_detail("disk offline at /dev/sda");
-
 let proto = err.exposure_snapshot(&DefaultExposurePolicy);
 
 // HTTP response — minimal, safe for external clients
-let http = proto.to_http_error_json().unwrap();
-assert_eq!(http["status"], 500);           // internal error
-assert_eq!(http["message"], "system error"); // uses reason, NOT detail
+proto.to_http_error_json();
 
 // Log output — full context for debugging
-let log = proto.to_log_error_json().unwrap();
-assert_eq!(log["detail"], "disk offline at /dev/sda");   // full detail
-assert!(log["source_frames"].is_array());                  // source chain
+proto.to_log_error_json();
 
 // RPC response — hides internal detail
-let rpc = proto.to_rpc_error_json().unwrap();
-assert_eq!(rpc["detail"], serde_json::Value::Null); // internal → detail hidden
+proto.to_rpc_error_json();
 
 // CLI output — human-readable summary
-let cli = proto.to_cli_error_json().unwrap();
-assert_eq!(cli["summary"], "system error: disk offline at /dev/sda");
+proto.to_cli_error_json();
 ```
 
-**The key insight**: the error is a 3D object; each protocol boundary sees a different 2D shadow. The `ExposurePolicy` decides which surface is visible to whom.
-
-## Stable Snapshot
+## 7. Testing
 
 ```rust
-let snapshot = err.snapshot();          // structured snapshot
-let stable: StableErrorSnapshot = snapshot.stable_export();  // versioned export
+use orion_error::dev::testing::assert_err_identity;
+use orion_error::reason::ErrorCategory;
+
+let err = std::fs::read_to_string("config.toml")
+    .source_err(UvsReason::system_error(), "read config failed")
+    .unwrap_err();
+
+assert_err_identity(&err, "sys.io_error", ErrorCategory::Sys);
 ```
 
-## Standard Error Interop
+Test helpers: `assert_err_code()`, `assert_err_category()`, `assert_err_identity()`, `assert_err_operation()`, `assert_err_path()`.
 
-`StructError<T>` does **not** implement `std::error::Error` directly. Use explicit bridge APIs:
+## 8. Best Practices
 
-```rust
-let std_err = err.as_std();            // borrow
-let owned_std = err.into_std();         // owned
-let dyn_std = err.into_dyn_std();       // type-erased
-```
-
-## Key Principles
-
-- Lower layers do not invent their own output shapes.
-- Middle layers do not lose source and context.
-- Boundary layers do not re-interpret raw strings.
-- The whole system shares one governance model.
+- Define domain reasons with `#[derive(OrionError)]`
+- Use `source_err(reason, detail)` as the unified error entry point
+- Use `conv_err()` for cross-layer reason conversion
+- Use `snapshot().stable_export()` for stable machine export
+- Use `exposure_snapshot(...)` for protocol boundary output
+- Use explicit interop APIs when entering `std::error::Error` ecosystem
