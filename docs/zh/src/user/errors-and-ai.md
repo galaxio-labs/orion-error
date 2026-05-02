@@ -2,7 +2,15 @@
 
 ## 错误处理为什么是瓶颈
 
-工业级代码中，错误处理通常占总开发工作量的 40-60%。这个比例在 Rust 中尤其明显——没有异常机制，没有 `try-catch`，每一处 `?` 都是一个人工决策点。
+工业级软件中，缺陷定位、修复和返工会占据很高的工程成本。已有研究和行业报告常把 finding/fixing bugs、avoidable rework 估计在 40-60% 量级；但这不等同于“错误处理代码本身占 40-60%”。错误治理真正关心的是：当失败发生时，分类是否稳定、上下文是否保留、边界输出是否一致、排障路径是否完整。
+
+几个可参考的数据点：
+
+- Hamill 和 Goseva-Popstojanova 在 NASA 故障修复研究中引用 Cambridge University 报告：开发者平均约 50% 时间用于 finding and fixing bugs；同一段还引用 Boehm/Basili 的 40-50% effort on avoidable rework。
+- Capers Jones 在 ASQ / Software Quality Professional 文章中总结，finding and fixing bugs 经常超过 60% total software effort。
+- Cabral 和 Marques 对 32 个 Java/.NET 应用的 field study 则显示，异常处理代码本身占源码比例并不高：Java 平均约 5%，.NET 平均约 3%，最高约 7%。
+
+所以本文讨论的不是“多写一些错误处理代码”，而是**用结构化错误机制降低缺陷定位、边界治理和跨层排障的成本**。Rust 中没有异常机制，没有 `try-catch`，每一处 `?` 都是一个传播决策点；如果这些决策没有结构，错误路径就会随代码规模一起失控。
 
 但问题不在于"需要写更多代码"，而在于**这些决策缺乏结构。** 一个典型的错误处理决策树：
 

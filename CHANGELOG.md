@@ -51,6 +51,10 @@
 ### Docs
 
 - README EN/ZH synced with Import Strategy and Error Flow Paths
+- 文档站迁移为中英文双 mdBook，并新增语言选择入口
+- 新增中英文架构页，说明 0.8.0 的设计目标、主路径 API 和边界模型
+- 新增中英文 “Error Governance and AI” 文档，澄清 40-60% 是缺陷定位/修复/返工成本口径，不是错误处理代码占比
+- 新增中文大型工程错误治理方法论
 - `RedactPolicy`, `ExposurePolicy`, `ContextAdd` doc comments with examples
 - `StableSnapshotContextFrame` conversion commented with design rationale
 - Feature-gated methods annotated with `Requires feature: "serde_json"`
