@@ -319,12 +319,11 @@ impl<T: DomainReason> StructError<T> {
             for (idx, frame) in frames.iter().enumerate() {
                 let indent = "   ".repeat(frame.index);
                 let prefix = if idx == frames.len() - 1 { "└─ " } else { "├─ " };
-                let msg = &frame.message;
-                let rest = frame.detail.as_deref().unwrap_or("");
-                if rest.is_empty() {
-                    out.push_str(&format!("\n  {indent}{prefix}{msg}"));
-                } else {
-                    out.push_str(&format!("\n  {indent}{prefix}{msg}: {rest}"));
+                out.push_str(&format!("\n  {indent}{prefix}{}", frame.message));
+                if let Some(detail) = &frame.detail {
+                    if !detail.is_empty() {
+                        out.push_str(&format!("\n  {indent}   {detail}"));
+                    }
                 }
             }
         }
