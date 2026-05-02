@@ -394,19 +394,15 @@ impl<T: DomainReason> StructError<T> {
         Err(self)
     }
 
-    fn context_slice(&self) -> &[OperationContext] {
-        self.imp.context.as_deref().map_or(&[], |v| v.as_ref())
-    }
-
     pub fn action_main(&self) -> Option<String> {
-        self.context_slice()
+        self.contexts()
             .iter()
             .rev()
             .find_map(|ctx| ctx.action().clone())
     }
 
     pub fn locator_main(&self) -> Option<String> {
-        self.context_slice()
+        self.contexts()
             .iter()
             .rev()
             .find_map(|ctx| ctx.locator().clone())
@@ -416,7 +412,7 @@ impl<T: DomainReason> StructError<T> {
         let mut path = Vec::new();
         let mut pending_locators: Vec<String> = Vec::new();
 
-        for ctx in self.context_slice().iter().rev() {
+        for ctx in self.contexts().iter().rev() {
             let locator_only = ctx.action().is_none()
                 && ctx.compat_target().is_none()
                 && ctx.locator().is_some()
@@ -501,7 +497,7 @@ impl<T: DomainReason> Display for StructError<T> {
             write!(f, "\n  -> Info: {detail}")?;
         }
 
-        let ctx_slice = self.context_slice();
+        let ctx_slice = self.contexts();
         if !ctx_slice.is_empty() {
             write!(f, "\n  -> Trace:")?;
             for (i, c) in ctx_slice.iter().rev().enumerate() {

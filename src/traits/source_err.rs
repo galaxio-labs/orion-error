@@ -317,7 +317,6 @@ mod tests {
     use std::{fmt, io};
 
     use super::{raw_source, RawStdError, SourceErr};
-    #[cfg(feature = "anyhow")]
     use crate::StructError;
     use crate::UvsReason;
 
@@ -398,5 +397,24 @@ mod tests {
             Some("invalid port")
         );
         assert_eq!(err.root_cause().unwrap().to_string(), "not a number");
+    }
+
+    #[test]
+    fn test_source_err_for_struct_error_source() {
+        // source_err works on Result<T, StructError<R1>> too (wraps as struct source)
+        let inner: Result<(), StructError<UvsReason>> =
+            Err(StructError::from(UvsReason::validation_error())
+                .with_detail("inner detail"));
+
+        let outer: Result<(), StructError<UvsReason>> =
+            inner.source_err(UvsReason::system_error(), "outer wrapper");
+
+        let err = outer.unwrap_err();
+        assert_eq!(err.detail().as_deref(), Some("outer wrapper"));
+
+        // The inner error becomes a structured source
+        let frames = err.source_frames();
+        assert_eq!(frames[0].message, "validation error");
+        assert_eq!(frames[0].detail.as_deref(), Some("inner detail"));
     }
 }
