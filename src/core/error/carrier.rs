@@ -335,6 +335,23 @@ impl<T: DomainReason> StructError<T> {
                     }
                 }
 
+                // Metadata (from with_meta calls)
+                if !frame.metadata.is_empty() {
+                    for (k, v) in frame.metadata.iter() {
+                        let val = match v {
+                            crate::core::metadata::MetadataValue::String(s) =>
+                                s.to_string(),
+                            crate::core::metadata::MetadataValue::Bool(b) =>
+                                b.to_string(),
+                            crate::core::metadata::MetadataValue::I64(i) =>
+                                i.to_string(),
+                            crate::core::metadata::MetadataValue::U64(u) =>
+                                u.to_string(),
+                        };
+                        out.push_str(&format!("\n  {indent}   {k}: {val}"));
+                    }
+                }
+
             }
         }
         out
