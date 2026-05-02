@@ -475,7 +475,7 @@ impl<T: DomainReason> Display for StructError<T> {
         }
 
         if let Some(path) = self.target_path() {
-            write!(f, "\n  -> Path: {path}")?;
+            write!(f, "\n  -> Call: {path}")?;
         }
 
         if let Some(detail) = &self.imp.detail {
@@ -488,11 +488,19 @@ impl<T: DomainReason> Display for StructError<T> {
 
         let ctx_slice = self.context_slice();
         if !ctx_slice.is_empty() {
-            writeln!(f, "\n  -> Context stack:")?;
+            let total = ctx_slice.len();
+            for (i, c) in ctx_slice.iter().rev().enumerate() {
+                // Outermost first: context 0 = most recent (outermost)
+                let label = c.action().as_deref().or_else(|| c.locator().as_deref())
+                    .unwrap_or("(operation)");
+                write!(f, "\n  {}: {label}", total - i - 1)?;
 
-            for (i, c) in ctx_slice.iter().enumerate() {
-                writeln!(f, "context {i}: ")?;
-                writeln!(f, "{c}")?;
+                // Fields indented under context
+                if !c.context().items.is_empty() {
+                    for (k, v) in &c.context().items {
+                        write!(f, "\n      {k}: {v}")?;
+                    }
+                }
             }
         }
 

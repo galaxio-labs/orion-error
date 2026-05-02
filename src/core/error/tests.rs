@@ -143,7 +143,7 @@
         );
 
         let display_output = format!("{error}");
-        assert!(display_output.contains("-> Path: place_order / read_order_payload / parse_order"));
+        assert!(display_output.contains("-> Call: place_order / read_order_payload / parse_order"));
     }
 
     #[test]

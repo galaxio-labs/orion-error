@@ -123,11 +123,11 @@ mod tests {
 
         assert!(display_output.contains("configuration error << core config"));
         assert!(display_output.contains("-> At: src/config.rs:42"));
-        assert!(display_output.contains("-> Path: database_config"));
+        assert!(display_output.contains("-> Call: database_config"));
         assert!(display_output.contains("-> Details: missing db config"));
-        assert!(display_output.contains("Context stack:"));
-        assert!(display_output.contains("1. step: initialization"));
-        assert!(display_output.contains("2. resource: database"));
+        assert!(display_output.contains("database_config"));
+        assert!(display_output.contains("step: initialization"));
+        assert!(display_output.contains("resource: database"));
     }
 
     #[test]

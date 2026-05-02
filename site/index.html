@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>orion-error - Structured error governance for Rust</title>
+    <meta
+      name="description"
+      content="orion-error is a structured error governance framework for large Rust codebases."
+    >
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">orion-error</span>
+        <span class="brand-sub">Structured error governance for Rust</span>
+      </div>
+      <nav class="topnav" aria-label="Primary">
+        <a href="#start">Start</a>
+        <a href="#apis">APIs</a>
+        <a href="#compare">Compare</a>
+        <a href="#docs">Docs</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" id="start">
+        <p class="eyebrow">A repo-native docs site</p>
+        <h1>One error language across layers, protocols, and teams.</h1>
+        <p class="lede">
+          orion-error keeps structure intact from first entry to boundary output:
+          stable identities, explicit source handling, layered conversion, and
+          protocol-aware rendering.
+        </p>
+
+        <div class="hero-points" aria-label="Key capabilities">
+          <div>Stable business identities with <code>#[derive(OrionError)]</code></div>
+          <div>First-entry source handling with <code>source_err(...)</code></div>
+          <div>Reason-only layer mapping with <code>conv_err()</code></div>
+          <div>Boundary export with <code>report()</code>, <code>snapshot()</code>, and <code>exposure_snapshot()</code></div>
+        </div>
+
+        <figure class="flow">
+          <img src="./assets/flow.svg" alt="Structured error flow from source to boundary outputs">
+        </figure>
+      </section>
+
+      <section class="band" id="apis">
+        <div class="section-head">
+          <p class="kicker">Core paths</p>
+          <h2>What to learn first</h2>
+        </div>
+
+        <div class="api-grid">
+          <article>
+            <h3><code>source_err(reason, detail)</code></h3>
+            <p>Use when an error enters the structured system or when a new semantic boundary is created and the upstream error should remain the source.</p>
+          </article>
+          <article>
+            <h3><code>conv_err()</code></h3>
+            <p>Use when a lower-layer <code>StructError</code> only needs reason remapping, without introducing a new boundary.</p>
+          </article>
+          <article>
+            <h3><code>to_err()</code></h3>
+            <p>Use when a single reason enum value needs to become a structured error immediately.</p>
+          </article>
+          <article>
+            <h3><code>with_field()</code> / <code>with_meta()</code></h3>
+            <p>Use for chained context construction. Keep <code>record_field()</code> and <code>record_meta()</code> for existing mutable references.</p>
+          </article>
+        </div>
+
+        <div class="snippet-grid">
+          <pre><code>let ctx = OperationContext::doing("load config")
+    .with_field("path", "config.toml")
+    .with_meta("component.name", "config_loader");</code></pre>
+          <pre><code>std::fs::read_to_string(path)
+    .source_err(AppReason::system_error(), "read config failed")?
+    .doing("read file")
+    .with_context(&ctx);</code></pre>
+        </div>
+      </section>
+
+      <section class="band" id="compare">
+        <div class="section-head">
+          <p class="kicker">Positioning</p>
+          <h2>Why this crate exists</h2>
+        </div>
+
+        <div class="compare-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tool</th>
+                <th>Best for</th>
+                <th>Limit</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>anyhow</td>
+                <td>Fast error handling and type erasure</td>
+                <td>No stable domain identity or policy-aware boundary model</td>
+              </tr>
+              <tr>
+                <td>thiserror</td>
+                <td>Local error enums and standard Error impls</td>
+                <td>No built-in context, protocol projection, or stable snapshot flow</td>
+              </tr>
+              <tr>
+                <td>color-eyre</td>
+                <td>Beautiful terminal diagnostics</td>
+                <td>Still a display layer, not a governance model</td>
+              </tr>
+              <tr>
+                <td>orion-error</td>
+                <td>Large Rust services with boundary contracts</td>
+                <td>More explicit by design</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="band" id="docs">
+        <div class="section-head">
+          <p class="kicker">Docs</p>
+          <h2>Where to go next</h2>
+        </div>
+
+        <div class="doc-links">
+          <a href="https://github.com/galaxio-labs/orion-error/blob/main/README.md">README</a>
+          <a href="https://github.com/galaxio-labs/orion-error/blob/main/docs/user/tutorial.md">Tutorial</a>
+          <a href="https://github.com/galaxio-labs/orion-error/blob/main/docs/user/ecosystem-comparison.md">Ecosystem comparison</a>
+          <a href="https://github.com/galaxio-labs/orion-error/blob/main/docs/user/protocol-contract.md">Protocol contract</a>
+          <a href="https://github.com/galaxio-labs/orion-error/blob/main/examples/order_case.rs">Example: order_case</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Built from the crate source and docs in this repository.</p>
+    </footer>
+  </body>
+</html>
