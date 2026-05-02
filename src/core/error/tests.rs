@@ -113,7 +113,6 @@ fn test_struct_error_source_tracking() {
     assert_eq!(error.source_ref().unwrap().to_string(), "outer source");
     assert_eq!(error.root_cause().unwrap().to_string(), "inner source");
     assert_eq!(error.root_cause_frame().unwrap().message, "inner source");
-
 }
 
 #[test]
