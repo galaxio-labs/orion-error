@@ -51,6 +51,30 @@ pub trait UnstructuredSource: private::Sealed {
         R: DomainReason;
 }
 
+/// Convert a `Result<T, E>` into `Result<T, StructError<R>>`, attaching the
+/// original error as the source of the new structured error.
+///
+/// Works for both raw `std::error::Error` types and already-structured
+/// `StructError` sources.
+///
+/// # Example
+///
+/// ```rust
+/// use orion_error::prelude::*;
+/// use orion_error::UvsReason;
+///
+/// let result: Result<(), std::io::Error> = Err(std::io::Error::other("disk offline"));
+/// let err: Result<(), StructError<UvsReason>> =
+///     result.source_err(UvsReason::system_error(), "read config");
+/// assert!(err.unwrap_err().detail().as_deref() == Some("read config"));
+/// ```
+///
+/// # Note on trait resolution
+///
+/// There are two blanket impls: one for raw `StdError` sources (via
+/// `UnstructuredSource`), and one for already-structured `StructError`
+/// sources. These do not conflict because `StructError<R>` does not
+/// implement `UnstructuredSource`.
 pub trait SourceErr<T, R: DomainReason>: Sized {
     fn source_err(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>>;
 }

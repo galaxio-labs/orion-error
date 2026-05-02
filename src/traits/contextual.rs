@@ -1,20 +1,32 @@
 use crate::core::OperationContext;
 
-/// Extension methods for attaching context and position to an error.
+/// Extension methods for attaching operation context and position to an error.
+///
+/// [`doing("...")`](ErrorWith::doing) and [`at("...")`](ErrorWith::at) are the
+/// primary ways to annotate where and what was happening when the error occurred.
 ///
 /// Implemented for [`StructError`](crate::StructError) and
 /// `Result<T, E>` where `E: ErrorWith`.
 ///
 /// # Example
+///
 /// ```rust
 /// use orion_error::prelude::*;
 /// use orion_error::UvsReason;
 ///
 /// let err = StructError::from(UvsReason::validation_error())
-///     .doing("parse config")
-///     .at("config.toml");
+///     .doing("parse config")      // what operation
+///     .at("config.toml");          // what resource
 ///
 /// assert_eq!(err.action_main().as_deref(), Some("parse config"));
+/// assert_eq!(err.locator_main().as_deref(), Some("config.toml"));
+///
+/// // doing/at also works on Result chains:
+/// let result: Result<(), StructError<UvsReason>> =
+///     Err(StructError::from(UvsReason::validation_error()))
+///         .doing("validate")
+///         .at("input.json");
+/// assert!(result.is_err());
 /// ```
 pub trait ErrorWith {
     fn position<S: Into<String>>(self, desc: S) -> Self;

@@ -191,6 +191,29 @@ assert_eq!(err.source_ref().unwrap().to_string(), "my custom error");
 > identity and context. The opt-in ensures you explicitly choose which types enter
 > as unstructured sources versus structured ones.
 
+**Newtype wrapper for foreign types.** If the error type comes from a dependency
+and you cannot implement `RawStdError` directly (orphan rule), use a newtype:
+
+```rust
+use orion_error::interop::{raw_source, RawStdError};
+
+struct WrappedError(reqwest::Error);
+
+impl std::fmt::Display for WrappedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.0, f)
+    }
+}
+impl std::error::Error for WrappedError {}
+impl RawStdError for WrappedError {}
+
+// Usage
+let result: Result<(), WrappedError> = Err(WrappedError(error));
+let err = result
+    .map_err(raw_source)
+    .source_err(AppReason::system_error(), "api call failed")?;
+```
+
 ## Standard Error Interop
 
 `StructError<R>` no longer directly implements `std::error::Error`.

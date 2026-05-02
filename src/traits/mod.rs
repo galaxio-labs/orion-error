@@ -1,7 +1,7 @@
 mod contextual;
 mod conversion;
-mod into_as;
+mod source_err;
 
 pub use contextual::ErrorWith;
 pub use conversion::{ConvErr, ConvStructError, ToStructError};
-pub use into_as::{raw_source, RawSource, RawStdError, SourceErr};
+pub use source_err::{raw_source, RawSource, RawStdError, SourceErr};

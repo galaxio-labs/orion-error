@@ -192,6 +192,28 @@ assert_eq!(err.source_ref().unwrap().to_string(), "my custom error");
 > `StructError<_>` 值也吞为无结构 source，丢失结构化身份和上下文。显式 opt-in
 > 确保你明确选择哪些类型进入无结构路径。
 
+**newtype 包装外来类型。** 如果错误类型来自依赖，无法直接实现 `RawStdError`
+（orphan rule），使用 newtype：
+
+```rust
+use orion_error::interop::{raw_source, RawStdError};
+
+struct WrappedError(reqwest::Error);
+
+impl std::fmt::Display for WrappedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.0, f)
+    }
+}
+impl std::error::Error for WrappedError {}
+impl RawStdError for WrappedError {}
+
+let result: Result<(), WrappedError> = Err(WrappedError(error));
+let err = result
+    .map_err(raw_source)
+    .source_err(AppReason::system_error(), "api call failed")?;
+```
+
 ## 和 `std::error::Error` 的关系
 
 `StructError<R>` 现在不再直接实现 `std::error::Error`。
