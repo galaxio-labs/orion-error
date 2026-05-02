@@ -8,12 +8,11 @@
 //!    Each layer defines its own DomainReason
 //! 2. 下层错误通过 conv_err() 收敛到上层
 //!    Lower errors converge to upper via conv_err()
-//! 3. 边界输出使用 exposure_snapshot()
-//!    Boundary output via exposure_snapshot()
+//! 3. 边界输出使用 print_error()
+//!    Boundary output via print_error()
 
 use derive_more::From;
 use orion_error::prelude::*;
-use orion_error::protocol::DefaultExposurePolicy;
 use orion_error::{
     cli::print_error, conversion::ToStructError, OperationContext, OrionError, StructError,
     UvsReason,
@@ -212,18 +211,9 @@ fn write_impl(item: &str) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-// ── 边界输出：打印 + protocol projection / Boundary output ──
+// ── 边界输出：打印错误诊断 / Print error diagnostics ──
 fn print_protocol_views(err: &OrderError) {
-    // 人类可读诊断 / Human-readable diagnostics
     print_error(err);
-    println!();
-    // 协议投影 / Protocol projection via DefaultExposurePolicy
-    println!();
-    let exposure_policy = DefaultExposurePolicy;
-    println!(
-        "{}",
-        err.exposure_snapshot(&exposure_policy).render_user_debug()
-    );
 }
 
 fn run_case(name: &str, user_id: u32, amount: u64, raw_order: &str) {
