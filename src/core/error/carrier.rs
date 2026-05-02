@@ -352,6 +352,13 @@ impl<T: DomainReason> StructError<T> {
                     }
                 }
 
+                // Context fields (from with_field / record_field calls)
+                if !frame.context_fields.is_empty() {
+                    for (k, v) in &frame.context_fields {
+                        out.push_str(&format!("
+  {indent}   {k}: {v}"));
+                    }
+                }
             }
         }
         out
