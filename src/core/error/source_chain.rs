@@ -168,6 +168,11 @@ pub struct SourceFrame {
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub detail: Option<SmolStr>,
     /// Context key-value fields (from `with_field` / `record_field`).
+    ///
+    /// Serialization: skipped via `#[serde(skip)]`. The stable snapshot format
+    /// uses `ErrorSnapshot` → `StableErrorSnapshot`, which strips runtime-only
+    /// context fields. Full context data is available in `SnapshotContextFrame`
+    /// for consumers that need it.
     #[cfg_attr(feature = "serde", serde(skip))]
     pub context_fields: Vec<(SmolStr, SmolStr)>,
     #[cfg_attr(feature = "serde", serde(default))]

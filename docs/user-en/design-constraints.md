@@ -15,7 +15,7 @@ fn place_order() -> Result<OrderDraft, StructError<OrderReason>> {
 
 // Actual:
 fn place_order() -> Result<OrderDraft, StructError<OrderReason>> {
-    let draft = parse_order().upcast()?;  // explicit conversion
+    let draft = parse_order().conv_err()?;  // explicit conversion
     Ok(draft)
 }
 ```

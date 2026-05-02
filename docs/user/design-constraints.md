@@ -4,8 +4,7 @@
 
 ### 问题
 
-跨层错误转换（`StructError<ParseReason>` → `StructError<OrderReason>`）需要调用 `.upcast()`。
-`err_conv()` 仍然可用，但只是兼容别名，旧调用方会收到 deprecation warning。
+跨层错误转换（`StructError<ParseReason>` → `StructError<OrderReason>`）需要调用 `.conv_err()`。
 
 ```rust
 // 期望但不能实现
@@ -16,7 +15,7 @@ fn place_order() -> Result<OrderDraft, StructError<OrderReason>> {
 
 // 实际需要显式调用
 fn place_order() -> Result<OrderDraft, StructError<OrderReason>> {
-    let draft = parse_order().upcast()?;  // 显式转换
+    let draft = parse_order().conv_err()?;  // 显式转换
     Ok(draft)
 }
 ```
@@ -50,6 +49,6 @@ Orphan rule 要求 trait 或 self type 至少有一个本地锚点，但这里 `
 
 ### 结论
 
-`upcast()` 是主推荐路径，`err_conv()` 只保留给旧代码兼容。
+`.conv_err()` 是唯一的路径。
 newtype 可以绕过 orphan rule，但代价太大——为了省一次显式调用而把所有函数返回类型包一层，收益远低于成本。
 Rust 的 orphan rule 是生态兼容性的核心保证，短期内不会为此放宽。

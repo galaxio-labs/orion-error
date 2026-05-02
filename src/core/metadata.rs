@@ -197,4 +197,12 @@ mod tests {
         assert_eq!(metadata.get("parse.line"), Some(&MetadataValue::U64(7)));
         assert_eq!(metadata.get_str("parse.line"), None);
     }
+
+    #[test]
+    fn test_metadata_value_display() {
+        assert_eq!(MetadataValue::String("hello".into()).to_string(), "hello");
+        assert_eq!(MetadataValue::Bool(true).to_string(), "true");
+        assert_eq!(MetadataValue::I64(-42).to_string(), "-42");
+        assert_eq!(MetadataValue::U64(256).to_string(), "256");
+    }
 }
