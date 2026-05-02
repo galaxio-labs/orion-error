@@ -482,9 +482,6 @@ impl<T: DomainReason> Display for StructError<T> {
             write!(f, "\n  -> Details: {detail}")?;
         }
 
-        if let Some(source) = self.source_ref() {
-            write!(f, "\n  -> Source: {}", source.to_string().lines().next().unwrap_or(""))?;
-        }
 
         let ctx_slice = self.context_slice();
         if !ctx_slice.is_empty() {
