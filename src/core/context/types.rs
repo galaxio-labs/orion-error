@@ -130,26 +130,37 @@ impl Drop for OperationContext {
 impl Display for OperationContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let target = self.compat_target();
+        let mut parts = Vec::new();
 
         if let Some(action) = &self.action {
-            writeln!(f, "doing: {action}")?;
+            parts.push(format!("doing: {action}"));
         }
         if let Some(locator) = &self.locator {
-            writeln!(f, "at: {locator}")?;
+            parts.push(format!("at: {locator}"));
         }
-        if let Some(target) = target.as_ref() {
-            if self.action.as_deref() != Some(target.as_str()) {
-                writeln!(f, "want: {target}")?;
+        if let Some(ref t) = target {
+            if self.action.as_deref() != Some(t.as_str()) {
+                parts.push(format!("want: {t}"));
             }
         }
         if let Some(path) = self.normalized_path_string() {
             if target.as_deref() != Some(path.as_str()) {
-                writeln!(f, "path: {path}")?;
+                parts.push(format!("path: {path}"));
             }
         }
-        for (i, (k, v)) in self.context().items.iter().enumerate() {
-            writeln!(f, "{}. {k}: {v} ", i + 1)?;
+
+        write!(f, "{}", parts.join(", "))?;
+
+        if !self.context().items.is_empty() {
+            let fields: Vec<String> = self
+                .context()
+                .items
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect();
+            write!(f, " [{}]", fields.join(", "))?;
         }
+
         Ok(())
     }
 }

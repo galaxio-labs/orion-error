@@ -76,7 +76,7 @@
         ctx.record("key1", "value1");
         let display = format!("{ctx}");
         assert!(display.contains("doing: test_target"));
-        assert!(display.contains("1. key1: value1"));
+        assert!(display.contains("key1=value1"));
     }
 
     #[test]
@@ -84,8 +84,7 @@
         let mut ctx = OperationContext::new();
         ctx.record("key1", "value1");
         let display = format!("{ctx}");
-        assert!(!display.contains("target:"));
-        assert!(display.contains("1. key1: value1"));
+        assert!(display.contains("key1=value1"));
     }
 
     #[test]
