@@ -1,0 +1,12 @@
+[book]
+title = "orion-error"
+authors = ["zuowenjian"]
+language = "en"
+src = "docs"
+
+[build]
+build-dir = "site"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"

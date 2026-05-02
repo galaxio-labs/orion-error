@@ -113,17 +113,18 @@ For new code, treat `doing(...)` as the standard operation verb.
 2. .source_err(reason, detail)`
    Use when an error enters the structured system — works for both raw
    `std::error::Error` and already-structured `StructError<_>` sources.
-3. `upcast()`
+3. `conv_err()`
    Use when the upstream value is already `StructError<R1>` and you only remap
    reason type to `StructError<R2>`.
-4. ~~`wrap_as(reason, detail)`~~ **Deprecated**: use `source_err` instead.
+4. `exposure(&policy)`
+   Use at service boundaries to project the error into HTTP/RPC/CLI/log output.
 
 ## Typical Flow
 
 ```text
 raw std error ──→.source_err(...) ──→ first entry into structured system
                                           │
-                                    upcast()
+                                    conv_err()
                                 (reason remap)
                                           │
                   report / exposure
@@ -255,7 +256,6 @@ Then add only the layered imports you need, for example:
 - `orion_error::runtime::source::*`
 - `orion_error::report::*`
 - `orion_error::protocol::*`
-- `orion_error::protocol::*`
 
 This keeps normal application code on one predictable entry path while still
 letting larger codebases keep clear module boundaries where that extra
@@ -303,7 +303,7 @@ There are exactly four ways a `StructError` enters or moves through your system:
 ```text
 raw std error / StructError ──→.source_err(reason, detail) ──→ first entry
                                                                     │
-                                                              upcast()
+                                                              conv_err()
                                                           (reason remap)
                                                                     │
                                           report / exposure
@@ -313,11 +313,11 @@ raw std error / StructError ──→.source_err(reason, detail) ──→ first
    `std::error::Error` and already-structured `StructError` sources. Use this
    whenever an error enters your system.
 
-**2. `upcast()`** — cross-layer conversion preserving semantics. The upstream error is
+**2. `conv_err()`** — cross-layer conversion preserving semantics. The upstream error is
    already `StructError<R1>`; you only want to map the reason type to `StructError<R2>` via
    `From`. All detail, context, source, and metadata survive.
 
-**4. `as_std() / into_std() / into_dyn_std()`** — exit point. Bridges the structured error
+**3. `as_std() / into_std() / into_dyn_std()`** — exit point. Bridges the structured error
    into the `std::error::Error` ecosystem for interop or legacy interfaces. These are
    explicit; `StructError<T>` does not implement `StdError` directly.
 
@@ -336,7 +336,6 @@ cargo run --example logging_example --features log
 - [Docs Index](./docs/README.md)
 - [Tutorial](./docs/user/tutorial.md)
 - [Reason Identity Guide](./docs/user/reason-identity-guide.md)
-- [Protocol Contract](./docs/user/protocol-contract.md)
 - [Protocol Contract](./docs/user/protocol-contract.md)
 - [thiserror Comparison](./docs/user/thiserror-comparison.md)
 - [orion-error-derive README](./orion-error-derive/README.md)
