@@ -12,6 +12,34 @@ mod private {
 /// `StdError` types and want to route them through `raw_source(...)` before
 /// calling `source_err(...)`.
 ///
+/// # Example
+///
+/// ```rust
+/// use orion_error::interop::{raw_source, RawStdError};
+/// use orion_error::prelude::*;
+/// use orion_error::UvsReason;
+///
+/// #[derive(Debug)]
+/// struct MyError;
+///
+/// impl std::fmt::Display for MyError {
+///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+///         write!(f, "my error")
+///     }
+/// }
+///
+/// impl std::error::Error for MyError {}
+/// impl RawStdError for MyError {}
+///
+/// let result: Result<(), MyError> = Err(MyError);
+/// let err = result
+///     .map_err(raw_source)
+///     .source_err(UvsReason::system_error(), "my operation failed")
+///     .unwrap_err();
+///
+/// assert_eq!(err.source_ref().unwrap().to_string(), "my error");
+/// ```
+///
 /// Implement this trait only for genuine non-structured raw error types.
 /// Do not implement it for wrappers around `StructError<_>`.
 pub trait RawStdError: StdError + Send + Sync + 'static {}

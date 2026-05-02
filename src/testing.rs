@@ -45,6 +45,21 @@ impl<T> TestAssert for Option<T> {
     }
 }
 
+/// Assert that the error's **stable code string** matches.
+///
+/// This asserts [`ErrorIdentityProvider::stable_code`], **not** the numeric
+/// [`ErrorCode::error_code`]. For numeric assertions, call `.error_code()` directly.
+///
+/// # Example
+///
+/// ```rust
+/// use orion_error::UvsReason;
+/// use orion_error::dev::testing::assert_err_code;
+/// use orion_error::StructError;
+///
+/// let err = StructError::from(UvsReason::system_error());
+/// assert_err_code(&err, "sys.io_error");
+/// ```
 pub fn assert_err_code<R>(err: &StructError<R>, code: &str)
 where
     R: DomainReason + ErrorIdentityProvider,
@@ -52,6 +67,7 @@ where
     assert_eq!(err.reason().stable_code(), code);
 }
 
+/// Assert that the error's [`ErrorCategory`] matches.
 pub fn assert_err_category<R>(err: &StructError<R>, category: ErrorCategory)
 where
     R: DomainReason + ErrorIdentityProvider,

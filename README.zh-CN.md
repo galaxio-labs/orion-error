@@ -158,6 +158,40 @@ StructError<ServiceReason>
 
 `orion-error` 的目标，就是让这些边界投影回到同一套治理模型下。
 
+## 第三方错误类型适配
+
+`source_err` 内置支持 (`io::Error`、`serde_json::Error`、`anyhow::Error`、`toml::Error`)。
+自定义类型通过显式 opt-in 接入：
+
+```rust
+use orion_error::interop::{raw_source, RawStdError};
+
+#[derive(Debug)]
+struct MyError;
+
+impl std::fmt::Display for MyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "my custom error")
+    }
+}
+
+impl std::error::Error for MyError {}
+
+impl RawStdError for MyError {}
+
+let result: Result<(), MyError> = Err(MyError);
+let err = result
+    .map_err(raw_source)
+    .source_err(AppReason::system_error(), "my operation failed")
+    .unwrap_err();
+
+assert_eq!(err.source_ref().unwrap().to_string(), "my custom error");
+```
+
+> **为什么是 opt-in 而不是 blanket `E: StdError`？** blanket impl 会静默地把
+> `StructError<_>` 值也吞为无结构 source，丢失结构化身份和上下文。显式 opt-in
+> 确保你明确选择哪些类型进入无结构路径。
+
 ## 和 `std::error::Error` 的关系
 
 `StructError<R>` 现在不再直接实现 `std::error::Error`。

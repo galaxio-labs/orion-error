@@ -4,13 +4,41 @@ use crate::{core::convert_error, core::DomainReason, StructError};
 ///
 /// Requires `R2: From<R1>`. Preserves all detail, position, context, and source state.
 ///
+/// # Example
+///
+/// ```rust,ignore
+/// // This example requires the `derive` feature (enabled by default).
+/// use orion_error::prelude::*;
+/// use orion_error::UvsReason;
+///
+/// #[derive(Debug, Clone, PartialEq, OrionError)]
+/// enum SubReason {
+///     #[orion_error(identity = "biz.sub")]
+///     Sub,
+/// }
+///
+/// #[derive(Debug, Clone, PartialEq, OrionError)]
+/// enum MainReason {
+///     #[orion_error(identity = "biz.main")]
+///     Main,
+/// }
+///
+/// impl From<SubReason> for MainReason {
+///     fn from(_: SubReason) -> Self { MainReason::Main }
+/// }
+///
+/// // conv_err converts StructError<SubReason> → StructError<MainReason>
+/// let result: Result<(), StructError<SubReason>> =
+///     Err(StructError::from(SubReason::Sub).with_detail("inner"));
+/// let converted: Result<(), StructError<MainReason>> = result.conv_err();
+/// assert!(converted.is_err());
+/// ```
+///
 /// # Design note
 ///
 /// A blanket `From<StructError<R1>> for StructError<R2>` is blocked by Rust's
 /// orphan rule: neither `From` (std) nor `StructError` (orion-error) are local
-/// to the user's crate. A newtype wrapper could technically bypass this, but
-/// the cost (wrapping every return type) outweighs the benefit of saving the
-/// `.conv_err()` call. An explicit trait method is the intended path forward.
+/// to the user's crate. An explicit trait method is the intended path forward.
 pub trait ConvErr<T, R: DomainReason>: Sized {
     fn conv_err(self) -> Result<T, StructError<R>>;
 

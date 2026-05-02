@@ -150,6 +150,17 @@ impl From<usize> for MetadataValue {
     }
 }
 
+impl std::fmt::Display for MetadataValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::String(s) => write!(f, "{s}"),
+            Self::Bool(b) => write!(f, "{b}"),
+            Self::I64(i) => write!(f, "{i}"),
+            Self::U64(u) => write!(f, "{u}"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ErrorMetadata, MetadataValue};

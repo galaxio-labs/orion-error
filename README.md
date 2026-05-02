@@ -154,6 +154,43 @@ That matters because large systems usually fail at the boundary:
 
 `orion-error` gives those boundaries one consistent projection model.
 
+## Third-Party Error Types
+
+`source_err` supports built-in types (`io::Error`, `serde_json::Error`, `anyhow::Error`,
+`toml::Error`) and custom types via opt-in:
+
+```rust
+use orion_error::interop::{raw_source, RawStdError};
+
+#[derive(Debug)]
+struct MyError;
+
+impl std::fmt::Display for MyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "my custom error")
+    }
+}
+
+impl std::error::Error for MyError {}
+
+// Step 1: declare it as a raw source
+impl RawStdError for MyError {}
+
+// Step 2: wrap + convert
+let result: Result<(), MyError> = Err(MyError);
+let err = result
+    .map_err(raw_source)
+    .source_err(AppReason::system_error(), "my operation failed")
+    .unwrap_err();
+
+assert_eq!(err.source_ref().unwrap().to_string(), "my custom error");
+```
+
+> **Why opt-in instead of blanket `E: StdError`?** A blanket impl would silently
+> swallow `StructError<_>` values as unstructured sources, losing their structured
+> identity and context. The opt-in ensures you explicitly choose which types enter
+> as unstructured sources versus structured ones.
+
 ## Standard Error Interop
 
 `StructError<R>` no longer directly implements `std::error::Error`.
