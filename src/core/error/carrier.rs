@@ -316,55 +316,40 @@ impl<T: DomainReason> StructError<T> {
         let mut out = format!("{self}");
         let frames = self.source_frames();
         if !frames.is_empty() {
+            out.push_str("\n  -> Caused by:");
             for (idx, frame) in frames.iter().enumerate() {
-                let indent = "   ".repeat(frame.index);
-                let prefix = if idx == frames.len() - 1 { "└─ " } else { "├─ " };
-                out.push_str(&format!("\n  {indent}{prefix}{}", frame.message));
+                out.push_str(&format!("\n      {}. {}", idx + 1, frame.message));
 
-                // Call path when present (from source's context)
-                if let Some(path) = &frame.path {
-                    if !path.is_empty() {
-                        out.push_str(&format!("\n  {indent}   call: {path}"));
-                    }
+                let path = frame.path.as_deref().unwrap_or("");
+                let detail = frame.detail.as_deref().unwrap_or("");
+                if !path.is_empty() && !detail.is_empty() {
+                    out.push_str(&format!(" [{path}, {detail}]"));
+                } else if !path.is_empty() {
+                    out.push_str(&format!(" [{path}]"));
+                } else if !detail.is_empty() {
+                    out.push_str(&format!(" [{detail}]"));
                 }
 
-                // Detail when separate from message
-                if let Some(detail) = &frame.detail {
-                    if !detail.is_empty() {
-                        out.push_str(&format!("\n  {indent}   info: {detail}"));
-                    }
-                }
-
-                // Metadata (from with_meta calls)
-                if !frame.metadata.is_empty() {
-                    for (k, v) in frame.metadata.iter() {
+                let extras: Vec<String> = frame.metadata
+                    .iter()
+                    .map(|(k, v)| {
                         let val = match v {
-                            crate::core::metadata::MetadataValue::String(s) =>
-                                s.to_string(),
-                            crate::core::metadata::MetadataValue::Bool(b) =>
-                                b.to_string(),
-                            crate::core::metadata::MetadataValue::I64(i) =>
-                                i.to_string(),
-                            crate::core::metadata::MetadataValue::U64(u) =>
-                                u.to_string(),
+                            crate::core::metadata::MetadataValue::String(s) => s.to_string(),
+                            crate::core::metadata::MetadataValue::Bool(b) => b.to_string(),
+                            crate::core::metadata::MetadataValue::I64(i) => i.to_string(),
+                            crate::core::metadata::MetadataValue::U64(u) => u.to_string(),
                         };
-                        out.push_str(&format!("\n  {indent}   {k}: {val}"));
-                    }
-                }
-
-                // Context fields (from with_field / record_field calls)
-                if !frame.context_fields.is_empty() {
-                    for (k, v) in &frame.context_fields {
-                        out.push_str(&format!("
-  {indent}   {k}: {v}"));
-                    }
+                        format!("{k}={val}")
+                    })
+                    .chain(frame.context_fields.iter().map(|(k, v)| format!("{k}={v}")))
+                    .collect();
+                if !extras.is_empty() {
+                    out.push_str(&format!(" {{{}}}", extras.join(", ")));
                 }
             }
         }
         out
-    }
-
-    #[cfg(feature = "anyhow")]
+    }#[cfg(feature = "anyhow")]
     pub(crate) fn with_dyn_struct_source(self, source: OwnedDynStdStructError) -> Self {
         self.with_internal_source(InternalSourceState::from_dyn_struct(source))
     }
@@ -513,26 +498,23 @@ impl<T: DomainReason> Display for StructError<T> {
         }
 
         if let Some(detail) = &self.imp.detail {
-            write!(f, "\n  -> Details: {detail}")?;
+            write!(f, "\n  -> Info: {detail}")?;
         }
-
 
         let ctx_slice = self.context_slice();
         if !ctx_slice.is_empty() {
-            write!(f, "\n  -> Context:")?;
-            let total = ctx_slice.len();
+            write!(f, "\n  -> Trace:")?;
             for (i, c) in ctx_slice.iter().rev().enumerate() {
-                let is_last = i == total - 1;
-                let prefix = if is_last { "  └─ " } else { "  ├─ " };
                 let label = c.action().as_deref().or_else(|| c.locator().as_deref())
                     .unwrap_or("(operation)");
-                write!(f, "\n{prefix}{label}")?;
+                write!(f, "\n      {}. {}", i + 1, label)?;
 
                 if !c.context().items.is_empty() {
-                    for (k, v) in &c.context().items {
-                        let field_prefix = if is_last { "     " } else { "  │  " };
-                        write!(f, "\n{field_prefix}{k}: {v}")?;
-                    }
+                    let fields: Vec<String> = c.context().items
+                        .iter()
+                        .map(|(k, v)| format!("{k}: {v}"))
+                        .collect();
+                    write!(f, " [{}]", fields.join(", "))?;
                 }
             }
         }

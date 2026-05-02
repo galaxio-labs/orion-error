@@ -228,8 +228,9 @@
         assert_eq!(error.source_frames()[1].type_name, None);
 
         let display_chain = error.display_chain();
-        assert!(display_chain.contains("├─ outer source"));
-        assert!(display_chain.contains("└─ inner source"));
+        assert!(display_chain.contains("-> Caused by:"));
+        assert!(display_chain.contains("1. outer source"));
+        assert!(display_chain.contains("2. inner source"));
     }
 
     #[test]
