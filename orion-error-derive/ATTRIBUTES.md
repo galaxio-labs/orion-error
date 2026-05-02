@@ -53,7 +53,7 @@ enum AppReason {
 #[derive(OrionError)]
 enum AppReason {
     #[orion_error(transparent)]
-    Uvs(UvsReason),           // stable_code() 委托给 UvsReason
+    General(UnifiedReason),           // stable_code() 委托给 UnifiedReason
 }
 ```
 

@@ -53,11 +53,11 @@ impl<T> TestAssert for Option<T> {
 /// # Example
 ///
 /// ```rust
-/// use orion_error::UvsReason;
+/// use orion_error::UnifiedReason;
 /// use orion_error::dev::testing::assert_err_code;
 /// use orion_error::StructError;
 ///
-/// let err = StructError::from(UvsReason::system_error());
+/// let err = StructError::from(UnifiedReason::system_error());
 /// assert_err_code(&err, "sys.io_error");
 /// ```
 pub fn assert_err_code<R>(err: &StructError<R>, code: &str)
@@ -105,29 +105,29 @@ mod tests {
     };
     use crate::conversion::ErrorWith;
     use crate::reason::ErrorCategory;
-    use crate::{StructError, UvsReason};
+    use crate::{StructError, UnifiedReason};
 
     #[test]
     fn test_assert_err_code_helper() {
-        let err = StructError::from(UvsReason::system_error());
+        let err = StructError::from(UnifiedReason::system_error());
         assert_err_code(&err, "sys.io_error");
     }
 
     #[test]
     fn test_assert_err_category_helper() {
-        let err = StructError::from(UvsReason::business_error());
+        let err = StructError::from(UnifiedReason::business_error());
         assert_err_category(&err, ErrorCategory::Biz);
     }
 
     #[test]
     fn test_assert_err_identity_helper() {
-        let err = StructError::from(UvsReason::network_error());
+        let err = StructError::from(UnifiedReason::network_error());
         assert_err_identity(&err, "sys.network_error", ErrorCategory::Sys);
     }
 
     #[test]
     fn test_assert_err_operation_helper() {
-        let err = StructError::from(UvsReason::system_error())
+        let err = StructError::from(UnifiedReason::system_error())
             .with_detail("read config failed")
             .doing("load config");
         assert_err_operation(&err, "load config");
@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn test_assert_err_path_helper() {
-        let err = StructError::from(UvsReason::system_error())
+        let err = StructError::from(UnifiedReason::system_error())
             .with_detail("read config failed")
             .doing("load config")
             .at("config.toml");

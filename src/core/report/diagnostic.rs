@@ -48,10 +48,10 @@ impl<T: DomainReason> StructError<T> {
     /// # Example
     ///
     /// ```rust
-    /// use orion_error::{StructError, UvsReason};
+    /// use orion_error::{StructError, UnifiedReason};
     /// use orion_error::report::DiagnosticReport;
     ///
-    /// let err = StructError::from(UvsReason::validation_error())
+    /// let err = StructError::from(UnifiedReason::validation_error())
     ///     .with_detail("field `email` is required");
     ///
     /// let report: DiagnosticReport = err.report();
@@ -72,9 +72,9 @@ impl<T: DomainReason> StructError<T> {
     /// # Example
     ///
     /// ```rust
-    /// use orion_error::{StructError, UvsReason};
+    /// use orion_error::{StructError, UnifiedReason};
     ///
-    /// let report = StructError::from(UvsReason::validation_error())
+    /// let report = StructError::from(UnifiedReason::validation_error())
     ///     .with_detail("field `email` is required")
     ///     .into_report();
     ///
@@ -95,7 +95,7 @@ impl<T: DomainReason> StructError<T> {
     /// # Example
     ///
     /// ```rust
-    /// use orion_error::{StructError, UvsReason};
+    /// use orion_error::{StructError, UnifiedReason};
     /// use orion_error::report::RedactPolicy;
     ///
     /// struct HideDetail;
@@ -110,7 +110,7 @@ impl<T: DomainReason> StructError<T> {
     ///     }
     /// }
     ///
-    /// let report = StructError::from(UvsReason::validation_error())
+    /// let report = StructError::from(UnifiedReason::validation_error())
     ///     .with_detail("token=abc")
     ///     .report_redacted(&HideDetail);
     ///
@@ -128,9 +128,9 @@ impl<T: DomainReason> StructError<T> {
     ///
     /// ```rust
     /// use orion_error::StructError;
-    /// use orion_error::reason::UvsReason;
+    /// use orion_error::reason::UnifiedReason;
     ///
-    /// let s = StructError::from(UvsReason::validation_error())
+    /// let s = StructError::from(UnifiedReason::validation_error())
     ///     .with_detail("field `email` is required")
     ///     .render();
     /// assert!(s.contains("validation"));
@@ -145,7 +145,7 @@ impl<T: DomainReason> StructError<T> {
     /// # Example
     ///
     /// ```rust
-    /// use orion_error::{StructError, UvsReason};
+    /// use orion_error::{StructError, UnifiedReason};
     /// use orion_error::report::RedactPolicy;
     ///
     /// struct HideDetail;
@@ -160,7 +160,7 @@ impl<T: DomainReason> StructError<T> {
     ///     }
     /// }
     ///
-    /// let rendered = StructError::from(UvsReason::validation_error())
+    /// let rendered = StructError::from(UnifiedReason::validation_error())
     ///     .with_detail("token=abc")
     ///     .render_redacted(&HideDetail);
     ///
@@ -243,9 +243,9 @@ impl DiagnosticReport {
     /// # Example
     ///
     /// ```rust
-    /// use orion_error::{StructError, UvsReason};
+    /// use orion_error::{StructError, UnifiedReason};
     ///
-    /// let err = StructError::from(UvsReason::validation_error())
+    /// let err = StructError::from(UnifiedReason::validation_error())
     ///     .with_detail("field `email` is required");
     /// let report = err.report();
     /// let output = report.render();
@@ -277,7 +277,7 @@ impl DiagnosticReport {
     /// # Example
     ///
     /// ```rust
-    /// use orion_error::{StructError, UvsReason};
+    /// use orion_error::{StructError, UnifiedReason};
     /// use orion_error::report::RedactPolicy;
     ///
     /// struct HidePosition;
@@ -292,7 +292,7 @@ impl DiagnosticReport {
     ///     }
     /// }
     ///
-    /// let report = StructError::from(UvsReason::validation_error())
+    /// let report = StructError::from(UnifiedReason::validation_error())
     ///     .with_position("src/main.rs:42")
     ///     .report()
     ///     .redacted(&HidePosition);
@@ -319,7 +319,7 @@ impl DiagnosticReport {
     /// # Example
     ///
     /// ```rust
-    /// use orion_error::{StructError, UvsReason};
+    /// use orion_error::{StructError, UnifiedReason};
     /// use orion_error::report::RedactPolicy;
     ///
     /// struct HideDetail;
@@ -334,7 +334,7 @@ impl DiagnosticReport {
     ///     }
     /// }
     ///
-    /// let rendered = StructError::from(UvsReason::validation_error())
+    /// let rendered = StructError::from(UnifiedReason::validation_error())
     ///     .with_detail("token=abc")
     ///     .report()
     ///     .render_redacted(&HideDetail);

@@ -3,12 +3,12 @@ use orion_error::prelude::*;
 use orion_error::protocol::DefaultExposurePolicy;
 use orion_error::protocol::Visibility as ReportVisibility;
 use orion_error::reason::ErrorCategory;
-use orion_error::{OperationContext, StructError, UvsReason};
+use orion_error::{OperationContext, StructError, UnifiedReason};
 
 #[test]
 fn test_snapshot_exposure_flow_for_system_error() {
     let err = std::fs::read_to_string("missing-config.toml")
-        .source_err(UvsReason::system_error(), "read config failed")
+        .source_err(UnifiedReason::system_error(), "read config failed")
         .doing("read config")
         .unwrap_err();
 
@@ -39,7 +39,7 @@ fn test_snapshot_exposure_flow_for_system_error() {
 #[test]
 fn test_snapshot_exposure_flow_for_business_error() {
     let err = ErrorWith::with_context(
-        StructError::from(UvsReason::business_error()).with_detail("order state invalid"),
+        StructError::from(UnifiedReason::business_error()).with_detail("order state invalid"),
         OperationContext::doing("validate order"),
     );
 
@@ -66,7 +66,7 @@ fn test_snapshot_exposure_flow_for_business_error() {
 #[cfg(feature = "serde_json")]
 #[test]
 fn test_exposure_json_projection_for_business_error() {
-    let err = StructError::from(UvsReason::business_error())
+    let err = StructError::from(UnifiedReason::business_error())
         .with_detail("order state invalid")
         .with_context(OperationContext::doing("validate order"));
 

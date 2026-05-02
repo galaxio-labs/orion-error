@@ -7,7 +7,7 @@ mod tests {
     use crate::conversion::ErrorWith;
     use crate::reason::{DomainReason, ErrorCode};
     use crate::{
-        core::convert_error, testing::TestAssertWithMsg, OperationContext, StructError, UvsReason,
+        core::convert_error, testing::TestAssertWithMsg, OperationContext, StructError, UnifiedReason,
     };
 
     // 测试用领域原因类型
@@ -16,14 +16,14 @@ mod tests {
         #[error("why1")]
         Why1,
         #[error("{0}")]
-        Uvs(UvsReason),
+        General(UnifiedReason),
     }
 
     impl ErrorCode for TestDomainReason {
         fn error_code(&self) -> i32 {
             match self {
                 TestDomainReason::Why1 => 200,
-                TestDomainReason::Uvs(uvs_reason) => uvs_reason.error_code(),
+                TestDomainReason::General(uvs_reason) => uvs_reason.error_code(),
             }
         }
     }
@@ -36,7 +36,7 @@ mod tests {
         #[error("why1")]
         Why2,
         #[error("{0}")]
-        Uvs(UvsReason),
+        General(UnifiedReason),
     }
 
     impl DomainReason for OtherDomainReason {}
@@ -45,7 +45,7 @@ mod tests {
         fn error_code(&self) -> i32 {
             match self {
                 OtherDomainReason::Why2 => 300,
-                OtherDomainReason::Uvs(uvs_reason) => uvs_reason.error_code(),
+                OtherDomainReason::General(uvs_reason) => uvs_reason.error_code(),
             }
         }
     }
@@ -54,7 +54,7 @@ mod tests {
         fn from(value: TestDomainReason) -> Self {
             match value {
                 TestDomainReason::Why1 => Self::Why2,
-                TestDomainReason::Uvs(uvs_reason) => Self::Uvs(uvs_reason),
+                TestDomainReason::General(uvs_reason) => Self::General(uvs_reason),
             }
         }
     }
@@ -110,7 +110,7 @@ mod tests {
         ctx.record("step", "initialization");
         ctx.record("resource", "database");
 
-        let err = StructError::from(TestDomainReason::Uvs(UvsReason::core_conf()))
+        let err = StructError::from(TestDomainReason::General(UnifiedReason::core_conf()))
             .with_detail("missing db config")
             .with_position("src/config.rs:42")
             .doing("database_config")

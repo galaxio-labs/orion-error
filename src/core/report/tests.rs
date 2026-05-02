@@ -6,7 +6,7 @@ use crate::{
         SourceFrame,
     },
     protocol::DefaultExposurePolicy,
-    OperationContext, StructError, UvsReason,
+    OperationContext, StructError, UnifiedReason,
 };
 
 #[cfg(feature = "serde_json")]
@@ -33,12 +33,12 @@ enum TestReason {
     #[error("test error")]
     TestError,
     #[error("{0}")]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 
-impl From<UvsReason> for TestReason {
-    fn from(value: UvsReason) -> Self {
-        Self::Uvs(value)
+impl From<UnifiedReason> for TestReason {
+    fn from(value: UnifiedReason) -> Self {
+        Self::General(value)
     }
 }
 
@@ -48,7 +48,7 @@ impl ErrorCode for TestReason {
     fn error_code(&self) -> i32 {
         match self {
             TestReason::TestError => 1001,
-            TestReason::Uvs(reason) => reason.error_code(),
+            TestReason::General(reason) => reason.error_code(),
         }
     }
 }
@@ -57,14 +57,14 @@ impl ErrorIdentityProvider for TestReason {
     fn stable_code(&self) -> &'static str {
         match self {
             TestReason::TestError => "test.test_error",
-            TestReason::Uvs(reason) => reason.stable_code(),
+            TestReason::General(reason) => reason.stable_code(),
         }
     }
 
     fn error_category(&self) -> ErrorCategory {
         match self {
             TestReason::TestError => ErrorCategory::Logic,
-            TestReason::Uvs(reason) => reason.error_category(),
+            TestReason::General(reason) => reason.error_category(),
         }
     }
 }

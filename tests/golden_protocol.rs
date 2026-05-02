@@ -9,7 +9,7 @@
 use orion_error::{
     prelude::*,
     protocol::DefaultExposurePolicy,
-    reason::UvsReason,
+    reason::UnifiedReason,
     runtime::{OperationContext, StructError},
     snapshot::StableErrorSnapshot,
 };
@@ -18,23 +18,23 @@ use orion_error::{
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn make_err() -> StructError<UvsReason> {
-    StructError::from(UvsReason::validation_error())
+fn make_err() -> StructError<UnifiedReason> {
+    StructError::from(UnifiedReason::validation_error())
         .with_detail("field `email` is required")
         .with_position("src/handler.rs:42")
         .doing("parse input")
         .at("request.json")
 }
 
-fn make_deep_err() -> StructError<UvsReason> {
-    let leaf = StructError::from(UvsReason::system_error())
+fn make_deep_err() -> StructError<UnifiedReason> {
+    let leaf = StructError::from(UnifiedReason::system_error())
         .with_detail("disk offline")
         .with_position("src/storage.rs:88");
-    let mid = StructError::from(UvsReason::data_error())
+    let mid = StructError::from(UnifiedReason::data_error())
         .with_detail("query failed")
         .with_source(leaf)
         .doing("load user");
-    StructError::from(UvsReason::validation_error())
+    StructError::from(UnifiedReason::validation_error())
         .with_detail("invalid request")
         .with_source(mid)
         .doing("handle request")
@@ -105,7 +105,7 @@ fn golden_stable_snapshot_deep_source() {
 
 #[test]
 fn golden_http_error_json_for_public_error() {
-    let err = StructError::from(UvsReason::business_error())
+    let err = StructError::from(UnifiedReason::business_error())
         .with_detail("order state invalid")
         .doing("validate order");
     let json = err
@@ -123,7 +123,7 @@ fn golden_http_error_json_for_public_error() {
 
 #[test]
 fn golden_http_error_json_for_internal_error() {
-    let err = StructError::from(UvsReason::system_error())
+    let err = StructError::from(UnifiedReason::system_error())
         .with_detail("disk offline")
         .doing("write file");
     let json = err
@@ -167,7 +167,8 @@ fn golden_http_error_json_keys() {
 
 #[test]
 fn golden_rpc_error_json_for_timeout() {
-    let err = StructError::from(UvsReason::timeout_error()).with_detail("downstream rpc timeout");
+    let err =
+        StructError::from(UnifiedReason::timeout_error()).with_detail("downstream rpc timeout");
     let json = err
         .exposure_snapshot(&DefaultExposurePolicy)
         .to_rpc_error_json()
@@ -185,7 +186,7 @@ fn golden_rpc_error_json_for_timeout() {
 
 #[test]
 fn golden_rpc_error_json_for_business() {
-    let err = StructError::from(UvsReason::business_error()).with_detail("order state invalid");
+    let err = StructError::from(UnifiedReason::business_error()).with_detail("order state invalid");
     let json = err
         .exposure_snapshot(&DefaultExposurePolicy)
         .to_rpc_error_json()
@@ -199,7 +200,7 @@ fn golden_rpc_error_json_for_business() {
 
 #[test]
 fn golden_redacted_protocol_masks_detail() {
-    let err = StructError::from(UvsReason::validation_error()).with_detail("token=abc");
+    let err = StructError::from(UnifiedReason::validation_error()).with_detail("token=abc");
     let policy = TestRedactPolicy;
     let redacted = err
         .exposure_snapshot(&DefaultExposurePolicy)
@@ -212,12 +213,12 @@ fn golden_redacted_protocol_masks_detail() {
 
 #[test]
 fn golden_source_frame_metadata() {
-    let inner = StructError::from(UvsReason::validation_error()).with_context(
+    let inner = StructError::from(UnifiedReason::validation_error()).with_context(
         OperationContext::doing("parse")
             .with_meta("parse.line", 42u32)
             .with_meta("parse.file", "config.toml"),
     );
-    let err = StructError::from(UvsReason::system_error()).with_struct_source(inner);
+    let err = StructError::from(UnifiedReason::system_error()).with_struct_source(inner);
 
     let json = err
         .exposure_snapshot(&DefaultExposurePolicy)

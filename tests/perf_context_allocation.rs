@@ -11,7 +11,7 @@ use std::time::Instant;
 use std::io;
 
 use orion_error::{
-    reason::UvsReason, runtime::source::SourceFrame, runtime::ErrorMetadata, OperationContext,
+    reason::UnifiedReason, runtime::source::SourceFrame, runtime::ErrorMetadata, OperationContext,
     StructError,
 };
 
@@ -23,29 +23,29 @@ const S: u64 = 1_000_000; // for frame-only benchmarks
 fn perf_measure_allocations() {
     // warmup: let the allocator settle
     for _ in 0..100_000 {
-        black_hole(StructError::from(UvsReason::validation_error()));
+        black_hole(StructError::from(UnifiedReason::validation_error()));
     }
 
     // 1. Bare creation — no detail, no context, no source
     bench("bare             ", || {
-        StructError::from(UvsReason::validation_error())
+        StructError::from(UnifiedReason::validation_error())
     });
 
     // 2. With detail
     bench("with-detail      ", || {
-        StructError::from(UvsReason::validation_error()).with_detail("port number out of range")
+        StructError::from(UnifiedReason::validation_error()).with_detail("port number out of range")
     });
 
     // 3. With detail + position
     bench("with-detail+pos  ", || {
-        StructError::from(UvsReason::validation_error())
+        StructError::from(UnifiedReason::validation_error())
             .with_detail("port number out of range")
             .with_position("src/config.rs:42")
     });
 
     // 4. builder — same payload as above via builder API
     bench("builder          ", || {
-        StructError::builder(UvsReason::validation_error())
+        StructError::builder(UnifiedReason::validation_error())
             .detail("port number out of range")
             .position("src/config.rs:42")
             .finish()
@@ -55,23 +55,25 @@ fn perf_measure_allocations() {
 
     // 5. With std source (io::Error, cheap Debug)
     bench_n("with-std-source  ", M, || {
-        StructError::from(UvsReason::system_error()).with_source(io::Error::other("disk offline"))
+        StructError::from(UnifiedReason::system_error()
+            ).with_source(io::Error::other("disk offline"))
     });
 
     // 6. With std source + long message (Debug cost visible)
     bench_n("with-std-verbose ", M, || {
-        StructError::from(UvsReason::system_error()).with_source(io::Error::other("x".repeat(256)))
+        StructError::from(UnifiedReason::system_error()
+            ).with_source(io::Error::other("x".repeat(256)))
     });
 
     // 7. With struct source (expensive Debug — full context stack)
     bench_n("with-struct-src  ", M, || {
         let ctx = OperationContext::doing("parse config");
-        let inner = StructError::from(UvsReason::validation_error())
+        let inner = StructError::from(UnifiedReason::validation_error())
             .with_detail("port number out of range")
             .with_position("src/config.rs:42")
             .with_context(ctx)
             .with_context(OperationContext::at("config.toml"));
-        StructError::from(UvsReason::system_error()).with_source(inner)
+        StructError::from(UnifiedReason::system_error()).with_source(inner)
     });
 
     // === SourceFrame clone benchmarks ===
@@ -112,16 +114,16 @@ fn perf_measure_allocations() {
 
     // 8. Deep struct source chain (3 layers, compounding Debug)
     bench_n("deep-struct-src  ", M, || {
-        let leaf = StructError::from(UvsReason::validation_error())
+        let leaf = StructError::from(UnifiedReason::validation_error())
             .with_detail("port number out of range");
-        let mid = StructError::from(UvsReason::data_error())
+        let mid = StructError::from(UnifiedReason::data_error())
             .with_detail("parse failed")
             .with_source(leaf);
-        StructError::from(UvsReason::system_error()).with_source(mid)
+        StructError::from(UnifiedReason::system_error()).with_source(mid)
     });
 }
 
-fn bench_n(name: &str, n: u64, f: impl Fn() -> StructError<UvsReason>) {
+fn bench_n(name: &str, n: u64, f: impl Fn() -> StructError<UnifiedReason>) {
     let start = Instant::now();
     for _ in 0..n {
         black_hole(f());
@@ -151,7 +153,7 @@ fn bench_n_src(name: &str, n: u64, frame: SourceFrame) {
     );
 }
 
-fn bench(name: &str, f: impl Fn() -> StructError<UvsReason>) {
+fn bench(name: &str, f: impl Fn() -> StructError<UnifiedReason>) {
     let start = Instant::now();
     for _ in 0..N {
         black_hole(f());

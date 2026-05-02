@@ -21,13 +21,13 @@ Use this crate directly only when you need to pin or inspect the proc-macro crat
 
 ```rust
 use derive_more::From;
-use orion_error::{OrionError, UvsReason};
+use orion_error::{OrionError, UnifiedReason};
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum AppReason {
     #[orion_error(identity = "biz.invalid_request")]
     InvalidRequest,
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+General(UnifiedReason),
 }
 ```

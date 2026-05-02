@@ -28,4 +28,4 @@ pub use snapshot::{
     ErrorIdentity, ErrorSnapshot, SnapshotContextFrame, SnapshotSourceFrame, StableErrorSnapshot,
     STABLE_SNAPSHOT_SCHEMA_VERSION,
 };
-pub use universal::{ConfErrReason, UvsReason};
+pub use universal::{UnifiedReason, ConfErrReason, UvsReason};

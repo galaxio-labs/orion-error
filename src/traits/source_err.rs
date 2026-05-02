@@ -17,7 +17,7 @@ mod private {
 /// ```rust
 /// use orion_error::interop::{raw_source, RawStdError};
 /// use orion_error::prelude::*;
-/// use orion_error::UvsReason;
+/// use orion_error::UnifiedReason;
 ///
 /// #[derive(Debug)]
 /// struct MyError;
@@ -34,7 +34,7 @@ mod private {
 /// let result: Result<(), MyError> = Err(MyError);
 /// let err = result
 ///     .map_err(raw_source)
-///     .source_err(UvsReason::system_error(), "my operation failed")
+///     .source_err(UnifiedReason::system_error(), "my operation failed")
 ///     .unwrap_err();
 ///
 /// assert_eq!(err.source_ref().unwrap().to_string(), "my error");
@@ -61,11 +61,11 @@ pub trait UnstructuredSource: private::Sealed {
 ///
 /// ```rust
 /// use orion_error::prelude::*;
-/// use orion_error::UvsReason;
+/// use orion_error::UnifiedReason;
 ///
 /// let result: Result<(), std::io::Error> = Err(std::io::Error::other("disk offline"));
-/// let err: Result<(), StructError<UvsReason>> =
-///     result.source_err(UvsReason::system_error(), "read config");
+/// let err: Result<(), StructError<UnifiedReason>> =
+///     result.source_err(UnifiedReason::system_error(), "read config");
 /// assert!(err.unwrap_err().detail().as_deref() == Some("read config"));
 /// ```
 ///
@@ -94,7 +94,7 @@ pub struct RawSource<E>(E);
 /// use std::fmt;
 ///
 /// use orion_error::prelude::*;
-/// use orion_error::UvsReason;
+/// use orion_error::UnifiedReason;
 /// use orion_error::interop::{raw_source, RawStdError};
 ///
 /// #[derive(Debug)]
@@ -112,17 +112,17 @@ pub struct RawSource<E>(E);
 /// let result: Result<(), ThirdPartyError> = Err(ThirdPartyError);
 /// let err = result
 ///     .map_err(raw_source)
-///     .source_err(UvsReason::system_error(), "load failed")
+///     .source_err(UnifiedReason::system_error(), "load failed")
 ///     .expect_err("expected structured error");
 ///
 /// assert_eq!(err.source_ref().unwrap().to_string(), "third-party failure");
 /// ```
 ///
 /// ```compile_fail
-/// use orion_error::{StructError, UvsReason};
+/// use orion_error::{StructError, UnifiedReason};
 /// use orion_error::interop::{raw_source, RawStdError};
 ///
-/// let structured = StructError::from(UvsReason::system_error());
+/// let structured = StructError::from(UnifiedReason::system_error());
 /// let _ = raw_source(structured);
 /// ```
 pub fn raw_source<E>(err: E) -> RawSource<E>
@@ -317,8 +317,8 @@ mod tests {
     use std::{fmt, io};
 
     use super::{raw_source, RawStdError, SourceErr};
+    use crate::UnifiedReason;
     use crate::StructError;
-    use crate::UvsReason;
 
     #[derive(Debug)]
     struct ThirdPartyError(&'static str);
@@ -338,7 +338,7 @@ mod tests {
         let result: Result<(), io::Error> = Err(io::Error::other("disk offline"));
 
         let err = result
-            .source_err(UvsReason::system_error(), "load config failed")
+            .source_err(UnifiedReason::system_error(), "load config failed")
             .expect_err("expected structured error");
 
         assert_eq!(err.detail().as_deref(), Some("load config failed"));
@@ -351,7 +351,7 @@ mod tests {
 
         let err = result
             .map_err(raw_source)
-            .source_err(UvsReason::validation_error(), "parse config failed")
+            .source_err(UnifiedReason::validation_error(), "parse config failed")
             .expect_err("expected structured error");
 
         assert_eq!(err.detail().as_deref(), Some("parse config failed"));
@@ -364,7 +364,7 @@ mod tests {
         let result: Result<(), anyhow::Error> = Err(anyhow::anyhow!("network offline"));
 
         let err = result
-            .source_err(UvsReason::system_error(), "load config failed")
+            .source_err(UnifiedReason::system_error(), "load config failed")
             .expect_err("expected structured error");
 
         assert_eq!(err.detail().as_deref(), Some("load config failed"));
@@ -375,14 +375,14 @@ mod tests {
     #[cfg(feature = "anyhow")]
     #[test]
     fn test_source_err_for_anyhow_extracts_top_level_official_dyn_bridge() {
-        let structured = StructError::from(UvsReason::validation_error())
+        let structured = StructError::from(UnifiedReason::validation_error())
             .with_detail("invalid port")
             .with_std_source(io::Error::other("not a number"));
         let structured_display = structured.to_string();
         let result: Result<(), anyhow::Error> = Err(anyhow::Error::new(structured.into_dyn_std()));
 
         let err = result
-            .source_err(UvsReason::system_error(), "load config failed")
+            .source_err(UnifiedReason::system_error(), "load config failed")
             .expect_err("expected structured error");
 
         assert_eq!(err.detail().as_deref(), Some("load config failed"));
@@ -402,12 +402,11 @@ mod tests {
     #[test]
     fn test_source_err_for_struct_error_source() {
         // source_err works on Result<T, StructError<R1>> too (wraps as struct source)
-        let inner: Result<(), StructError<UvsReason>> =
-            Err(StructError::from(UvsReason::validation_error())
-                .with_detail("inner detail"));
+        let inner: Result<(), StructError<UnifiedReason>> =
+            Err(StructError::from(UnifiedReason::validation_error()).with_detail("inner detail"));
 
-        let outer: Result<(), StructError<UvsReason>> =
-            inner.source_err(UvsReason::system_error(), "outer wrapper");
+        let outer: Result<(), StructError<UnifiedReason>> =
+            inner.source_err(UnifiedReason::system_error(), "outer wrapper");
 
         let err = outer.unwrap_err();
         assert_eq!(err.detail().as_deref(), Some("outer wrapper"));

@@ -13,7 +13,7 @@ Rust：stable 2025-04-30
 
 | 场景 | 构造内容 |
 |------|---------|
-| `bare` | `StructError::from(UvsReason::validation_error())` |
+| `bare` | `StructError::from(UnifiedReason::validation_error())` |
 | `with-detail` | 同上 + `.with_detail("port number out of range")` |
 | `with-detail+pos` | 同上 + `.with_position("src/config.rs:42")` |
 | `builder` | builder API 等同 with-detail+pos |

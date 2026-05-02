@@ -40,14 +40,14 @@ pub trait DomainReason: PartialEq + Display + Debug + Send + Sync + 'static {}
 
 ```rust
 use derive_more::From;
-use orion_error::{OrionError, UvsReason};
+use orion_error::{OrionError, UnifiedReason};
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum AppReason {
     #[orion_error(identity = "biz.invalid_request")]
     InvalidRequest,
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 ```
 
@@ -66,7 +66,7 @@ enum AppReason {
 
 `ErrorCode::error_code()` 返回兼容数值码：
 
-- `UvsReason::system_error()` 是 `201`
+- `UnifiedReason::system_error()` 是 `201`
 - `OrionError` 未显式声明 `code = ...` 时默认是 `500`
 
 它的定位是：
@@ -145,12 +145,12 @@ enum AppReason {
 ### 4.3 `transparent`
 
 ```rust
-use orion_error::{OrionError, UvsReason};
+use orion_error::{OrionError, UnifiedReason};
 
 #[derive(Debug, Clone, PartialEq, OrionError)]
 enum AppReason {
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 ```
 
@@ -160,7 +160,7 @@ enum AppReason {
 - `ErrorCode`
 - `ErrorIdentityProvider`
 
-这适合保留一个 `Uvs(UvsReason)` 兜底通道。
+这适合保留一个 `General(UnifiedReason)` 兜底通道。
 
 ## 5. 为什么不能只靠 `Display`
 
@@ -188,9 +188,9 @@ enum AppReason {
 
 才适合作为跨边界约定。
 
-## 6. `UvsReason` 的角色
+## 6. `UnifiedReason` 的角色
 
-`UvsReason` 是内置的通用错误分类，已经实现：
+`UnifiedReason` 是内置的通用错误分类，已经实现：
 
 - `DomainReason`
 - `ErrorCode`
@@ -198,16 +198,16 @@ enum AppReason {
 
 这意味着它可以直接：
 
-- 作为 `StructError<UvsReason>` 的 reason
+- 作为 `StructError<UnifiedReason>` 的 reason
 - 作为 `#[orion_error(transparent)]` 的底层 reason
 - 进入稳定身份和协议投影路径
 
 例如：
 
-- `UvsReason::system_error()` -> `sys.io_error`
-- `UvsReason::network_error()` -> `sys.network_error`
-- `UvsReason::core_conf()` -> `conf.core_invalid`
-- `UvsReason::logic_error()` -> `logic.internal_invariant_broken`
+- `UnifiedReason::system_error()` -> `sys.io_error`
+- `UnifiedReason::network_error()` -> `sys.network_error`
+- `UnifiedReason::core_conf()` -> `conf.core_invalid`
+- `UnifiedReason::logic_error()` -> `logic.internal_invariant_broken`
 
 ## 7. 什么时候必须提供稳定身份
 
@@ -228,7 +228,7 @@ enum AppReason {
 
 ```rust
 use derive_more::From;
-use orion_error::{OrionError, UvsReason};
+use orion_error::{OrionError, UnifiedReason};
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum OrderReason {
@@ -237,7 +237,7 @@ enum OrderReason {
     #[orion_error(identity = "biz.insufficient_funds")]
     InsufficientFunds,
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 ```
 
@@ -245,7 +245,7 @@ enum OrderReason {
 
 - 业务错误有稳定领域语义
 - 通用系统错误不需要重复造轮子
-- HTTP / RPC / log 等投影可以直接复用 `UvsReason` 的稳定身份
+- HTTP / RPC / log 等投影可以直接复用 `UnifiedReason` 的稳定身份
 
 ## 9. 设计建议
 

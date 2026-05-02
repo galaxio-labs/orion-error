@@ -27,7 +27,7 @@ Prefer one of these two approaches:
 **Application code (default):**
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UvsReason;
+use orion_error::reason::UnifiedReason;
 use orion_error::runtime::OperationContext;
 ```
 
@@ -44,7 +44,7 @@ use orion_error::interop::*;       // std::error::Error bridge
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UvsReason;
+use orion_error::reason::UnifiedReason;
 use orion_error::runtime::OperationContext;
 
 #[derive(Debug, Clone, PartialEq, OrionError)]
@@ -52,7 +52,7 @@ enum AppReason {
     #[orion_error(identity = "biz.invalid")]
     Invalid,
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 
 fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
@@ -81,7 +81,7 @@ This covers the four core points:
 New code should use `#[derive(OrionError)]`:
 
 ```rust
-use orion_error::{OrionError, UvsReason};
+use orion_error::{OrionError, UnifiedReason};
 
 #[derive(Debug, Clone, PartialEq, OrionError)]
 enum OrderReason {
@@ -90,7 +90,7 @@ enum OrderReason {
     #[orion_error(identity = "biz.insufficient_funds")]
     InsufficientFunds,
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 ```
 
@@ -98,18 +98,18 @@ enum OrderReason {
 
 ### 1.2 Universal Reason
 
-`UvsReason` is the built-in universal reason classification. Common constructors:
+`UnifiedReason` is the built-in universal reason classification. Common constructors:
 
-- `UvsReason::validation_error()`, `UvsReason::business_error()`
-- `UvsReason::system_error()`, `UvsReason::network_error()`, `UvsReason::timeout_error()`
-- `UvsReason::core_conf()`, `UvsReason::logic_error()`
+- `UnifiedReason::validation_error()`, `UnifiedReason::business_error()`
+- `UnifiedReason::system_error()`, `UnifiedReason::network_error()`, `UnifiedReason::timeout_error()`
+- `UnifiedReason::core_conf()`, `UnifiedReason::logic_error()`
 
 ### 1.3 Delegate Constructors
 
-If your domain reason has a transparent `UvsReason` variant, all `UvsReason` constructors are generated automatically:
+If your domain reason has a transparent `UnifiedReason` variant, all `UnifiedReason` constructors are generated automatically:
 
 ```rust
-AppReason::system_error()          // instead of AppReason::from(UvsReason::system_error())
+AppReason::system_error()          // instead of AppReason::from(UnifiedReason::system_error())
 AppReason::validation_error()
 ```
 
@@ -118,14 +118,14 @@ AppReason::validation_error()
 ### 2.1 Direct Construction
 
 ```rust
-let err = StructError::from(UvsReason::validation_error())
+let err = StructError::from(UnifiedReason::validation_error())
     .with_detail("field `email` is required");
 ```
 
 ### 2.2 Builder
 
 ```rust
-let err = StructError::builder(UvsReason::validation_error())
+let err = StructError::builder(UnifiedReason::validation_error())
     .detail("field `email` is required")
     .context_ref(&ctx)
     .finish();
@@ -134,7 +134,7 @@ let err = StructError::builder(UvsReason::validation_error())
 ### 2.3 Attaching Source
 
 ```rust
-let err = StructError::from(UvsReason::system_error())
+let err = StructError::from(UnifiedReason::system_error())
     .with_detail("read config failed")
     .with_source(std::io::Error::other("disk offline"));
 ```
@@ -172,7 +172,7 @@ Works for both raw `std::error::Error` and already-structured `StructError` sour
 
 ```rust
 let err = std::fs::read_to_string("config.toml")
-    .source_err(UvsReason::system_error(), "read config failed")
+    .source_err(UnifiedReason::system_error(), "read config failed")
     .unwrap_err();
 ```
 
@@ -245,7 +245,7 @@ use orion_error::dev::testing::assert_err_identity;
 use orion_error::reason::ErrorCategory;
 
 let err = std::fs::read_to_string("config.toml")
-    .source_err(UvsReason::system_error(), "read config failed")
+    .source_err(UnifiedReason::system_error(), "read config failed")
     .unwrap_err();
 
 assert_err_identity(&err, "sys.io_error", ErrorCategory::Sys);

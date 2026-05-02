@@ -1,7 +1,7 @@
 use crate::reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
 use crate::{
     core::{DomainReason, ErrorMetadata, SourceFrame},
-    OperationContext, StructError, UvsReason,
+    OperationContext, StructError, UnifiedReason,
 };
 
 use super::{
@@ -14,12 +14,12 @@ enum TestReason {
     #[error("test error")]
     TestError,
     #[error("{0}")]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 
-impl From<UvsReason> for TestReason {
-    fn from(value: UvsReason) -> Self {
-        Self::Uvs(value)
+impl From<UnifiedReason> for TestReason {
+    fn from(value: UnifiedReason) -> Self {
+        Self::General(value)
     }
 }
 
@@ -29,7 +29,7 @@ impl ErrorCode for TestReason {
     fn error_code(&self) -> i32 {
         match self {
             TestReason::TestError => 1001,
-            TestReason::Uvs(reason) => reason.error_code(),
+            TestReason::General(reason) => reason.error_code(),
         }
     }
 }
@@ -38,14 +38,14 @@ impl ErrorIdentityProvider for TestReason {
     fn stable_code(&self) -> &'static str {
         match self {
             TestReason::TestError => "test.test_error",
-            TestReason::Uvs(reason) => reason.stable_code(),
+            TestReason::General(reason) => reason.stable_code(),
         }
     }
 
     fn error_category(&self) -> ErrorCategory {
         match self {
             TestReason::TestError => ErrorCategory::Logic,
-            TestReason::Uvs(reason) => reason.error_category(),
+            TestReason::General(reason) => reason.error_category(),
         }
     }
 }
@@ -55,7 +55,7 @@ fn test_snapshot_captures_runtime_fields_and_source_frames() {
     let source = StructError::from(TestReason::TestError).with_context(
         OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
     );
-    let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
+    let err = StructError::from(TestReason::General(UnifiedReason::system_error()))
         .with_detail("engine bootstrap failed")
         .with_position("src/main.rs:42")
         .with_context(OperationContext::doing("start engine").with_meta("component.name", "engine"))
@@ -79,7 +79,7 @@ fn test_snapshot_captures_runtime_fields_and_source_frames() {
 
 #[test]
 fn test_identity_snapshot_captures_stable_identity_fields() {
-    let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
+    let err = StructError::from(TestReason::General(UnifiedReason::system_error()))
         .with_detail("engine bootstrap failed")
         .with_position("src/main.rs:42")
         .with_context(OperationContext::doing("start engine"));
@@ -99,7 +99,7 @@ fn test_snapshot_preserves_action_and_locator_context_fields() {
     let mut ctx = OperationContext::at("config.toml");
     ctx.with_doing("parse config");
 
-    let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
+    let err = StructError::from(TestReason::General(UnifiedReason::system_error()))
         .with_context(OperationContext::doing("load config").with_meta("component.name", "engine"))
         .with_context(ctx);
 
@@ -247,7 +247,7 @@ fn test_snapshot_stable_helpers_prefer_snapshot_native_frames() {
         .with_context(
             OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
         );
-    let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
+    let err = StructError::from(TestReason::General(UnifiedReason::system_error()))
         .with_detail("outer detail")
         .with_context(OperationContext::doing("start engine"))
         .with_struct_source(source);
@@ -279,7 +279,7 @@ fn test_snapshot_stable_export_strips_compat_projection_fields() {
         );
     let mut outer = OperationContext::at("engine.toml");
     outer.with_doing("start engine");
-    let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
+    let err = StructError::from(TestReason::General(UnifiedReason::system_error()))
         .with_detail("outer detail")
         .with_context(outer)
         .with_struct_source(source);
@@ -360,7 +360,7 @@ fn test_stable_snapshot_from_struct_error_matches_snapshot_stable_export() {
         .with_context(
             OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
         );
-    let err = StructError::from(TestReason::Uvs(UvsReason::system_error()))
+    let err = StructError::from(TestReason::General(UnifiedReason::system_error()))
         .with_detail("outer detail")
         .with_context(OperationContext::doing("start engine"))
         .with_struct_source(source);

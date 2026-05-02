@@ -24,7 +24,7 @@ pub enum ConfErrReason {
 /// - 300-399: Configuration & External Layer Errors (配置和外部层错误)
 #[derive(Debug, Error, PartialEq, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-pub enum UvsReason {
+pub enum UnifiedReason {
     // === Business Layer Errors (100-199) ===
     /// Input validation errors (格式错误、参数校验失败等)
     #[error("validation error")]
@@ -81,9 +81,9 @@ pub enum UvsReason {
     LogicError,
 }
 
-impl DomainReason for UvsReason {}
+impl DomainReason for UnifiedReason {}
 
-impl UvsReason {
+impl UnifiedReason {
     // === Configuration Error Constructors ===
     pub fn core_conf() -> Self {
         Self::ConfigError(ConfErrReason::Core)
@@ -149,94 +149,94 @@ impl UvsReason {
     }
 }
 
-impl ErrorCode for UvsReason {
+impl ErrorCode for UnifiedReason {
     fn error_code(&self) -> i32 {
         match self {
             // === Business Layer Errors (100-199) ===
-            UvsReason::ValidationError => 100,
-            UvsReason::BusinessError => 101,
-            UvsReason::NotFoundError => 102,
-            UvsReason::PermissionError => 103,
-            UvsReason::LogicError => 104,
-            UvsReason::RunRuleError => 105,
+            UnifiedReason::ValidationError => 100,
+            UnifiedReason::BusinessError => 101,
+            UnifiedReason::NotFoundError => 102,
+            UnifiedReason::PermissionError => 103,
+            UnifiedReason::LogicError => 104,
+            UnifiedReason::RunRuleError => 105,
 
             // === Infrastructure Layer Errors (200-299) ===
-            UvsReason::DataError => 200,
-            UvsReason::SystemError => 201,
-            UvsReason::NetworkError => 202,
-            UvsReason::ResourceError => 203,
-            UvsReason::TimeoutError => 204,
+            UnifiedReason::DataError => 200,
+            UnifiedReason::SystemError => 201,
+            UnifiedReason::NetworkError => 202,
+            UnifiedReason::ResourceError => 203,
+            UnifiedReason::TimeoutError => 204,
 
             // === Configuration & External Layer Errors (300-399) ===
-            UvsReason::ConfigError(_) => 300,
-            UvsReason::ExternalError => 301,
+            UnifiedReason::ConfigError(_) => 300,
+            UnifiedReason::ExternalError => 301,
         }
     }
 }
 
-impl ErrorIdentityProvider for UvsReason {
+impl ErrorIdentityProvider for UnifiedReason {
     fn stable_code(&self) -> &'static str {
         match self {
-            UvsReason::ValidationError => "biz.validation_error",
-            UvsReason::BusinessError => "biz.business_error",
-            UvsReason::RunRuleError => "biz.run_rule_error",
-            UvsReason::NotFoundError => "biz.not_found",
-            UvsReason::PermissionError => "biz.permission_denied",
-            UvsReason::DataError => "sys.data_error",
-            UvsReason::SystemError => "sys.io_error",
-            UvsReason::NetworkError => "sys.network_error",
-            UvsReason::ResourceError => "sys.resource_exhausted",
-            UvsReason::TimeoutError => "sys.timeout",
-            UvsReason::ConfigError(ConfErrReason::Core) => "conf.core_invalid",
-            UvsReason::ConfigError(ConfErrReason::Feature) => "conf.feature_invalid",
-            UvsReason::ConfigError(ConfErrReason::Dynamic) => "conf.dynamic_invalid",
-            UvsReason::ExternalError => "sys.external_service_error",
-            UvsReason::LogicError => "logic.internal_invariant_broken",
+            UnifiedReason::ValidationError => "biz.validation_error",
+            UnifiedReason::BusinessError => "biz.business_error",
+            UnifiedReason::RunRuleError => "biz.run_rule_error",
+            UnifiedReason::NotFoundError => "biz.not_found",
+            UnifiedReason::PermissionError => "biz.permission_denied",
+            UnifiedReason::DataError => "sys.data_error",
+            UnifiedReason::SystemError => "sys.io_error",
+            UnifiedReason::NetworkError => "sys.network_error",
+            UnifiedReason::ResourceError => "sys.resource_exhausted",
+            UnifiedReason::TimeoutError => "sys.timeout",
+            UnifiedReason::ConfigError(ConfErrReason::Core) => "conf.core_invalid",
+            UnifiedReason::ConfigError(ConfErrReason::Feature) => "conf.feature_invalid",
+            UnifiedReason::ConfigError(ConfErrReason::Dynamic) => "conf.dynamic_invalid",
+            UnifiedReason::ExternalError => "sys.external_service_error",
+            UnifiedReason::LogicError => "logic.internal_invariant_broken",
         }
     }
 
     fn error_category(&self) -> ErrorCategory {
         match self {
-            UvsReason::ConfigError(_) => ErrorCategory::Conf,
-            UvsReason::LogicError => ErrorCategory::Logic,
-            UvsReason::ValidationError
-            | UvsReason::BusinessError
-            | UvsReason::RunRuleError
-            | UvsReason::NotFoundError
-            | UvsReason::PermissionError => ErrorCategory::Biz,
-            UvsReason::DataError
-            | UvsReason::SystemError
-            | UvsReason::NetworkError
-            | UvsReason::ResourceError
-            | UvsReason::TimeoutError
-            | UvsReason::ExternalError => ErrorCategory::Sys,
+            UnifiedReason::ConfigError(_) => ErrorCategory::Conf,
+            UnifiedReason::LogicError => ErrorCategory::Logic,
+            UnifiedReason::ValidationError
+            | UnifiedReason::BusinessError
+            | UnifiedReason::RunRuleError
+            | UnifiedReason::NotFoundError
+            | UnifiedReason::PermissionError => ErrorCategory::Biz,
+            UnifiedReason::DataError
+            | UnifiedReason::SystemError
+            | UnifiedReason::NetworkError
+            | UnifiedReason::ResourceError
+            | UnifiedReason::TimeoutError
+            | UnifiedReason::ExternalError => ErrorCategory::Sys,
         }
     }
 }
 
-impl UvsReason {
+impl UnifiedReason {
     /// Check if this error is retryable
     /// 检查错误是否可重试
     pub fn is_retryable(&self) -> bool {
         match self {
             // Infrastructure errors are often retryable
-            UvsReason::NetworkError => true,
-            UvsReason::TimeoutError => true,
-            UvsReason::ResourceError => true,
-            UvsReason::SystemError => true,
-            UvsReason::ExternalError => true,
+            UnifiedReason::NetworkError => true,
+            UnifiedReason::TimeoutError => true,
+            UnifiedReason::ResourceError => true,
+            UnifiedReason::SystemError => true,
+            UnifiedReason::ExternalError => true,
 
             // Business logic errors are generally not retryable
-            UvsReason::ValidationError => false,
-            UvsReason::BusinessError => false,
-            UvsReason::RunRuleError => false,
-            UvsReason::NotFoundError => false,
-            UvsReason::PermissionError => false,
+            UnifiedReason::ValidationError => false,
+            UnifiedReason::BusinessError => false,
+            UnifiedReason::RunRuleError => false,
+            UnifiedReason::NotFoundError => false,
+            UnifiedReason::PermissionError => false,
 
             // Configuration errors require manual intervention
-            UvsReason::ConfigError(_) => false,
-            UvsReason::DataError => false,
-            UvsReason::LogicError => false,
+            UnifiedReason::ConfigError(_) => false,
+            UnifiedReason::DataError => false,
+            UnifiedReason::LogicError => false,
         }
     }
 
@@ -245,9 +245,9 @@ impl UvsReason {
     pub fn is_high_severity(&self) -> bool {
         match self {
             // System and infrastructure issues are high severity
-            UvsReason::SystemError => true,
-            UvsReason::ResourceError => true,
-            UvsReason::ConfigError(_) => true,
+            UnifiedReason::SystemError => true,
+            UnifiedReason::ResourceError => true,
+            UnifiedReason::ConfigError(_) => true,
 
             // Others are normal business operations
             _ => false,
@@ -258,22 +258,26 @@ impl UvsReason {
     /// 获取错误类别名称用于监控和指标
     pub fn category_name(&self) -> &'static str {
         match self {
-            UvsReason::ValidationError => "validation",
-            UvsReason::BusinessError => "business",
-            UvsReason::RunRuleError => "runrule",
-            UvsReason::NotFoundError => "not_found",
-            UvsReason::PermissionError => "permission",
-            UvsReason::DataError => "data",
-            UvsReason::SystemError => "system",
-            UvsReason::NetworkError => "network",
-            UvsReason::ResourceError => "resource",
-            UvsReason::TimeoutError => "timeout",
-            UvsReason::ConfigError(_) => "config",
-            UvsReason::ExternalError => "external",
-            UvsReason::LogicError => "logic",
+            UnifiedReason::ValidationError => "validation",
+            UnifiedReason::BusinessError => "business",
+            UnifiedReason::RunRuleError => "runrule",
+            UnifiedReason::NotFoundError => "not_found",
+            UnifiedReason::PermissionError => "permission",
+            UnifiedReason::DataError => "data",
+            UnifiedReason::SystemError => "system",
+            UnifiedReason::NetworkError => "network",
+            UnifiedReason::ResourceError => "resource",
+            UnifiedReason::TimeoutError => "timeout",
+            UnifiedReason::ConfigError(_) => "config",
+            UnifiedReason::ExternalError => "external",
+            UnifiedReason::LogicError => "logic",
         }
     }
 }
+
+/// Deprecated: use [`UnifiedReason`] instead.
+#[deprecated(since = "0.9.0", note = "renamed to UnifiedReason")]
+pub type UvsReason = UnifiedReason;
 
 #[cfg(test)]
 mod tests {
@@ -282,56 +286,59 @@ mod tests {
     #[test]
     fn test_error_code_ranges() {
         // Business layer (100-199)
-        assert_eq!(UvsReason::validation_error().error_code(), 100);
-        assert_eq!(UvsReason::business_error().error_code(), 101);
-        assert_eq!(UvsReason::not_found_error().error_code(), 102);
-        assert_eq!(UvsReason::permission_error().error_code(), 103);
+        assert_eq!(UnifiedReason::validation_error().error_code(), 100);
+        assert_eq!(UnifiedReason::business_error().error_code(), 101);
+        assert_eq!(UnifiedReason::not_found_error().error_code(), 102);
+        assert_eq!(UnifiedReason::permission_error().error_code(), 103);
 
         // Infrastructure layer (200-299)
-        assert_eq!(UvsReason::data_error().error_code(), 200);
-        assert_eq!(UvsReason::system_error().error_code(), 201);
-        assert_eq!(UvsReason::network_error().error_code(), 202);
-        assert_eq!(UvsReason::resource_error().error_code(), 203);
-        assert_eq!(UvsReason::timeout_error().error_code(), 204);
+        assert_eq!(UnifiedReason::data_error().error_code(), 200);
+        assert_eq!(UnifiedReason::system_error().error_code(), 201);
+        assert_eq!(UnifiedReason::network_error().error_code(), 202);
+        assert_eq!(UnifiedReason::resource_error().error_code(), 203);
+        assert_eq!(UnifiedReason::timeout_error().error_code(), 204);
 
         // Configuration & external layer (300-399)
-        assert_eq!(UvsReason::core_conf().error_code(), 300);
-        assert_eq!(UvsReason::external_error().error_code(), 301);
+        assert_eq!(UnifiedReason::core_conf().error_code(), 300);
+        assert_eq!(UnifiedReason::external_error().error_code(), 301);
     }
 
     #[test]
     fn test_retryable_errors() {
-        assert!(UvsReason::network_error().is_retryable());
-        assert!(UvsReason::timeout_error().is_retryable());
-        assert!(!UvsReason::validation_error().is_retryable());
-        assert!(!UvsReason::business_error().is_retryable());
+        assert!(UnifiedReason::network_error().is_retryable());
+        assert!(UnifiedReason::timeout_error().is_retryable());
+        assert!(!UnifiedReason::validation_error().is_retryable());
+        assert!(!UnifiedReason::business_error().is_retryable());
     }
 
     #[test]
     fn test_high_severity_errors() {
-        assert!(UvsReason::system_error().is_high_severity());
-        assert!(UvsReason::resource_error().is_high_severity());
-        assert!(!UvsReason::validation_error().is_high_severity());
-        assert!(!UvsReason::NotFoundError.is_high_severity());
+        assert!(UnifiedReason::system_error().is_high_severity());
+        assert!(UnifiedReason::resource_error().is_high_severity());
+        assert!(!UnifiedReason::validation_error().is_high_severity());
+        assert!(!UnifiedReason::NotFoundError.is_high_severity());
     }
 
     #[test]
     fn test_category_names() {
-        assert_eq!(UvsReason::network_error().category_name(), "network");
-        assert_eq!(UvsReason::business_error().category_name(), "business");
-        assert_eq!(UvsReason::core_conf().category_name(), "config");
+        assert_eq!(UnifiedReason::network_error().category_name(), "network");
+        assert_eq!(UnifiedReason::business_error().category_name(), "business");
+        assert_eq!(UnifiedReason::core_conf().category_name(), "config");
     }
 
     #[test]
     fn test_stable_code_values() {
         assert_eq!(
-            UvsReason::validation_error().stable_code(),
+            UnifiedReason::validation_error().stable_code(),
             "biz.validation_error"
         );
-        assert_eq!(UvsReason::system_error().stable_code(), "sys.io_error");
-        assert_eq!(UvsReason::core_conf().stable_code(), "conf.core_invalid");
+        assert_eq!(UnifiedReason::system_error().stable_code(), "sys.io_error");
         assert_eq!(
-            UvsReason::logic_error().stable_code(),
+            UnifiedReason::core_conf().stable_code(),
+            "conf.core_invalid"
+        );
+        assert_eq!(
+            UnifiedReason::logic_error().stable_code(),
             "logic.internal_invariant_broken"
         );
     }
@@ -339,16 +346,19 @@ mod tests {
     #[test]
     fn test_error_categories() {
         assert_eq!(
-            UvsReason::validation_error().error_category(),
+            UnifiedReason::validation_error().error_category(),
             ErrorCategory::Biz
         );
         assert_eq!(
-            UvsReason::system_error().error_category(),
+            UnifiedReason::system_error().error_category(),
             ErrorCategory::Sys
         );
-        assert_eq!(UvsReason::core_conf().error_category(), ErrorCategory::Conf);
         assert_eq!(
-            UvsReason::logic_error().error_category(),
+            UnifiedReason::core_conf().error_category(),
+            ErrorCategory::Conf
+        );
+        assert_eq!(
+            UnifiedReason::logic_error().error_category(),
             ErrorCategory::Logic
         );
         assert_eq!(ErrorCategory::Biz.as_str(), "biz");
@@ -356,13 +366,13 @@ mod tests {
 
     #[test]
     fn test_trait_implementations() {
-        let reason = UvsReason::network_error();
+        let reason = UnifiedReason::network_error();
         assert_eq!(reason.error_code(), 202);
 
-        let reason = UvsReason::validation_error();
+        let reason = UnifiedReason::validation_error();
         assert_eq!(reason.error_code(), 100);
 
-        let reason = UvsReason::external_error();
+        let reason = UnifiedReason::external_error();
         assert_eq!(reason.error_code(), 301);
         assert_eq!(reason.error_category(), ErrorCategory::Sys);
     }

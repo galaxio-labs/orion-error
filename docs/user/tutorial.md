@@ -31,7 +31,7 @@ orion-error = { version = "0.8.0", features = ["serde_json"] }
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UvsReason;
+use orion_error::reason::UnifiedReason;
 use orion_error::runtime::OperationContext;
 ```
 
@@ -41,7 +41,7 @@ use orion_error::runtime::OperationContext;
 use orion_error::{StructError, OrionError};
 use orion_error::conversion::{ErrorWith, SourceErr, ConvErr};
 use orion_error::protocol::DefaultExposurePolicy;
-use orion_error::reason::UvsReason;
+use orion_error::reason::UnifiedReason;
 use orion_error::runtime::OperationContext;
 ```
 
@@ -58,7 +58,7 @@ use orion_error::runtime::OperationContext;
 use derive_more::From;
 use orion_error::{
     prelude::*,
-    reason::UvsReason,
+    reason::UnifiedReason,
     runtime::OperationContext,
 };
 
@@ -67,7 +67,7 @@ enum AppReason {
     #[orion_error(identity = "biz.invalid_request")]
     InvalidRequest,
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 
 fn load_config() -> Result<String, StructError<AppReason>> {
@@ -97,7 +97,7 @@ fn load_config() -> Result<String, StructError<AppReason>> {
 
 ```rust
 use derive_more::From;
-use orion_error::{OrionError, UvsReason};
+use orion_error::{OrionError, UnifiedReason};
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum OrderReason {
@@ -106,7 +106,7 @@ enum OrderReason {
     #[orion_error(identity = "biz.insufficient_funds")]
     InsufficientFunds,
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 ```
 
@@ -126,7 +126,7 @@ enum OrderReason {
 
 ### 1.2 通用 reason
 
-`UvsReason` 是 crate 内置的通用错误分类，已经实现：
+`UnifiedReason` 是 crate 内置的通用错误分类，已经实现：
 
 - `DomainReason`
 - `ErrorCode`
@@ -134,22 +134,22 @@ enum OrderReason {
 
 常用构造：
 
-- `UvsReason::validation_error()`
-- `UvsReason::business_error()`
-- `UvsReason::system_error()`
-- `UvsReason::network_error()`
-- `UvsReason::timeout_error()`
-- `UvsReason::core_conf()`
-- `UvsReason::logic_error()`
+- `UnifiedReason::validation_error()`
+- `UnifiedReason::business_error()`
+- `UnifiedReason::system_error()`
+- `UnifiedReason::network_error()`
+- `UnifiedReason::timeout_error()`
+- `UnifiedReason::core_conf()`
+- `UnifiedReason::logic_error()`
 
 ## 2. 构造 `StructError`
 
 ### 2.1 直接构造
 
 ```rust
-use orion_error::{StructError, UvsReason};
+use orion_error::{StructError, UnifiedReason};
 
-let err = StructError::from(UvsReason::validation_error())
+let err = StructError::from(UnifiedReason::validation_error())
     .with_detail("field `email` is required");
 ```
 
@@ -159,12 +159,12 @@ let err = StructError::from(UvsReason::validation_error())
 use orion_error::{
     runtime::OperationContext,
     StructError,
-    UvsReason,
+    UnifiedReason,
 };
 
 let ctx = OperationContext::doing("validate request");
 
-let err = StructError::builder(UvsReason::validation_error())
+let err = StructError::builder(UnifiedReason::validation_error())
     .detail("field `email` is required")
     .context_ref(&ctx)
     .finish();
@@ -175,9 +175,9 @@ let err = StructError::builder(UvsReason::validation_error())
 已有 `StructError` 时：
 
 ```rust
-use orion_error::{StructError, UvsReason};
+use orion_error::{StructError, UnifiedReason};
 
-let err = StructError::from(UvsReason::system_error())
+let err = StructError::from(UnifiedReason::system_error())
     .with_detail("read config failed")
     .with_source(std::io::Error::other("disk offline"));
 
@@ -187,9 +187,9 @@ assert_eq!(err.source_ref().unwrap().to_string(), "disk offline");
 Builder 时：
 
 ```rust
-use orion_error::{StructError, UvsReason};
+use orion_error::{StructError, UnifiedReason};
 
-let err = StructError::builder(UvsReason::system_error())
+let err = StructError::builder(UnifiedReason::system_error())
     .detail("read config failed")
     .source(std::io::Error::other("disk offline"))
     .finish();
@@ -238,10 +238,10 @@ let ctx = OperationContext::doing("place_order")
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::{OperationContext, StructError, UvsReason};
+use orion_error::{OperationContext, StructError, UnifiedReason};
 
-fn check_inventory() -> Result<(), StructError<UvsReason>> {
-    Err(StructError::from(UvsReason::business_error()).with_detail("inventory unavailable"))
+fn check_inventory() -> Result<(), StructError<UnifiedReason>> {
+    Err(StructError::from(UnifiedReason::business_error()).with_detail("inventory unavailable"))
 }
 
 let mut ctx = OperationContext::doing("place_order");
@@ -275,10 +275,10 @@ assert!(result.is_err());
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::UvsReason;
+use orion_error::UnifiedReason;
 
 let err = std::fs::read_to_string("config.toml")
-    .source_err(UvsReason::system_error(), "read config failed")
+    .source_err(UnifiedReason::system_error(), "read config failed")
     .unwrap_err();
 ```
 
@@ -297,7 +297,7 @@ let err = std::fs::read_to_string("config.toml")
 ```rust
 use std::fmt;
 use orion_error::prelude::*;
-use orion_error::UvsReason;
+use orion_error::UnifiedReason;
 use orion_error::interop::{raw_source, RawStdError};
 
 #[derive(Debug)]
@@ -315,7 +315,7 @@ impl RawStdError for ThirdPartyError {}
 let result: Result<(), ThirdPartyError> = Err(ThirdPartyError);
 let err = result
     .map_err(raw_source)
-    .source_err(UvsReason::system_error(), "load failed")
+    .source_err(UnifiedReason::system_error(), "load failed")
     .unwrap_err();
 ```
 
@@ -326,13 +326,13 @@ let err = result
 
 ```rust
 use derive_more::From;
-use orion_error::{OrionError, StructError, UvsReason};
+use orion_error::{OrionError, StructError, UnifiedReason};
 use orion_error::conversion::ConvErr;
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum RepoReason {
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
@@ -377,9 +377,9 @@ assert_eq!(err.detail().as_deref(), Some("read config failed"));
 常用入口：
 
 ```rust
-use orion_error::{StructError, UvsReason};
+use orion_error::{StructError, UnifiedReason};
 
-let err = StructError::from(UvsReason::system_error())
+let err = StructError::from(UnifiedReason::system_error())
     .with_detail("read config failed");
 
 let snapshot = err.snapshot();
@@ -398,9 +398,9 @@ assert_eq!(stable.reason(), "system error");
 常用入口：
 
 ```rust
-use orion_error::{StructError, UvsReason};
+use orion_error::{StructError, UnifiedReason};
 
-let err = StructError::from(UvsReason::system_error())
+let err = StructError::from(UnifiedReason::system_error())
     .with_detail("read config failed");
 
 let report = err.report();
@@ -519,12 +519,12 @@ assert_eq!(cli["summary"], "system error: disk offline at /dev/sda");
 
 ```rust
 use orion_error::prelude::*;
-use orion_error::UvsReason;
+use orion_error::UnifiedReason;
 use orion_error::reason::ErrorCategory;
 use orion_error::dev::testing::assert_err_identity;
 
 let err = std::fs::read_to_string("config.toml")
-    .source_err(UvsReason::system_error(), "read config failed")
+    .source_err(UnifiedReason::system_error(), "read config failed")
     .unwrap_err();
 
 assert_err_identity(&err, "sys.io_error", ErrorCategory::Sys);
@@ -534,9 +534,9 @@ assert_err_identity(&err, "sys.io_error", ErrorCategory::Sys);
 
 ```rust
 use orion_error::reason::ErrorCode;
-use orion_error::{StructError, UvsReason};
+use orion_error::{StructError, UnifiedReason};
 
-let err = StructError::from(UvsReason::system_error());
+let err = StructError::from(UnifiedReason::system_error());
 assert_eq!(err.reason().error_code(), 201);
 ```
 

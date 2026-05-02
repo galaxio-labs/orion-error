@@ -134,9 +134,9 @@ impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
     ///
     /// ```rust
     /// use orion_error::protocol::DefaultExposurePolicy;
-    /// use orion_error::{StructError, UvsReason};
+    /// use orion_error::{StructError, UnifiedReason};
     ///
-    /// let err = StructError::from(UvsReason::system_error())
+    /// let err = StructError::from(UnifiedReason::system_error())
     ///     .with_detail("disk full");
     /// let proto = err.exposure_snapshot(&DefaultExposurePolicy);
     /// assert_eq!(proto.identity.code, "sys.io_error");
@@ -162,9 +162,9 @@ impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
     ///
     /// ```rust
     /// use orion_error::protocol::DefaultExposurePolicy;
-    /// use orion_error::{StructError, UvsReason};
+    /// use orion_error::{StructError, UnifiedReason};
     ///
-    /// let proto = StructError::from(UvsReason::system_error())
+    /// let proto = StructError::from(UnifiedReason::system_error())
     ///     .with_detail("disk full")
     ///     .into_exposure_snapshot(&DefaultExposurePolicy);
     ///

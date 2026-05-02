@@ -46,7 +46,7 @@ fn expand_orion_error(input: DeriveInput) -> TokenStream2 {
     let identity_provider = impl_error_identity_provider(input.clone());
     let domain_reason = impl_domain_reason(input.clone());
 
-    // Generate UvsReason delegate constructors if a transparent UvsReason variant exists
+    // Generate UnifiedReason delegate constructors if a transparent variant exists
     let uvs_ctors = impl_uvs_constructors(&input)
         .ok()
         .flatten()

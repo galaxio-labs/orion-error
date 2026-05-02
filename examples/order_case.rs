@@ -15,7 +15,7 @@ use derive_more::From;
 use orion_error::prelude::*;
 use orion_error::{
     cli::print_error, conversion::ToStructError, OperationContext, OrionError, StructError,
-    UvsReason,
+    UnifiedReason,
 };
 // conv_err 通过 prelude 可用 / conv_err is available via prelude
 
@@ -27,7 +27,7 @@ enum ParseReason {
     #[orion_error(identity = "biz.order_invalid_amount")]
     InvalidAmount,
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
@@ -35,7 +35,7 @@ enum UserReason {
     #[orion_error(identity = "biz.user_not_found")]
     NotFound,
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
@@ -43,7 +43,7 @@ enum StoreReason {
     #[orion_error(identity = "biz.storage_full")]
     StorageFull,
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
@@ -51,7 +51,7 @@ enum MemStoreReason {
     #[orion_error(identity = "sys.out_mem")]
     StorageFull,
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 
 // ── 上层 Reason：服务层 / Upper layer: service ──
@@ -68,7 +68,7 @@ enum OrderReason {
     #[orion_error(identity = "sys.storage_full")]
     StorageFull,
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 
 // ── From 实现：下层 Reason → 上层 Reason / Lower → Upper ──
@@ -76,7 +76,7 @@ impl From<ParseReason> for OrderReason {
     fn from(value: ParseReason) -> Self {
         match value {
             ParseReason::InvalidText | ParseReason::InvalidAmount => Self::InvalidOrder,
-            ParseReason::Uvs(reason) => Self::Uvs(reason),
+            ParseReason::General(reason) => Self::General(reason),
         }
     }
 }
@@ -85,7 +85,7 @@ impl From<UserReason> for OrderReason {
     fn from(value: UserReason) -> Self {
         match value {
             UserReason::NotFound => Self::UserNotFound,
-            UserReason::Uvs(reason) => Self::Uvs(reason),
+            UserReason::General(reason) => Self::General(reason),
         }
     }
 }
@@ -94,7 +94,7 @@ impl From<StoreReason> for OrderReason {
     fn from(value: StoreReason) -> Self {
         match value {
             StoreReason::StorageFull => Self::StorageFull,
-            StoreReason::Uvs(reason) => Self::Uvs(reason),
+            StoreReason::General(reason) => Self::General(reason),
         }
     }
 }

@@ -55,7 +55,7 @@ mod tests {
     };
     use crate::reason::{ErrorCode, ErrorIdentityProvider};
     use crate::report::RedactPolicy;
-    use crate::UvsReason;
+    use crate::UnifiedReason;
 
     // ── Test types ──
 
@@ -77,12 +77,12 @@ mod tests {
         #[error("test error")]
         TestError,
         #[error("{0}")]
-        Uvs(UvsReason),
+        General(UnifiedReason),
     }
 
-    impl From<UvsReason> for TestReason {
-        fn from(value: UvsReason) -> Self {
-            Self::Uvs(value)
+    impl From<UnifiedReason> for TestReason {
+        fn from(value: UnifiedReason) -> Self {
+            Self::General(value)
         }
     }
 
@@ -92,7 +92,7 @@ mod tests {
         fn error_code(&self) -> i32 {
             match self {
                 TestReason::TestError => 1001,
-                TestReason::Uvs(reason) => reason.error_code(),
+                TestReason::General(reason) => reason.error_code(),
             }
         }
     }
@@ -101,14 +101,14 @@ mod tests {
         fn stable_code(&self) -> &'static str {
             match self {
                 TestReason::TestError => "test.test_error",
-                TestReason::Uvs(reason) => reason.stable_code(),
+                TestReason::General(reason) => reason.stable_code(),
             }
         }
 
         fn error_category(&self) -> ErrorCategory {
             match self {
                 TestReason::TestError => ErrorCategory::Logic,
-                TestReason::Uvs(reason) => reason.error_category(),
+                TestReason::General(reason) => reason.error_category(),
             }
         }
     }
@@ -146,7 +146,7 @@ mod tests {
                 .with_meta("config.kind", "sink_defaults")
                 .with_meta("parse.line", 1u32),
         );
-        let wrapped = StructError::from(TestReason::from(UvsReason::system_error()))
+        let wrapped = StructError::from(TestReason::from(UnifiedReason::system_error()))
             .with_struct_source(error);
 
         let json_value = serde_json::to_value(&wrapped).unwrap();
@@ -243,7 +243,7 @@ mod tests {
             .with_context(
                 OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
             );
-        let err = StructError::from(TestReason::from(UvsReason::system_error()))
+        let err = StructError::from(TestReason::from(UnifiedReason::system_error()))
             .with_detail("engine bootstrap failed")
             .with_position("src/main.rs:42")
             .with_context(
@@ -402,7 +402,7 @@ mod tests {
         let source = StructError::from(TestReason::TestError).with_context(
             OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
         );
-        let err = StructError::from(TestReason::from(UvsReason::system_error()))
+        let err = StructError::from(TestReason::from(UnifiedReason::system_error()))
             .with_context(
                 OperationContext::doing("start engine").with_meta("component.name", "engine"),
             )

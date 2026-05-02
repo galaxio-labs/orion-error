@@ -79,7 +79,7 @@ orion-error = { version = "0.8", features = ["toml"] }
 use derive_more::From;
 use orion_error::{
     prelude::*,
-    reason::UvsReason,
+    reason::UnifiedReason,
     runtime::OperationContext,
 };
 
@@ -88,7 +88,7 @@ enum AppReason {
     #[orion_error(identity = "biz.invalid_request")]
     InvalidRequest,
     #[orion_error(transparent)]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 
 fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
@@ -221,11 +221,11 @@ let err = result
 如果某个边界必须进入标准错误生态，走 interop API：
 
 ```rust
-use orion_error::{StructError, UvsReason};
+use orion_error::{StructError, UnifiedReason};
 
-let borrowed_err = StructError::from(UvsReason::system_error());
-let owned_err = StructError::from(UvsReason::system_error());
-let boxed_err = StructError::from(UvsReason::system_error());
+let borrowed_err = StructError::from(UnifiedReason::system_error());
+let owned_err = StructError::from(UnifiedReason::system_error());
+let boxed_err = StructError::from(UnifiedReason::system_error());
 
 let borrowed_std = borrowed_err.as_std();
 let owned_std = owned_err.into_std();
@@ -251,7 +251,7 @@ use orion_error::prelude::*;
 
 然后按需补少量分层导入，例如：
 
-- `orion_error::reason::UvsReason`
+- `orion_error::reason::UnifiedReason`
 - `orion_error::runtime::OperationContext`
 - `orion_error::runtime::source::*`
 - `orion_error::report::*`
@@ -268,7 +268,7 @@ use orion_error::prelude::*;
 **应用主路径（默认）**
 ```rust
 use orion_error::prelude::*;
-use orion_error::reason::UvsReason;
+use orion_error::reason::UnifiedReason;
 use orion_error::runtime::OperationContext;
 ```
 

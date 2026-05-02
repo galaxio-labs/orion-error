@@ -14,7 +14,7 @@ crate root 只承诺保留最小主路径入口：
 
 - `StructError`
 - `OperationContext`
-- `UvsReason`
+- `UnifiedReason`
 - derive feature 开启时的 derive 宏：
   - `OrionError`
   - `ErrorCode`
@@ -53,7 +53,7 @@ interop type 或测试 helper。它们的正式归属在分层模块中。
   `ConvStructError`、`ToStructError`。
 - `reason`
   reason trait、分类和内置 reason：`DomainReason`、`ErrorCode`、
-  `ErrorIdentityProvider`、`ErrorCategory`、`UvsReason`、`ConfErrReason`。
+  `ErrorIdentityProvider`、`ErrorCategory`、`UnifiedReason`、`ConfErrReason`。
 - `report`
   人类诊断与 redaction：`DiagnosticReport`、`RedactPolicy`。
 - `snapshot`

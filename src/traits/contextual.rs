@@ -12,9 +12,9 @@ use crate::core::OperationContext;
 ///
 /// ```rust
 /// use orion_error::prelude::*;
-/// use orion_error::UvsReason;
+/// use orion_error::UnifiedReason;
 ///
-/// let err = StructError::from(UvsReason::validation_error())
+/// let err = StructError::from(UnifiedReason::validation_error())
 ///     .doing("parse config")      // what operation
 ///     .at("config.toml");          // what resource
 ///
@@ -22,8 +22,8 @@ use crate::core::OperationContext;
 /// assert_eq!(err.locator_main().as_deref(), Some("config.toml"));
 ///
 /// // doing/at also works on Result chains:
-/// let result: Result<(), StructError<UvsReason>> =
-///     Err(StructError::from(UvsReason::validation_error()))
+/// let result: Result<(), StructError<UnifiedReason>> =
+///     Err(StructError::from(UnifiedReason::validation_error()))
 ///         .doing("validate")
 ///         .at("input.json");
 /// assert!(result.is_err());

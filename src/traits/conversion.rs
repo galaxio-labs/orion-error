@@ -9,7 +9,7 @@ use crate::{core::convert_error, core::DomainReason, StructError};
 /// ```rust,ignore
 /// // This example requires the `derive` feature (enabled by default).
 /// use orion_error::prelude::*;
-/// use orion_error::UvsReason;
+/// use orion_error::UnifiedReason;
 ///
 /// #[derive(Debug, Clone, PartialEq, OrionError)]
 /// enum SubReason {
@@ -106,7 +106,7 @@ where
 mod tests {
     use super::*;
     use crate::reason::ErrorCode;
-    use crate::{core::DomainReason, OperationContext, StructError, UvsReason};
+    use crate::{core::DomainReason, OperationContext, StructError, UnifiedReason};
 
     // 定义测试用的 DomainReason
     #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -114,23 +114,23 @@ mod tests {
         #[error("test error")]
         TestError,
         #[error("{0}")]
-        Uvs(UvsReason),
+        General(UnifiedReason),
     }
 
     impl ErrorCode for TestReason {
         fn error_code(&self) -> i32 {
             match self {
                 TestReason::TestError => 1001,
-                TestReason::Uvs(uvs) => uvs.error_code(),
+                TestReason::General(uvs) => uvs.error_code(),
             }
         }
     }
 
     impl DomainReason for TestReason {}
 
-    impl From<UvsReason> for TestReason {
-        fn from(uvs: UvsReason) -> Self {
-            TestReason::Uvs(uvs)
+    impl From<UnifiedReason> for TestReason {
+        fn from(uvs: UnifiedReason) -> Self {
+            TestReason::General(uvs)
         }
     }
 
@@ -140,23 +140,23 @@ mod tests {
         #[error("another error")]
         AnotherError,
         #[error("{0}")]
-        Uvs(UvsReason),
+        General(UnifiedReason),
     }
 
     impl ErrorCode for AnotherReason {
         fn error_code(&self) -> i32 {
             match self {
                 AnotherReason::AnotherError => 2001,
-                AnotherReason::Uvs(uvs) => uvs.error_code(),
+                AnotherReason::General(uvs) => uvs.error_code(),
             }
         }
     }
 
     impl DomainReason for AnotherReason {}
 
-    impl From<UvsReason> for AnotherReason {
-        fn from(uvs: UvsReason) -> Self {
-            AnotherReason::Uvs(uvs)
+    impl From<UnifiedReason> for AnotherReason {
+        fn from(uvs: UnifiedReason) -> Self {
+            AnotherReason::General(uvs)
         }
     }
 
@@ -164,7 +164,7 @@ mod tests {
         fn from(test: TestReason) -> Self {
             match test {
                 TestReason::TestError => AnotherReason::AnotherError,
-                TestReason::Uvs(uvs) => AnotherReason::Uvs(uvs),
+                TestReason::General(uvs) => AnotherReason::General(uvs),
             }
         }
     }
@@ -198,9 +198,9 @@ mod tests {
 
         assert_eq!(converted_error.reason().error_code(), 2001);
 
-        // 测试带有 UvsReason 的转换
+        // 测试带有 UnifiedReason 的转换
         let uvs_error: StructError<TestReason> =
-            TestReason::Uvs(UvsReason::network_error()).to_err();
+            TestReason::General(UnifiedReason::network_error()).to_err();
 
         let converted_uvs_error: StructError<AnotherReason> = uvs_error.conv();
 
@@ -223,14 +223,14 @@ mod tests {
         let error_from_result = result.unwrap_err();
         assert_eq!(error_from_result.reason().error_code(), 1001);
 
-        // 测试使用 UvsReason
-        let uvs_reason1 = UvsReason::validation_error();
-        let uvs_error: StructError<UvsReason> = uvs_reason1.to_err();
+        // 测试使用 UnifiedReason
+        let uvs_reason1 = UnifiedReason::validation_error();
+        let uvs_error: StructError<UnifiedReason> = uvs_reason1.to_err();
 
         assert_eq!(uvs_error.reason().error_code(), 100);
 
-        let uvs_reason2 = UvsReason::validation_error();
-        let uvs_result: Result<i32, StructError<UvsReason>> = uvs_reason2.err_result();
+        let uvs_reason2 = UnifiedReason::validation_error();
+        let uvs_result: Result<i32, StructError<UnifiedReason>> = uvs_reason2.err_result();
         assert!(uvs_result.is_err());
         assert_eq!(uvs_result.unwrap_err().reason().error_code(), 100);
     }

@@ -91,9 +91,9 @@
 //! ```
 //!
 //! ```compile_fail
-//! use orion_error::{StructError, UvsReason};
+//! use orion_error::{StructError, UnifiedReason};
 //!
-//! let _ = StructError::from(UvsReason::system_error())
+//! let _ = StructError::from(UnifiedReason::system_error())
 //!     .attach_source(std::io::Error::other("disk offline"));
 //! ```
 //!
@@ -110,9 +110,9 @@
 //! ```
 //!
 //! ```compile_fail
-//! use orion_error::{StructError, UvsReason};
+//! use orion_error::{StructError, UnifiedReason};
 //!
-//! let report = StructError::from(UvsReason::system_error()).report();
+//! let report = StructError::from(UnifiedReason::system_error()).report();
 //! let _ = report.projection;
 //! ```
 //!
@@ -121,38 +121,38 @@
 //! ```
 //!
 //! ```compile_fail
-//! use orion_error::{StructError, UvsReason};
+//! use orion_error::{StructError, UnifiedReason};
 //!
-//! let report = StructError::from(UvsReason::system_error()).report();
+//! let report = StructError::from(UnifiedReason::system_error()).report();
 //! let _ = report.path();
 //! ```
 //!
 //! ```compile_fail
-//! use orion_error::{StructError, UvsReason};
+//! use orion_error::{StructError, UnifiedReason};
 //!
-//! let report = StructError::from(UvsReason::system_error()).report();
+//! let report = StructError::from(UnifiedReason::system_error()).report();
 //! let _ = report.root_metadata();
 //! ```
 //!
 //! ```compile_fail
-//! use orion_error::{StructError, UvsReason};
+//! use orion_error::{StructError, UnifiedReason};
 //!
-//! let report = StructError::from(UvsReason::system_error()).report();
+//! let report = StructError::from(UnifiedReason::system_error()).report();
 //! let _ = report.source_frames();
 //! ```
 //!
 //! ```compile_fail
-//! use orion_error::{OperationContext, StructError, UvsReason};
+//! use orion_error::{OperationContext, StructError, UnifiedReason};
 //!
 //! let _ = OperationContext::doing("load config").target();
-//! let _ = StructError::from(UvsReason::system_error()).target_main();
+//! let _ = StructError::from(UnifiedReason::system_error()).target_main();
 //! ```
 //!
 //! ```rust
 //! use orion_error::protocol::DefaultExposurePolicy;
-//! use orion_error::{StructError, UvsReason};
+//! use orion_error::{StructError, UnifiedReason};
 //!
-//! let proto = StructError::from(UvsReason::system_error())
+//! let proto = StructError::from(UnifiedReason::system_error())
 //!     .exposure_snapshot(&DefaultExposurePolicy);
 //! let _ = proto.report();
 //! ```
@@ -182,7 +182,7 @@ extern crate self as orion_error;
 #[cfg(feature = "derive")]
 pub use orion_error_derive::{ErrorCode, ErrorIdentityProvider, OrionError};
 
-pub use core::{convert_error, OperationContext, StructError, UvsReason};
+pub use core::{convert_error, UnifiedReason, OperationContext, StructError, UvsReason};
 
 /// Primary-path traits and types for convenient wildcard imports.
 ///
@@ -256,7 +256,8 @@ pub mod protocol {
 /// Reason-layer enums and traits.
 pub mod reason {
     pub use crate::core::{
-        ConfErrReason, DomainReason, ErrorCategory, ErrorCode, ErrorIdentityProvider, UvsReason,
+        UnifiedReason, ConfErrReason, DomainReason, ErrorCategory, ErrorCode, ErrorIdentityProvider,
+        UvsReason,
     };
 }
 

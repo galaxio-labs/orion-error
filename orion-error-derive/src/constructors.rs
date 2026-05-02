@@ -1,6 +1,6 @@
-// Generation of delegate constructors for transparent UvsReason variants.
-// When a domain reason enum has #[orion_error(transparent)] wrapping UvsReason,
-// the derive generates all UvsReason constructors as methods on the enum.
+// Generation of delegate constructors for transparent UvsReason/UnifiedReason variants.
+// When a domain reason enum has #[orion_error(transparent)] wrapping UvsReason or
+// UnifiedReason, the derive generates all constructors as methods on the enum.
 
 const UVS_METHODS: &[&str] = &[
     "core_conf",
@@ -37,8 +37,8 @@ pub(crate) fn impl_uvs_constructors(input: &DeriveInput) -> Result<Option<TokenS
         match &variant.fields {
             Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
                 let ty_str = quote!(#fields).to_string();
-                // Matches "UvsReason" or "::orion_error::reason::UvsReason"
-                ty_str.contains("UvsReason")
+                // Matches "UvsReason", "UnifiedReason", or fully-qualified paths
+                ty_str.contains("UvsReason") || ty_str.contains("UnifiedReason") || ty_str.contains("UnifiedReason")
             }
             _ => false,
         }
@@ -58,7 +58,7 @@ pub(crate) fn impl_uvs_constructors(input: &DeriveInput) -> Result<Option<TokenS
             quote! {
                 pub fn #method_name() -> Self {
                     Self::#variant_ident(
-                        ::orion_error::reason::UvsReason::#method_name()
+                        ::orion_error::UnifiedReason::#method_name()
                     )
                 }
             }

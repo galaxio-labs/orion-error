@@ -6,7 +6,7 @@ use crate::{
     core::context::CallContext,
     reason::{DomainReason, ErrorCode},
     traits::ErrorWith,
-    OperationContext, UvsReason,
+    OperationContext, UnifiedReason,
 };
 
 use super::*;
@@ -20,14 +20,14 @@ enum TestDomainReason {
     #[error("test error")]
     TestError,
     #[error("{0}")]
-    Uvs(UvsReason),
+    General(UnifiedReason),
 }
 
 impl ErrorCode for TestDomainReason {
     fn error_code(&self) -> i32 {
         match self {
             TestDomainReason::TestError => 1001,
-            TestDomainReason::Uvs(uvs_reason) => uvs_reason.error_code(),
+            TestDomainReason::General(uvs_reason) => uvs_reason.error_code(),
         }
     }
 }
@@ -311,7 +311,7 @@ fn test_with_struct_source_preserves_source_context_metadata() {
         OperationContext::doing("load sink defaults").with_meta("config.kind", "sink_defaults"),
     );
 
-    let error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
+    let error = StructError::from(TestDomainReason::General(UnifiedReason::system_error()))
         .with_struct_source(source);
 
     assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Struct));
@@ -344,7 +344,7 @@ fn test_with_source_auto_routes_struct_source_kind() {
     );
 
     let error =
-        StructError::from(TestDomainReason::Uvs(UvsReason::system_error())).with_source(source);
+        StructError::from(TestDomainReason::General(UnifiedReason::system_error())).with_source(source);
 
     assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Struct));
     assert_eq!(
@@ -359,7 +359,7 @@ fn test_builder_source_struct_preserves_source_context_metadata() {
         OperationContext::doing("load sink defaults").with_meta("config.kind", "sink_defaults"),
     );
 
-    let error = StructError::builder(TestDomainReason::Uvs(UvsReason::system_error()))
+    let error = StructError::builder(TestDomainReason::General(UnifiedReason::system_error()))
         .source_struct(source)
         .finish();
 
@@ -394,7 +394,7 @@ fn test_builder_source_auto_routes_struct_source_kind() {
         OperationContext::doing("load sink defaults").with_meta("config.kind", "sink_defaults"),
     );
 
-    let error = StructError::builder(TestDomainReason::Uvs(UvsReason::system_error()))
+    let error = StructError::builder(TestDomainReason::General(UnifiedReason::system_error()))
         .source(source)
         .finish();
 
@@ -419,7 +419,7 @@ fn test_internal_source_payload_uses_distinct_std_and_struct_variants() {
         .with_context(
             OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
         );
-    let struct_error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
+    let struct_error = StructError::from(TestDomainReason::General(UnifiedReason::system_error()))
         .with_struct_source(source);
     assert!(matches!(
         struct_error.imp.source_payload.as_ref().unwrap(),
@@ -447,7 +447,7 @@ fn test_public_source_payload_ref_exposes_struct_source_read_only() {
     let source = StructError::from(TestDomainReason::TestError)
         .with_detail("repo layer failed")
         .with_std_source(std::io::Error::other("db unavailable"));
-    let error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
+    let error = StructError::from(TestDomainReason::General(UnifiedReason::system_error()))
         .with_struct_source(source);
 
     let payload = error.source_payload().expect("expected source payload");
@@ -486,7 +486,7 @@ fn test_with_source_routes_struct_source_payload() {
         .with_detail("repo layer failed")
         .with_std_source(std::io::Error::other("db unavailable"));
     let error =
-        StructError::from(TestDomainReason::Uvs(UvsReason::system_error())).with_source(source);
+        StructError::from(TestDomainReason::General(UnifiedReason::system_error())).with_source(source);
 
     assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Struct));
     assert_eq!(
@@ -687,10 +687,10 @@ fn test_with_struct_source_keeps_nested_source_frame_metadata() {
             .with_meta("config.kind", "sink_route")
             .with_meta("config.group", "infra"),
     );
-    let middle = StructError::from(TestDomainReason::Uvs(UvsReason::validation_error()))
+    let middle = StructError::from(TestDomainReason::General(UnifiedReason::validation_error()))
         .with_struct_source(leaf);
 
-    let error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
+    let error = StructError::from(TestDomainReason::General(UnifiedReason::system_error()))
         .with_struct_source(middle);
 
     assert_eq!(
@@ -709,7 +709,7 @@ fn test_root_and_source_metadata_can_be_read_separately() {
         OperationContext::doing("load sink defaults").with_meta("config.kind", "sink_defaults"),
     );
 
-    let error = StructError::from(TestDomainReason::Uvs(UvsReason::system_error()))
+    let error = StructError::from(TestDomainReason::General(UnifiedReason::system_error()))
         .with_context(OperationContext::doing("start engine").with_meta("component.name", "engine"))
         .with_struct_source(source);
 
