@@ -184,7 +184,7 @@ impl<K: AsRef<str>, V: AsRef<str>> From<(K, V)> for CallContext {
 /// let ctx = OperationContext::doing("load")
 ///     .with_field("tenant", "acme");
 ///
-/// assert!(format!("{ctx}").contains("tenant=acme"));
+/// assert!(format!("{ctx}").contains("tenant: acme"));
 /// ```
 pub trait ContextAdd<T> {
     fn add_context(&mut self, val: T);

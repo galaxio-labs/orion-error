@@ -15,7 +15,7 @@ use derive_more::From;
 use orion_error::prelude::*;
 use orion_error::protocol::DefaultExposurePolicy;
 use orion_error::{
-    conversion::ToStructError, OperationContext, OrionError, StructError,
+    cli::print_error, conversion::ToStructError, OperationContext, OrionError, StructError,
     UvsReason,
 };
 // conv_err 通过 prelude 可用 / conv_err is available via prelude
@@ -212,8 +212,13 @@ fn write_impl(item: &str) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-// ── 边界输出：渲染用户调试摘要 / Render user debug summary ──
+// ── 边界输出：打印 + protocol projection / Boundary output ──
 fn print_protocol_views(err: &OrderError) {
+    // 人类可读诊断 / Human-readable diagnostics
+    print_error(err);
+    println!();
+    // 协议投影 / Protocol projection via DefaultExposurePolicy
+    println!();
     let exposure_policy = DefaultExposurePolicy;
     println!(
         "{}",

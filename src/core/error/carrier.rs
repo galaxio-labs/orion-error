@@ -471,34 +471,28 @@ impl<T: DomainReason> Display for StructError<T> {
         write!(f, "{reason}", reason = self.reason())?;
 
         if let Some(pos) = &self.imp.position {
-            write!(f, "\n   at: {pos}")?;
+            write!(f, "\n  -> At: {pos}")?;
         }
 
         if let Some(path) = self.target_path() {
-            write!(f, "\n  path: {path}")?;
+            write!(f, "\n  -> Path: {path}")?;
         }
 
         if let Some(detail) = &self.imp.detail {
-            write!(f, "\n  info: {detail}")?;
+            write!(f, "\n  -> Details: {detail}")?;
         }
 
         if let Some(source) = self.source_ref() {
-            write!(f, "\n cause: {source}")?;
+            write!(f, "\n  -> Source: {source}")?;
         }
 
         let ctx_slice = self.context_slice();
         if !ctx_slice.is_empty() {
-            let last = ctx_slice.len() - 1;
+            writeln!(f, "\n  -> Context stack:")?;
+
             for (i, c) in ctx_slice.iter().enumerate() {
-                let prefix = if i == last { "  └─ " } else { "  ├─ " };
-                let ctx_text = format!("{c}");
-                for (j, line) in ctx_text.lines().enumerate() {
-                    if j == 0 {
-                        write!(f, "\n{prefix}{}", line.trim_end())?;
-                    } else {
-                        write!(f, "\n  │  {}", line.trim_end())?;
-                    }
-                }
+                writeln!(f, "context {i}: ")?;
+                writeln!(f, "{c}")?;
             }
         }
 
