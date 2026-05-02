@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>orion-error - Tutorial</title>
+    <link rel="stylesheet" href="../styles.css">
+  </head>
+  <body>
+    <header class="wrap topbar">
+      <a class="brand" href="../index.html">
+        <strong>orion-error</strong>
+        <span>Structured error governance for Rust</span>
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <a href="../index.html">Home</a>
+        <a href="../api/">API</a>
+        <a href="../compare/">Compare</a>
+      </nav>
+    </header>
+
+    <main class="wrap page">
+      <p class="eyebrow">Tutorial</p>
+      <h1>Start with stable identities, source boundaries, and context.</h1>
+      <p class="lede">
+        The shortest useful path is: define domain reasons, turn upstream
+        failures into <code>StructError&lt;R&gt;</code>, add context, then expose a
+        stable boundary view.
+      </p>
+
+      <section>
+        <h2>1. Define reasons</h2>
+        <pre><code>#[derive(Debug, Clone, PartialEq, From, OrionError)]
+enum AppReason {
+    #[orion_error(identity = "biz.invalid_request")]
+    InvalidRequest,
+
+    #[orion_error(transparent)]
+    Uvs(UvsReason),
+}</code></pre>
+      </section>
+
+      <section>
+        <h2>2. Build context fluently</h2>
+        <pre><code>let ctx = OperationContext::doing("load config")
+    .with_field("path", "config.toml")
+    .with_meta("component.name", "config_loader");</code></pre>
+      </section>
+
+      <section>
+        <h2>3. Enter the structured system</h2>
+        <pre><code>let content = std::fs::read_to_string(path)
+    .source_err(AppReason::system_error(), "read config failed")?
+    .doing("read file")
+    .with_context(&ctx);</code></pre>
+      </section>
+
+      <section>
+        <h2>4. Remap without a new boundary</h2>
+        <pre><code>let user = repository.load_user(id)
+    .conv_err()?;</code></pre>
+      </section>
+
+      <section>
+        <h2>5. Create a direct structured error</h2>
+        <pre><code>return Err(AppReason::validation_error()
+    .to_err()
+    .with_detail("missing order id")
+    .with_field("field", "order_id"));</code></pre>
+      </section>
+    </main>
+  </body>
+</html>

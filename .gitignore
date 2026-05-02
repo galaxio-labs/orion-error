@@ -5,4 +5,3 @@ target/
 **/.report
 Cargo.lock
 .claude/
-site/
