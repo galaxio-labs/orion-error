@@ -346,12 +346,12 @@ cargo run --example logging_example --features log
 
 - [English README](./README.md)
 - [变更记录](./CHANGELOG.md)
-- [文档导航](./docs/README.md)
-- [使用教程](./docs/user/tutorial.md)
-- [OrionError 与稳定身份](./docs/user/reason-identity-guide.md)
-- [协议契约](./docs/user/protocol-contract.md)
-- [Protocol Contract](./docs/user/protocol-contract.md)
-- [与 thiserror 的关系](./docs/user/thiserror-comparison.md)
+- [中文文档](./docs/zh/src/README.md)
+- [English docs](./docs/en/src/README.md)
+- [使用教程](./docs/zh/src/user/tutorial.md)
+- [OrionError 与稳定身份](./docs/zh/src/user/reason-identity-guide.md)
+- [协议契约](./docs/zh/src/user/protocol-contract.md)
+- [与 thiserror 的关系](./docs/zh/src/user/thiserror-comparison.md)
 - [orion-error-derive README](./orion-error-derive/README.md)
 
 ## 维护者说明

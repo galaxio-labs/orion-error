@@ -266,7 +266,7 @@ do_sync()?;
 ctx.mark_suc();
 ```
 
-If the scope drops without `mark_suc()` or `mark_cancel()`, a failure log is emitted automatically. See [LOGGING.md](https://github.com/galaxio-labs/orion-error/blob/main/docs/user-en/LOGGING.md) for details.
+If the scope drops without `mark_suc()` or `mark_cancel()`, a failure log is emitted automatically. See [LOGGING.md](./LOGGING.md) for details.
 
 The principle: **sparse lifecycle logs + boundary error projection**, not repetitive `error!` at every layer.
 

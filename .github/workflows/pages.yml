@@ -4,13 +4,11 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - "book.toml"
       - "docs/**"
       - ".github/workflows/pages.yml"
   pull_request:
     branches: [main, develop]
     paths:
-      - "book.toml"
       - "docs/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
@@ -29,8 +27,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: taiki-e/install-action@mdbook
-      - name: Build site
-        run: mdbook build
+      - name: Build English site
+        run: mdbook build docs/en
+      - name: Build Chinese site
+        run: mdbook build docs/zh
+      - name: Add language index
+        run: cp docs/index.html site/index.html
       - name: Upload Pages artifact
         if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-pages-artifact@v4

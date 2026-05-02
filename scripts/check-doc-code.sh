@@ -22,14 +22,9 @@ load_doc_deps() {
   )"
 }
 
+echo "[doc-code] preparing dependencies with cargo test --all-features --no-run"
+cargo test --all-features --no-run
 load_doc_deps
-
-if [[ -z "${ORION_LIB:-}" || -z "${DERIVE_MORE_LIB:-}" ]]; then
-  echo "[doc-code] missing built dependencies in target/debug/deps"
-  echo "[doc-code] preparing dependencies with cargo test --all-features --no-run"
-  cargo test --all-features --no-run
-  load_doc_deps
-fi
 
 if [[ -z "${ORION_LIB:-}" || -z "${DERIVE_MORE_LIB:-}" ]]; then
   echo "[doc-code] failed to locate built dependencies in target/debug/deps"
@@ -49,6 +44,10 @@ run_doc_test() {
   rustdoc \
     --edition=2021 \
     --test "$file" \
+    --cfg 'feature="serde"' \
+    --cfg 'feature="serde_json"' \
+    --cfg 'feature="derive"' \
+    --cfg 'feature="log"' \
     -L dependency=target/debug/deps \
     --extern orion_error="$ORION_LIB" \
     --extern derive_more="$DERIVE_MORE_LIB"
@@ -56,6 +55,6 @@ run_doc_test() {
 
 run_doc_test "README.md" README.md
 run_doc_test "README.zh-CN.md" README.zh-CN.md
-run_doc_test "docs/user/tutorial.md" docs/user/tutorial.md
-run_doc_test "docs/user/reason-identity-guide.md" docs/user/reason-identity-guide.md
-run_doc_test "docs/user-en/tutorial.md" docs/user-en/tutorial.md
+run_doc_test "docs/zh/src/user/tutorial.md" docs/zh/src/user/tutorial.md
+run_doc_test "docs/zh/src/user/reason-identity-guide.md" docs/zh/src/user/reason-identity-guide.md
+run_doc_test "docs/en/src/user/tutorial.md" docs/en/src/user/tutorial.md

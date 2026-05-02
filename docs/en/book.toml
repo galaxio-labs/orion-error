@@ -1,0 +1,14 @@
+[book]
+title = "orion-error"
+authors = ["zuowenjian"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "../../site/en"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/galaxio-labs/orion-error"
+edit-url-template = "https://github.com/galaxio-labs/orion-error/edit/main/docs/en/src/{path}"

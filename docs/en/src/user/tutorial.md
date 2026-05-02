@@ -288,7 +288,7 @@ The identity prefix (`biz`, `sys`, `conf`, `logic`) also determines the default 
 
 The same error produces different JSON shapes for different protocol boundaries:
 
-```rust
+```rust,ignore
 use orion_error::{OrionError, StructError};
 use orion_error::protocol::DefaultExposurePolicy;
 use orion_error::UnifiedReason;

@@ -350,11 +350,11 @@ cargo run --example logging_example --features log
 
 - [中文 README](./README.zh-CN.md)
 - [Changelog](./CHANGELOG.md)
-- [Docs Index](./docs/README.md)
-- [Tutorial](./docs/user/tutorial.md)
-- [Reason Identity Guide](./docs/user/reason-identity-guide.md)
-- [Protocol Contract](./docs/user/protocol-contract.md)
-- [thiserror Comparison](./docs/user/thiserror-comparison.md)
+- [English docs](./docs/en/src/README.md)
+- [中文文档](./docs/zh/src/README.md)
+- [Tutorial](./docs/en/src/user/tutorial.md)
+- [Protocol Contract](./docs/en/src/user/protocol-contract.md)
+- [thiserror Comparison](./docs/en/src/user/thiserror-comparison.md)
 - [orion-error-derive README](./orion-error-derive/README.md)
 
 ## Maintainers

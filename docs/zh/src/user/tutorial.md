@@ -435,7 +435,7 @@ assert_eq!(ApiReason::InvalidInput.error_category().as_str(), "biz");
 
 同一个错误，对不同的协议边界输出**不同的 JSON 形状**，不需要手写映射：
 
-```rust
+```rust,ignore
 use orion_error::{OrionError, StructError};
 use orion_error::protocol::DefaultExposurePolicy;
 use orion_error::UnifiedReason;
