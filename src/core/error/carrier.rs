@@ -488,17 +488,16 @@ impl<T: DomainReason> Display for StructError<T> {
 
         let ctx_slice = self.context_slice();
         if !ctx_slice.is_empty() {
-            let total = ctx_slice.len();
+            write!(f, "\n  -> Context:")?;
             for (i, c) in ctx_slice.iter().rev().enumerate() {
-                // Outermost first: context 0 = most recent (outermost)
+                // Outer contexts first (pushed last)
                 let label = c.action().as_deref().or_else(|| c.locator().as_deref())
                     .unwrap_or("(operation)");
-                write!(f, "\n  {}: {label}", total - i - 1)?;
+                write!(f, "\n    {i}: {label}")?;
 
-                // Fields indented under context
                 if !c.context().items.is_empty() {
                     for (k, v) in &c.context().items {
-                        write!(f, "\n      {k}: {v}")?;
+                        write!(f, "\n        {k}: {v}")?;
                     }
                 }
             }
