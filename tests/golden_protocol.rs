@@ -69,8 +69,14 @@ fn golden_stable_snapshot_shallow() {
 
     // Stable export omits compat projection fields (fields, result, display, type_name)
     for ctx in obj["context"].as_array().unwrap() {
-        assert!(ctx.get("fields").is_none(), "stable context must not contain fields");
-        assert!(ctx.get("result").is_none(), "stable context must not contain result");
+        assert!(
+            ctx.get("fields").is_none(),
+            "stable context must not contain fields"
+        );
+        assert!(
+            ctx.get("result").is_none(),
+            "stable context must not contain result"
+        );
     }
 }
 
@@ -143,7 +149,12 @@ fn golden_http_error_json_keys() {
         .exposure_snapshot(&DefaultExposurePolicy)
         .to_http_error_json()
         .unwrap();
-    let keys: Vec<&str> = json.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+    let keys: Vec<&str> = json
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(|k| k.as_str())
+        .collect();
 
     assert!(keys.contains(&"status"));
     assert!(keys.contains(&"code"));
@@ -156,8 +167,7 @@ fn golden_http_error_json_keys() {
 
 #[test]
 fn golden_rpc_error_json_for_timeout() {
-    let err = StructError::from(UvsReason::timeout_error())
-        .with_detail("downstream rpc timeout");
+    let err = StructError::from(UvsReason::timeout_error()).with_detail("downstream rpc timeout");
     let json = err
         .exposure_snapshot(&DefaultExposurePolicy)
         .to_rpc_error_json()
@@ -175,8 +185,7 @@ fn golden_rpc_error_json_for_timeout() {
 
 #[test]
 fn golden_rpc_error_json_for_business() {
-    let err = StructError::from(UvsReason::business_error())
-        .with_detail("order state invalid");
+    let err = StructError::from(UvsReason::business_error()).with_detail("order state invalid");
     let json = err
         .exposure_snapshot(&DefaultExposurePolicy)
         .to_rpc_error_json()
@@ -190,8 +199,7 @@ fn golden_rpc_error_json_for_business() {
 
 #[test]
 fn golden_redacted_protocol_masks_detail() {
-    let err = StructError::from(UvsReason::validation_error())
-        .with_detail("token=abc");
+    let err = StructError::from(UvsReason::validation_error()).with_detail("token=abc");
     let policy = TestRedactPolicy;
     let redacted = err
         .exposure_snapshot(&DefaultExposurePolicy)
@@ -204,14 +212,12 @@ fn golden_redacted_protocol_masks_detail() {
 
 #[test]
 fn golden_source_frame_metadata() {
-    let inner = StructError::from(UvsReason::validation_error())
-        .with_context(
-            OperationContext::doing("parse")
-                .with_meta("parse.line", 42u32)
-                .with_meta("parse.file", "config.toml"),
-        );
-    let err = StructError::from(UvsReason::system_error())
-        .with_struct_source(inner);
+    let inner = StructError::from(UvsReason::validation_error()).with_context(
+        OperationContext::doing("parse")
+            .with_meta("parse.line", 42u32)
+            .with_meta("parse.file", "config.toml"),
+    );
+    let err = StructError::from(UvsReason::system_error()).with_struct_source(inner);
 
     let json = err
         .exposure_snapshot(&DefaultExposurePolicy)

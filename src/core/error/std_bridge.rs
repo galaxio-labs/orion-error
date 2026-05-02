@@ -3,16 +3,15 @@
 //! Wrappers that present a `StructError` through the `std::error::Error`
 //! trait while preserving structured source-frame metadata.
 
-use std::sync::Arc;
 use std::error::Error as StdError;
 use std::fmt::Display;
+use std::sync::Arc;
 
 use super::carrier::StructError;
-use crate::core::DomainReason;
 use super::source_chain::{
-    BoxedSource, InternalSourceState, SourceFrame,
-    collect_struct_error_source_frames,
+    collect_struct_error_source_frames, BoxedSource, InternalSourceState, SourceFrame,
 };
+use crate::core::DomainReason;
 use crate::reason::{ErrorCategory, ErrorIdentityProvider};
 
 // ---------------------------------------------------------------------------

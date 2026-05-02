@@ -1,7 +1,7 @@
-use orion_error::reason::ErrorCode;
-use orion_error::{conversion, reason, runtime, snapshot};
 use orion_error::prelude::*;
+use orion_error::reason::ErrorCode;
 use orion_error::UvsReason;
+use orion_error::{conversion, reason, runtime, snapshot};
 
 #[test]
 fn test_layered_modules_and_root_prelude_compile() {
@@ -50,7 +50,10 @@ fn test_layered_modules_and_root_prelude_compile() {
     }
 
     let err = build_with_root_prelude().unwrap_err();
-    assert_eq!(err.reason().error_code(), UvsReason::system_error().error_code());
+    assert_eq!(
+        err.reason().error_code(),
+        UvsReason::system_error().error_code()
+    );
     assert_eq!(err.action_main().as_deref(), Some("load config"));
     assert_eq!(err.locator_main(), None);
     assert_eq!(err.contexts()[0].action().as_deref(), Some("read config"));
@@ -108,5 +111,8 @@ fn test_root_prelude_imports_compile() {
     }
 
     let err = build_with_prelude().unwrap_err();
-    assert_eq!(err.reason().error_code(), UvsReason::system_error().error_code());
+    assert_eq!(
+        err.reason().error_code(),
+        UvsReason::system_error().error_code()
+    );
 }

@@ -4,8 +4,8 @@
 //! chains. This module defines the internal source payload representation
 //! and the public observation types that expose it.
 
-use std::sync::Arc;
 use std::error::Error as StdError;
+use std::sync::Arc;
 
 use smol_str::SmolStr;
 

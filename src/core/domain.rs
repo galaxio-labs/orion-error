@@ -14,7 +14,4 @@ use std::fmt::{Debug, Display};
 /// Prefer `#[derive(OrionError)]` (requires the `derive` feature), which
 /// also implements [`ErrorCode`](crate::reason::ErrorCode) and
 /// [`ErrorIdentityProvider`](crate::reason::ErrorIdentityProvider).
-pub trait DomainReason:
-    PartialEq + Display + Debug + Send + Sync + 'static
-{
-}
+pub trait DomainReason: PartialEq + Display + Debug + Send + Sync + 'static {}

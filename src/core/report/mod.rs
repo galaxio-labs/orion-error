@@ -1,5 +1,5 @@
-use crate::{core::DomainReason, StructError};
 use crate::reason::ErrorCategory;
+use crate::{core::DomainReason, StructError};
 use std::sync::Arc;
 
 use super::{

@@ -264,7 +264,7 @@ where
 mod tests {
     use std::{fmt, io};
 
-    use super::{raw_source, SourceErr, RawStdError};
+    use super::{raw_source, RawStdError, SourceErr};
     #[cfg(feature = "anyhow")]
     use crate::StructError;
     use crate::UvsReason;

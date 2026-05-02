@@ -4,13 +4,11 @@ mod tests {
     use derive_more::From;
     use thiserror::Error;
 
-    use crate::{
-        core::convert_error,
-        testing::TestAssertWithMsg,
-        OperationContext, StructError, UvsReason,
-    };
     use crate::conversion::ErrorWith;
     use crate::reason::{DomainReason, ErrorCode};
+    use crate::{
+        core::convert_error, testing::TestAssertWithMsg, OperationContext, StructError, UvsReason,
+    };
 
     // 测试用领域原因类型
     #[derive(Debug, PartialEq, Clone, Error, From)]

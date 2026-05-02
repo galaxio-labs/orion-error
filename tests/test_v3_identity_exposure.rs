@@ -1,8 +1,8 @@
-use orion_error::protocol::Visibility as ReportVisibility;
-use orion_error::protocol::DefaultExposurePolicy;
-use orion_error::reason::ErrorCategory;
 use orion_error::dev::testing::{assert_err_identity, assert_err_operation, assert_err_path};
 use orion_error::prelude::*;
+use orion_error::protocol::DefaultExposurePolicy;
+use orion_error::protocol::Visibility as ReportVisibility;
+use orion_error::reason::ErrorCategory;
 use orion_error::{OperationContext, StructError, UvsReason};
 
 #[test]

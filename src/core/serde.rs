@@ -53,8 +53,8 @@ mod tests {
         ErrorSnapshot, OperationContext, SnapshotContextFrame, SnapshotSourceFrame, SourceFrame,
         StableErrorSnapshot, StructError, STABLE_SNAPSHOT_SCHEMA_VERSION,
     };
-    use crate::report::RedactPolicy;
     use crate::reason::{ErrorCode, ErrorIdentityProvider};
+    use crate::report::RedactPolicy;
     use crate::UvsReason;
 
     // ── Test types ──
@@ -358,7 +358,6 @@ mod tests {
                     metadata
                 },
                 is_root_cause: true,
-            context_fields: Vec::new(),
             }],
             category: ErrorCategory::Sys,
             code: "sys.test_error".to_string(),

@@ -28,7 +28,6 @@ pub trait ConvStructError<R: DomainReason>: Sized {
     fn conv(self) -> StructError<R>;
 }
 
-
 impl<T, R1, R2> ConvErr<T, R2> for Result<T, StructError<R1>>
 where
     R1: DomainReason,
@@ -78,8 +77,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{core::DomainReason, OperationContext, StructError, UvsReason};
     use crate::reason::ErrorCode;
+    use crate::{core::DomainReason, OperationContext, StructError, UvsReason};
 
     // 定义测试用的 DomainReason
     #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -237,5 +236,4 @@ mod tests {
             Some("sink_defaults")
         );
     }
-
 }

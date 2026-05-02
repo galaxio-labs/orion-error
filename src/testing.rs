@@ -1,5 +1,5 @@
-use crate::{core::DomainReason, StructError};
 use crate::reason::{ErrorCategory, ErrorIdentityProvider};
+use crate::{core::DomainReason, StructError};
 
 #[allow(dead_code)]
 // Testing-only assertion trait (no message).
@@ -87,9 +87,9 @@ mod tests {
         assert_err_category, assert_err_code, assert_err_identity, assert_err_operation,
         assert_err_path,
     };
-    use crate::{StructError, UvsReason};
     use crate::conversion::ErrorWith;
     use crate::reason::ErrorCategory;
+    use crate::{StructError, UvsReason};
 
     #[test]
     fn test_assert_err_code_helper() {

@@ -1,5 +1,5 @@
-use orion_error::{cli, conversion, interop, protocol, reason, report, runtime, snapshot};
 use orion_error::prelude::ErrorWith;
+use orion_error::{cli, conversion, interop, protocol, reason, report, runtime, snapshot};
 
 #[test]
 fn test_layered_surfaces_compile_and_interoperate() {
@@ -61,8 +61,8 @@ fn test_dev_testing_module_exports_assert_helpers() {
 #[test]
 fn test_root_surface_stays_on_primary_runtime_path() {
     use orion_error::prelude::*;
-    use orion_error::{OperationContext, UvsReason};
     use orion_error::protocol::DefaultExposurePolicy;
+    use orion_error::{OperationContext, UvsReason};
 
     let mut ctx = OperationContext::doing("load config");
     ctx.record_field("path", "config.toml");
@@ -81,12 +81,16 @@ fn test_root_surface_stays_on_primary_runtime_path() {
     assert_eq!(report.reason(), "system error");
     assert_eq!(proto.identity.code, "sys.io_error");
     assert_eq!(err.action_main().as_deref(), Some("load config"));
-    assert_eq!(err.target_path().as_deref(), Some("load config / read config"));
+    assert_eq!(
+        err.target_path().as_deref(),
+        Some("load config / read config")
+    );
     assert_eq!(err.contexts()[0].action().as_deref(), Some("read config"));
     assert_eq!(err.contexts()[1].action().as_deref(), Some("load config"));
 }
 
 #[test]
+#[allow(clippy::type_complexity)]
 fn test_root_conversion_traits_now_live_under_prelude_or_conversion() {
     fn build_with_prelude() -> Result<(), runtime::StructError<reason::UvsReason>> {
         use orion_error::prelude::*;
@@ -139,7 +143,8 @@ fn test_reason_module_is_the_trait_home_for_identity_and_code() {
         )
     }
 
-    let (stable_code, category, error_code) = assert_reason_traits(&reason::UvsReason::system_error());
+    let (stable_code, category, error_code) =
+        assert_reason_traits(&reason::UvsReason::system_error());
     assert_eq!(stable_code, "sys.io_error");
     assert_eq!(category, reason::ErrorCategory::Sys);
     assert_eq!(error_code, 201);
@@ -221,8 +226,8 @@ fn test_report_and_protocol_modules_have_distinct_roles() {
 #[test]
 fn test_cli_module_is_the_public_home_for_print_error() {
     let fn_ptr: fn(&runtime::StructError<reason::UvsReason>) = cli::print_error;
-    let err = runtime::StructError::from(reason::UvsReason::system_error())
-        .with_detail("disk offline");
+    let err =
+        runtime::StructError::from(reason::UvsReason::system_error()).with_detail("disk offline");
 
     let _ = fn_ptr;
     assert!(err.display_chain().contains("disk offline"));

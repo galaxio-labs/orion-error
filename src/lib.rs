@@ -213,9 +213,7 @@ pub mod runtime {
     /// `runtime::*` surface stays centered on the main carrier and context
     /// APIs.
     pub mod source {
-        pub use crate::core::{
-            SourceFrame, SourcePayloadKind, SourcePayloadRef,
-        };
+        pub use crate::core::{SourceFrame, SourcePayloadKind, SourcePayloadRef};
     }
 }
 
@@ -229,9 +227,7 @@ pub mod snapshot {
 
 /// Report-layer types for rendering and redaction.
 pub mod report {
-    pub use crate::core::{
-        DiagnosticReport, RedactPolicy,
-    };
+    pub use crate::core::{DiagnosticReport, RedactPolicy};
 }
 
 /// CLI-side output helpers.
@@ -260,16 +256,13 @@ pub mod protocol {
 /// Reason-layer enums and traits.
 pub mod reason {
     pub use crate::core::{
-        ConfErrReason, DomainReason, ErrorCategory, ErrorCode, ErrorIdentityProvider,
-        UvsReason,
+        ConfErrReason, DomainReason, ErrorCategory, ErrorCode, ErrorIdentityProvider, UvsReason,
     };
 }
 
 /// Conversion traits for the current primary paths.
 pub mod conversion {
-    pub use crate::traits::{
-        ConvErr, ConvStructError, ErrorWith, SourceErr, ToStructError,
-    };
+    pub use crate::traits::{ConvErr, ConvStructError, ErrorWith, SourceErr, ToStructError};
 }
 
 /// Development and validation-only helpers.

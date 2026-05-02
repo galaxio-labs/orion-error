@@ -1,8 +1,11 @@
 #![cfg(feature = "derive")]
 
 use derive_more::From;
-use orion_error::{ErrorCode as ErrorCodeDerive, ErrorIdentityProvider as ErrorIdentityProviderDerive, OrionError, UvsReason};
 use orion_error::reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
+use orion_error::{
+    ErrorCode as ErrorCodeDerive, ErrorIdentityProvider as ErrorIdentityProviderDerive, OrionError,
+    UvsReason,
+};
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum DerivedReason {

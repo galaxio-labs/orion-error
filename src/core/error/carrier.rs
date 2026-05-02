@@ -7,19 +7,19 @@
 //! [`StructErrorBuilder`](super::builder::StructErrorBuilder) lives in the
 //! sibling module `builder`.
 
-use std::sync::Arc;
 use std::error::Error as StdError;
 use std::fmt::Display;
+use std::sync::Arc;
 
+use super::super::{
+    context::OperationContext, domain::DomainReason, metadata::ErrorMetadata, ContextAdd,
+};
+use super::builder::StructErrorBuilder;
 use super::source_chain::{
     InternalSourcePayload, InternalSourceState, SourcePayloadKind, SourcePayloadRef,
 };
-use super::std_bridge::{IntoSourcePayload, OwnedDynStdStructError, OwnedStdStructError,
-    StdStructRef,
-};
-use super::builder::StructErrorBuilder;
-use super::super::{
-    context::OperationContext, domain::DomainReason, metadata::ErrorMetadata, ContextAdd,
+use super::std_bridge::{
+    IntoSourcePayload, OwnedDynStdStructError, OwnedStdStructError, StdStructRef,
 };
 use crate::traits::ErrorWith;
 
@@ -122,7 +122,8 @@ impl<T: DomainReason> PartialEq for StructErrorImpl<T> {
         self.reason == other.reason
             && self.detail == other.detail
             && self.position == other.position
-            && self.context.as_deref().map_or(&[][..], |v| v.as_slice()) == other.context.as_deref().map_or(&[][..], |v| v.as_slice())
+            && self.context.as_deref().map_or(&[][..], |v| v.as_slice())
+                == other.context.as_deref().map_or(&[][..], |v| v.as_slice())
     }
 }
 
@@ -151,9 +152,7 @@ impl<T: DomainReason> StructErrorImpl<T> {
     }
 
     pub fn source_ref(&self) -> Option<&(dyn StdError + 'static)> {
-        self.source_payload
-            .as_ref()
-            .map(|sp| sp.source_ref())
+        self.source_payload.as_ref().map(|sp| sp.source_ref())
     }
 
     fn source_payload_ref(&self) -> Option<SourcePayloadRef<'_>> {
@@ -183,7 +182,9 @@ where
         other.imp.reason.into(),
         other.imp.detail,
         other.imp.position,
-        other.imp.context.map_or(Vec::new(), |arc| Arc::try_unwrap(arc).unwrap_or_else(|a| (*a).clone())),
+        other.imp.context.map_or(Vec::new(), |arc| {
+            Arc::try_unwrap(arc).unwrap_or_else(|a| (*a).clone())
+        }),
         other.imp.source_payload,
     )
 }
@@ -248,10 +249,7 @@ impl<T: DomainReason> StructError<T> {
     }
 
     pub fn root_cause(&self) -> Option<&(dyn StdError + 'static)> {
-        self.imp
-            .source_payload
-            .as_ref()
-            .map(|sp| sp.root_cause())
+        self.imp.source_payload.as_ref().map(|sp| sp.root_cause())
     }
 
     pub fn source_frames(&self) -> &[super::source_chain::SourceFrame] {
@@ -330,7 +328,8 @@ impl<T: DomainReason> StructError<T> {
                     out.push_str(&format!(" [{detail}]"));
                 }
 
-                let extras: Vec<String> = frame.metadata
+                let extras: Vec<String> = frame
+                    .metadata
                     .iter()
                     .map(|(k, v)| {
                         let val = match v {
@@ -349,7 +348,8 @@ impl<T: DomainReason> StructError<T> {
             }
         }
         out
-    }#[cfg(feature = "anyhow")]
+    }
+    #[cfg(feature = "anyhow")]
     pub(crate) fn with_dyn_struct_source(self, source: OwnedDynStdStructError) -> Self {
         self.with_internal_source(InternalSourceState::from_dyn_struct(source))
     }
@@ -505,12 +505,17 @@ impl<T: DomainReason> Display for StructError<T> {
         if !ctx_slice.is_empty() {
             write!(f, "\n  -> Trace:")?;
             for (i, c) in ctx_slice.iter().rev().enumerate() {
-                let label = c.action().as_deref().or_else(|| c.locator().as_deref())
+                let label = c
+                    .action()
+                    .as_deref()
+                    .or_else(|| c.locator().as_deref())
                     .unwrap_or("(operation)");
                 write!(f, "\n      {}. {}", i + 1, label)?;
 
                 if !c.context().items.is_empty() {
-                    let fields: Vec<String> = c.context().items
+                    let fields: Vec<String> = c
+                        .context()
+                        .items
                         .iter()
                         .map(|(k, v)| format!("{k}: {v}"))
                         .collect();
@@ -539,4 +544,3 @@ impl<T: DomainReason> ErrorWith for StructError<T> {
         self
     }
 }
-

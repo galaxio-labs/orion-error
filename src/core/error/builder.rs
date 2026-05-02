@@ -5,11 +5,11 @@
 
 use std::error::Error as StdError;
 
+use super::super::context::OperationContext;
 use super::carrier::StructError;
-use crate::core::DomainReason;
 use super::source_chain::{InternalSourcePayload, InternalSourceState};
 use super::std_bridge::IntoSourcePayload;
-use super::super::context::OperationContext;
+use crate::core::DomainReason;
 
 pub struct StructErrorBuilder<T: DomainReason> {
     pub(crate) reason: T,

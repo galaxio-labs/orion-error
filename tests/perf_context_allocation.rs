@@ -33,8 +33,7 @@ fn perf_measure_allocations() {
 
     // 2. With detail
     bench("with-detail      ", || {
-        StructError::from(UvsReason::validation_error())
-            .with_detail("port number out of range")
+        StructError::from(UvsReason::validation_error()).with_detail("port number out of range")
     });
 
     // 3. With detail + position
@@ -56,14 +55,12 @@ fn perf_measure_allocations() {
 
     // 5. With std source (io::Error, cheap Debug)
     bench_n("with-std-source  ", M, || {
-        StructError::from(UvsReason::system_error())
-            .with_source(io::Error::other("disk offline"))
+        StructError::from(UvsReason::system_error()).with_source(io::Error::other("disk offline"))
     });
 
     // 6. With std source + long message (Debug cost visible)
     bench_n("with-std-verbose ", M, || {
-        StructError::from(UvsReason::system_error())
-            .with_source(io::Error::other("x".repeat(256)))
+        StructError::from(UvsReason::system_error()).with_source(io::Error::other("x".repeat(256)))
     });
 
     // 7. With struct source (expensive Debug — full context stack)
@@ -74,8 +71,7 @@ fn perf_measure_allocations() {
             .with_position("src/config.rs:42")
             .with_context(ctx)
             .with_context(OperationContext::at("config.toml"));
-        StructError::from(UvsReason::system_error())
-            .with_source(inner)
+        StructError::from(UvsReason::system_error()).with_source(inner)
     });
 
     // === SourceFrame clone benchmarks ===
@@ -121,8 +117,7 @@ fn perf_measure_allocations() {
         let mid = StructError::from(UvsReason::data_error())
             .with_detail("parse failed")
             .with_source(leaf);
-        StructError::from(UvsReason::system_error())
-            .with_source(mid)
+        StructError::from(UvsReason::system_error()).with_source(mid)
     });
 }
 
