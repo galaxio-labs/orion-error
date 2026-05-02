@@ -81,9 +81,9 @@ exposure 决策结构是 `protocol::ExposureDecision`。
 主要入口：
 
 - `ExposurePolicy::decide(...)`
-- `StructError::exposure_snapshot(...)`
-- `StructError::into_exposure_snapshot(...)`
-- 完整 projection 数据以 `StructError::exposure_snapshot(...)` 为主路径
+- `StructError::exposure(...)`
+- `StructError::into_exposure(...)`
+- 完整 projection 数据以 `StructError::exposure(...)` 为主路径
 
 ## 4. `ErrorProtocolSnapshot`
 
@@ -97,8 +97,8 @@ exposure 决策结构是 `protocol::ExposureDecision`。
 
 入口：
 
-- `StructError::exposure_snapshot(...)`
-- `StructError::into_exposure_snapshot(...)`
+- `StructError::exposure(...)`
+- `StructError::into_exposure(...)`
 
 适用场景：
 
@@ -234,7 +234,7 @@ JSON 字段：
 
 如果启用了 `serde_json` feature，还可以使用：
 
-- 协议投影应改走 `StructError::exposure_snapshot(...)`
+- 协议投影应改走 `StructError::exposure(...)`
 - 然后使用 `ErrorProtocolSnapshot::to_*_json()`
 
 ## 11. 建议的消费路径
@@ -243,7 +243,7 @@ JSON 字段：
 
 1. 运行时传播用 `StructError<R>`
 2. 要稳定识别时取 `identity_snapshot()`
-3. 要统一出口规则时取 `exposure_snapshot(...)`
+3. 要统一出口规则时取 `exposure(...)`
 4. 要协议出口时使用 projection API
 5. 要人类摘要时使用 `render_user_debug(...)`
 

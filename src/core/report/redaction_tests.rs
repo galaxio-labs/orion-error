@@ -10,7 +10,7 @@
                 ctx
             });
 
-        let rendered = err.exposure_snapshot(&DefaultExposurePolicy).render_user_debug_redacted(&TestPolicy);
+        let rendered = err.exposure(&DefaultExposurePolicy).render_user_debug_redacted(&TestPolicy);
 
         assert!(rendered.contains("<redacted>"));
         assert!(!rendered.contains("token=abc"));

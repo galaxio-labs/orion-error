@@ -1,7 +1,7 @@
 use orion_error::prelude::*;
 use orion_error::reason::ErrorCode;
 use orion_error::UnifiedReason;
-use orion_error::{conversion, reason, runtime, snapshot};
+use orion_error::{conversion, reason, runtime};
 
 #[test]
 fn test_layered_modules_and_root_prelude_compile() {
@@ -11,17 +11,10 @@ fn test_layered_modules_and_root_prelude_compile() {
         runtime::OperationContext::doing("start engine"),
     );
 
-    let snapshot = err.snapshot();
-    let stable = snapshot.stable_export();
-    let report = stable.report();
+    let report = err.report();
     let bridge = err.as_std();
 
     assert_eq!(reason::ErrorCode::error_code(err.reason()), 201);
-    assert_eq!(snapshot.reason, "system error");
-    assert_eq!(
-        stable.schema_version(),
-        snapshot::STABLE_SNAPSHOT_SCHEMA_VERSION
-    );
     assert_eq!(report.reason(), "system error");
     assert!(std::error::Error::source(&bridge).is_none());
 
@@ -76,11 +69,11 @@ fn test_dev_prelude_exports_cli_projection_types() {
     use orion_error::StructError;
 
     let http = StructError::from(UnifiedReason::system_error())
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_http_error_json()
         .unwrap();
     let cli = StructError::from(UnifiedReason::system_error())
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_cli_error_json()
         .unwrap();
 
@@ -88,7 +81,7 @@ fn test_dev_prelude_exports_cli_projection_types() {
     assert_eq!(http["status"], serde_json::json!(500));
     assert_eq!(cli["code"], serde_json::json!("sys.io_error"));
     assert!(StructError::from(UnifiedReason::system_error())
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .render()
         .contains("reason: system error"));
 }

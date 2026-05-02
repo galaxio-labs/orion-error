@@ -11,12 +11,9 @@
 //! │    → err.report().render()                                  │
 //! │                                                             │
 //! │  Need to return it to an HTTP/RPC/CLI boundary?             │
-//! │    → err.exposure_snapshot(&policy).to_http_error_json()    │
-//! │    → err.exposure_snapshot(&policy).to_rpc_error_json()     │
-//! │    → err.exposure_snapshot(&policy).to_cli_error_json()     │
-//! │                                                             │
-//! │  Need a stable machine-readable snapshot?                   │
-//! │    → err.snapshot().stable_export()                         │
+//! │    → err.exposure(&policy).to_http_error_json()    │
+//! │    → err.exposure(&policy).to_rpc_error_json()     │
+//! │    → err.exposure(&policy).to_cli_error_json()     │
 //! │                                                             │
 //! │  Need to bridge to std::error::Error?                       │
 //! │    → err.as_std() / err.into_std() / err.into_dyn_std()    │
@@ -31,13 +28,13 @@
 //!
 //! - [`StructError::report()`] gives you a [`DiagnosticReport`] — human diagnostics,
 //!   redaction, text rendering. Only requires [`reason::DomainReason`].
-//! - [`StructError::exposure_snapshot()`] gives you an [`ErrorProtocolSnapshot`] —
+//! - [`StructError::exposure()`] gives you an [`ErrorProtocolSnapshot`] —
 //!   identity + exposure decision + report, the unified protocol input.
 //!   Requires [`reason::DomainReason`] + [`reason::ErrorIdentityProvider`].
 //!
 //! If you only have [`reason::DomainReason`], you can always `report()`. If you
 //! also implement [`reason::ErrorIdentityProvider`] (via `#[derive(OrionError)]`),
-//! you can use `exposure_snapshot()` and the full protocol projection stack.
+//! you can use `exposure()` and the full protocol projection stack.
 //!
 //! Module split:
 //!
@@ -153,7 +150,7 @@
 //! use orion_error::{StructError, UnifiedReason};
 //!
 //! let proto = StructError::from(UnifiedReason::system_error())
-//!     .exposure_snapshot(&DefaultExposurePolicy);
+//!     .exposure(&DefaultExposurePolicy);
 //! let _ = proto.report();
 //! ```
 //!
@@ -182,7 +179,7 @@ extern crate self as orion_error;
 #[cfg(feature = "derive")]
 pub use orion_error_derive::{ErrorCode, ErrorIdentityProvider, OrionError};
 
-pub use core::{convert_error, UnifiedReason, OperationContext, StructError, UvsReason};
+pub use core::{convert_error, ErrorIdentity, OperationContext, StructError, UnifiedReason};
 
 /// Primary-path traits and types for convenient wildcard imports.
 ///
@@ -195,6 +192,7 @@ pub mod prelude {
     pub use crate::traits::{ConvErr, ErrorWith, SourceErr};
     #[cfg(feature = "derive")]
     pub use crate::OrionError;
+    pub use crate::UnifiedReason;
 }
 
 /// Runtime-layer types.
@@ -215,14 +213,6 @@ pub mod runtime {
     pub mod source {
         pub use crate::core::{SourceFrame, SourcePayloadKind, SourcePayloadRef};
     }
-}
-
-/// Snapshot-layer types and stable snapshot schema exports.
-pub mod snapshot {
-    pub use crate::core::{
-        ErrorIdentity, ErrorSnapshot, SnapshotContextFrame, SnapshotSourceFrame,
-        StableErrorSnapshot, STABLE_SNAPSHOT_SCHEMA_VERSION,
-    };
 }
 
 /// Report-layer types for rendering and redaction.
@@ -256,8 +246,7 @@ pub mod protocol {
 /// Reason-layer enums and traits.
 pub mod reason {
     pub use crate::core::{
-        UnifiedReason, ConfErrReason, DomainReason, ErrorCategory, ErrorCode, ErrorIdentityProvider,
-        UvsReason,
+        ConfErrReason, DomainReason, ErrorCategory, ErrorCode, ErrorIdentityProvider, UnifiedReason,
     };
 }
 
@@ -276,9 +265,8 @@ pub mod dev {
     /// Wildcard imports for tests, schema checks, and migration-oriented validation.
     pub mod prelude {
         pub use crate::core::{
-            DiagnosticReport, ErrorIdentity, ErrorProtocolSnapshot, ErrorSnapshot,
-            ExposureDecision, ExposurePolicy, RedactPolicy, StableErrorSnapshot, Visibility,
-            STABLE_SNAPSHOT_SCHEMA_VERSION,
+            DiagnosticReport, ErrorIdentity, ErrorProtocolSnapshot, ExposureDecision,
+            ExposurePolicy, RedactPolicy, Visibility,
         };
         #[cfg(feature = "derive")]
         pub use crate::OrionError;

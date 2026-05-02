@@ -10,10 +10,10 @@ Suggested reading order: start with `user/` or `user-en/` to learn concepts and 
 
 | Document | Description |
 |----------|-------------|
+| [为什么需要 orion-error](./user/why-orion-error.md) | Error governance motivation and examples |
 | [使用教程](./user/tutorial.md) | Getting started tutorial |
 | [OrionError 与稳定身份](./user/reason-identity-guide.md) | Defining domain reason types |
 | [协议契约](./user/protocol-contract.md) | Exposure projection contract |
-| [Stable Snapshot Schema](./user/stable-snapshot-schema.md) | Snapshot structure and versioning |
 | [Report / Exposure Boundary](./user/report-exposure-boundary.md) | Diagnostic vs exposure boundary |
 | [日志说明](./user/LOGGING.md) | Logging integration |
 | [与 thiserror 的关系](./user/thiserror-comparison.md) | Comparison with thiserror |
@@ -24,9 +24,9 @@ Suggested reading order: start with `user/` or `user-en/` to learn concepts and 
 
 | Document | Description |
 |----------|-------------|
+| [Why orion-error](./user-en/why-orion-error.md) | Error governance motivation and examples |
 | [Tutorial](./user-en/tutorial.md) | Getting started tutorial |
 | [Protocol Contract](./user-en/protocol-contract.md) | Exposure projection contract |
-| [Stable Snapshot Schema](./user-en/stable-snapshot-schema.md) | Snapshot structure and versioning |
 | [Report / Exposure Boundary](./user-en/report-exposure-boundary.md) | Diagnostic vs exposure boundary |
 | [Comparison with thiserror](./user-en/thiserror-comparison.md) | Differences and coexistence |
 | [Ecosystem Comparison](./user-en/ecosystem-comparison.md) | anyhow / thiserror / color-eyre / orion-error |

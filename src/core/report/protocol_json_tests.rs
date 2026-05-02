@@ -46,12 +46,12 @@ fn test_default_exposure_policy_maps_category_to_http_status_and_visibility() {
 
 #[cfg(feature = "serde_json")]
 #[test]
-fn test_exposure_snapshot_json_contains_identity_decision_and_report_sections() {
+fn test_exposure_json_contains_identity_decision_and_report_sections() {
     let err = StructError::from(TestReason::General(UnifiedReason::system_error()))
         .with_detail("engine bootstrap failed")
         .with_context(OperationContext::doing("start engine"));
 
-    let snapshot = err.exposure_snapshot(&DefaultExposurePolicy);
+    let snapshot = err.exposure(&DefaultExposurePolicy);
 
     assert_eq!(snapshot.identity.code, "sys.io_error");
     assert_eq!(snapshot.identity.category, ErrorCategory::Sys);
@@ -66,11 +66,11 @@ fn test_exposure_snapshot_json_contains_identity_decision_and_report_sections() 
 
 #[cfg(feature = "serde_json")]
 #[test]
-fn test_exposure_snapshot_contains_identity_decision_and_report() {
+fn test_exposure_contains_identity_decision_and_report() {
     let err = StructError::from(TestReason::General(UnifiedReason::system_error()))
         .with_detail("engine bootstrap failed");
 
-    let snapshot = err.exposure_snapshot(&DefaultExposurePolicy);
+    let snapshot = err.exposure(&DefaultExposurePolicy);
 
     assert_eq!(snapshot.identity.code, "sys.io_error");
     assert_eq!(snapshot.identity.category, ErrorCategory::Sys);
@@ -85,7 +85,7 @@ fn test_http_response_json_for_public_visibility_uses_detail() {
     let err = StructError::from(TestReason::General(UnifiedReason::business_error()))
         .with_detail("order state invalid");
     let json = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_http_error_json()
         .unwrap();
 
@@ -103,7 +103,7 @@ fn test_http_response_json_for_internal_visibility_uses_reason() {
     let err = StructError::from(TestReason::General(UnifiedReason::system_error()))
         .with_detail("disk offline");
     let json = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_http_error_json()
         .unwrap();
 
@@ -125,7 +125,7 @@ fn test_http_error_json_keys_match_expected_shape() {
         .with_detail("disk offline");
 
     let json_value = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_http_error_json()
         .expect("serialize http error");
 
@@ -162,7 +162,7 @@ fn test_cli_response_json_contains_summary_detail_and_hints() {
     let err = StructError::from(TestReason::General(UnifiedReason::system_error()))
         .with_detail("disk offline");
     let json = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_cli_error_json()
         .unwrap();
 
@@ -192,7 +192,7 @@ fn test_log_response_json_contains_machine_facing_diagnostics() {
         .with_context(OperationContext::doing("load config").with_meta("tenant", "acme"));
 
     let json = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_log_error_json()
         .unwrap();
 
@@ -219,7 +219,7 @@ fn test_rpc_response_json_hides_internal_detail_and_marks_retryable() {
     let err = StructError::from(TestReason::General(UnifiedReason::timeout_error()))
         .with_detail("downstream rpc timeout");
     let json = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_rpc_error_json()
         .unwrap();
 
@@ -242,7 +242,7 @@ fn test_rpc_response_json_keeps_public_detail() {
     let err = StructError::from(TestReason::General(UnifiedReason::business_error()))
         .with_detail("order state invalid");
     let json = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_rpc_error_json()
         .unwrap();
 
@@ -263,7 +263,7 @@ fn test_cli_error_json_keys_match_expected_shape() {
         .with_detail("order state invalid");
 
     let json_value = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_cli_error_json()
         .expect("serialize cli error");
 
@@ -304,7 +304,7 @@ fn test_log_error_json_keys_match_expected_shape() {
         .with_context(OperationContext::doing("load config"));
 
     let json_value = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_log_error_json()
         .expect("serialize log error");
 
@@ -346,7 +346,7 @@ fn test_rpc_error_json_keys_match_expected_shape() {
         .with_detail("downstream rpc timeout");
 
     let json_value = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_rpc_error_json()
         .expect("serialize rpc error");
 

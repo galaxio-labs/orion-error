@@ -4,7 +4,7 @@ This document describes the responsibility boundary between `DiagnosticReport` a
 
 ## Current State
 
-`category` and `code` have been removed from `DiagnosticReport`. Identity data now lives exclusively in `ErrorProtocolSnapshot.identity`. All exposure bridge methods on `DiagnosticReport` (`exposure_identity`, `http_status`, `visibility`, `default_hints`, `decision`, `exposure_snapshot`, `to_exposure_snapshot_json`) have been deleted.
+`category` and `code` have been removed from `DiagnosticReport`. Identity data now lives exclusively in `ErrorProtocolSnapshot.identity`. All exposure bridge methods on `DiagnosticReport` (`exposure_identity`, `http_status`, `visibility`, `default_hints`, `decision`, `exposure`, `to_exposure_json`) have been deleted.
 
 `StructError<T>::report()` only requires `DomainReason`, not `ErrorIdentityProvider`.
 
@@ -26,7 +26,7 @@ let text = report.render();
 
 **Protocol/projection:**
 ```rust
-let proto = err.exposure_snapshot(&policy);
+let proto = err.exposure(&policy);
 let debug = proto.render_user_debug();
 let http = proto.to_http_error_json()?;
 ```
@@ -39,7 +39,7 @@ let http = proto.to_http_error_json()?;
 
 In short:
 - Need text diagnostics → `report()`
-- Need exposure / JSON projection → `exposure_snapshot(…)`
+- Need exposure / JSON projection → `exposure(…)`
 
 ## 4. From DiagnosticReport to Protocol
 
@@ -49,7 +49,7 @@ If the caller starts from an existing `DiagnosticReport` (not `StructError`):
 let proto = ErrorProtocolSnapshot::from_report_skeleton(report, identity, &policy);
 ```
 
-But if full projection data (root metadata, source frames, path) is needed, prefer `StructError::exposure_snapshot(...)`.
+But if full projection data (root metadata, source frames, path) is needed, prefer `StructError::exposure(...)`.
 
 ## 5. Summary
 

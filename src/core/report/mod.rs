@@ -3,8 +3,8 @@ use crate::{core::DomainReason, StructError};
 use std::sync::Arc;
 
 use super::{
-    snapshot::{ErrorIdentity, ErrorSnapshot, StableErrorSnapshot},
-    ErrorIdentityProvider, ErrorMetadata, MetadataValue, OperationContext, SourceFrame,
+    ErrorIdentity, ErrorIdentityProvider, ErrorMetadata, MetadataValue, OperationContext,
+    SourceFrame,
 };
 
 include!("redaction_impl.rs");

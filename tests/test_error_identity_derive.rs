@@ -3,8 +3,8 @@
 use derive_more::From;
 use orion_error::reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
 use orion_error::{
-    UnifiedReason, ErrorCode as ErrorCodeDerive,
-    ErrorIdentityProvider as ErrorIdentityProviderDerive, OrionError,
+    ErrorCode as ErrorCodeDerive, ErrorIdentityProvider as ErrorIdentityProviderDerive, OrionError,
+    UnifiedReason,
 };
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]

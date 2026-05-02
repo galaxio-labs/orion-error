@@ -50,48 +50,6 @@ fn test_report_from_struct_error_matches_report_methods() {
 }
 
 #[test]
-fn test_report_from_stable_snapshot_matches_report_methods() {
-    let stable = ErrorSnapshot {
-        reason: "system error".to_string(),
-        detail: Some("outer detail".to_string()),
-        position: None,
-        path: Some("start engine".to_string()),
-        context: vec![SnapshotContextFrame {
-            target: Some("start engine".to_string()),
-            action: None,
-            locator: None,
-            path: vec!["start engine".to_string()],
-            metadata: ErrorMetadata::new(),
-            fields: vec![],
-            result: crate::core::context::OperationResult::Fail,
-        }],
-        root_metadata: ErrorMetadata::new(),
-        source_frames: vec![SnapshotSourceFrame {
-            index: 0,
-            message: "db unavailable".to_string(),
-            display: None,
-            type_name: None,
-            error_code: None,
-            reason: None,
-            path: Some("load config / read".to_string()),
-            detail: Some("inner detail".to_string()),
-            metadata: ErrorMetadata::new(),
-            is_root_cause: true,
-        }],
-        category: ErrorCategory::Sys,
-        code: "sys.test_error".to_string(),
-    }
-    .stable_export();
-
-    let via_method = stable.report();
-    let via_borrowed = DiagnosticReport::from(&stable);
-    let via_owned = DiagnosticReport::from(stable);
-
-    assert_eq!(via_borrowed, via_method);
-    assert_eq!(via_owned, via_method);
-}
-
-#[test]
 fn test_report_verbose_render_includes_metadata() {
     let report = DiagnosticReport::from_parts(
         "test error".to_string(),
@@ -108,12 +66,12 @@ fn test_report_verbose_render_includes_metadata() {
 }
 
 #[test]
-fn test_struct_error_exposure_snapshot_uses_real_stable_identity() {
+fn test_struct_error_exposure_uses_real_stable_identity() {
     let err = StructError::from(TestReason::General(UnifiedReason::system_error()))
         .with_detail("engine bootstrap failed")
         .with_context(OperationContext::doing("start engine"));
 
-    let snapshot = err.exposure_snapshot(&DefaultExposurePolicy);
+    let snapshot = err.exposure(&DefaultExposurePolicy);
 
     assert_eq!(snapshot.identity.code, "sys.io_error");
     assert_eq!(snapshot.identity.category, ErrorCategory::Sys);

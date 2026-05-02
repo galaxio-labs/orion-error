@@ -27,7 +27,7 @@
 - `render()`
 - `snapshot().stable_export()`
 - `identity_snapshot()`
-- `exposure_snapshot(...)`
+- `exposure(...)`
 - `source_err(...)`
 - `conv_err()`
 

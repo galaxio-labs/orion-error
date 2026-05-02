@@ -3,7 +3,7 @@
 //! This module is only compiled when `feature = "serde"` is enabled.
 //! Keeping serde logic in one place makes feature gating and maintenance simpler.
 
-use crate::core::{DomainReason, ErrorSnapshot, StructError};
+use crate::core::{DomainReason, StructError};
 
 // ── Manual Serialize impls ──
 
@@ -35,23 +35,13 @@ where
     }
 }
 
-impl serde::Serialize for ErrorSnapshot {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.stable_export().serialize(serializer)
-    }
-}
-
 // ── Serde-gated tests ──
 
 #[cfg(test)]
 mod tests {
     use crate::core::{
-        context::OperationResult, DomainReason, ErrorCategory, ErrorIdentity, ErrorMetadata,
-        ErrorSnapshot, OperationContext, SnapshotContextFrame, SnapshotSourceFrame, SourceFrame,
-        StableErrorSnapshot, StructError, STABLE_SNAPSHOT_SCHEMA_VERSION,
+        DomainReason, ErrorCategory, ErrorIdentity, ErrorMetadata, OperationContext, SourceFrame,
+        StructError,
     };
     use crate::reason::{ErrorCode, ErrorIdentityProvider};
     use crate::report::RedactPolicy;
@@ -237,166 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn test_snapshot_default_serialization_uses_stable_export_shape() {
-        let source = StructError::from(TestReason::TestError)
-            .with_detail("inner detail")
-            .with_context(
-                OperationContext::doing("load defaults").with_meta("config.kind", "sink_defaults"),
-            );
-        let err = StructError::from(TestReason::from(UnifiedReason::system_error()))
-            .with_detail("engine bootstrap failed")
-            .with_position("src/main.rs:42")
-            .with_context(
-                OperationContext::doing("start engine").with_meta("component.name", "engine"),
-            )
-            .with_struct_source(source);
-
-        let json_value = serde_json::to_value(err.snapshot()).unwrap();
-
-        assert_eq!(
-            json_value["schema_version"],
-            serde_json::json!(STABLE_SNAPSHOT_SCHEMA_VERSION)
-        );
-        assert_eq!(json_value["reason"], serde_json::json!("system error"));
-        assert_eq!(
-            json_value["detail"],
-            serde_json::json!("engine bootstrap failed")
-        );
-        assert_eq!(json_value["position"], serde_json::json!("src/main.rs:42"));
-        assert_eq!(json_value["path"], serde_json::json!("start engine"));
-        assert_eq!(
-            json_value["root_metadata"]["component.name"],
-            serde_json::json!("engine")
-        );
-        assert_eq!(
-            json_value["context"][0]["target"],
-            serde_json::json!("start engine")
-        );
-        assert_eq!(
-            json_value["context"][0]["action"],
-            serde_json::json!("start engine")
-        );
-        assert_eq!(json_value["context"][0]["locator"], serde_json::Value::Null);
-        assert_eq!(
-            json_value["context"][0]["path"],
-            serde_json::json!(["start engine"])
-        );
-        assert_eq!(
-            json_value["context"][0]["metadata"]["component.name"],
-            serde_json::json!("engine")
-        );
-        assert!(json_value["context"][0].get("fields").is_none());
-        assert!(json_value["context"][0].get("result").is_none());
-        assert_eq!(
-            json_value["source_frames"][0]["message"],
-            serde_json::json!("test error")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["reason"],
-            serde_json::json!("test error")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["path"],
-            serde_json::json!("load defaults")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["detail"],
-            serde_json::json!("inner detail")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["metadata"]["config.kind"],
-            serde_json::json!("sink_defaults")
-        );
-        assert_eq!(
-            json_value["source_frames"][0]["is_root_cause"],
-            serde_json::json!(true)
-        );
-        assert!(json_value["source_frames"][0].get("debug").is_none());
-        assert!(json_value["source_frames"][0].get("display").is_none());
-        assert!(json_value["source_frames"][0].get("type_name").is_none());
-        assert!(json_value.get("source_message").is_none());
-        assert!(json_value.get("source_chain").is_none());
-    }
-
-    #[test]
-    fn test_snapshot_stable_export_serialization_omits_compat_projection_fields() {
-        let snapshot = ErrorSnapshot {
-            reason: "system error".to_string(),
-            detail: Some("outer detail".to_string()),
-            position: Some("src/main.rs:42".to_string()),
-            path: Some("start engine".to_string()),
-            context: vec![SnapshotContextFrame {
-                target: Some("start engine".to_string()),
-                action: Some("start engine".to_string()),
-                locator: Some("engine.toml".to_string()),
-                path: vec!["start engine".to_string()],
-                metadata: {
-                    let mut metadata = ErrorMetadata::new();
-                    metadata.insert("component.name", "engine");
-                    metadata
-                },
-                fields: vec![("tenant".to_string(), "alpha".to_string())],
-                result: OperationResult::Fail,
-            }],
-            root_metadata: {
-                let mut metadata = ErrorMetadata::new();
-                metadata.insert("component.name", "engine");
-                metadata
-            },
-            source_frames: vec![SnapshotSourceFrame {
-                index: 0,
-                message: "db unavailable".into(),
-                display: Some("db unavailable".to_string()),
-                type_name: Some("std::io::Error".to_string()),
-                error_code: None,
-                reason: None,
-                path: Some("load config / read".to_string()),
-                detail: Some("inner detail".to_string()),
-                metadata: {
-                    let mut metadata = ErrorMetadata::new();
-                    metadata.insert("config.kind", "sink_defaults");
-                    metadata
-                },
-                is_root_cause: true,
-            }],
-            category: ErrorCategory::Sys,
-            code: "sys.test_error".to_string(),
-        };
-
-        let stable = snapshot.stable_export();
-        let json_value = serde_json::to_value(&stable).unwrap();
-
-        assert_eq!(StableErrorSnapshot::clone(&stable), stable);
-        assert_eq!(
-            json_value["schema_version"],
-            serde_json::json!(STABLE_SNAPSHOT_SCHEMA_VERSION)
-        );
-        assert_eq!(json_value["reason"], serde_json::json!("system error"));
-        assert_eq!(
-            json_value["context"][0]["target"],
-            serde_json::json!("start engine")
-        );
-        assert_eq!(
-            json_value["context"][0]["action"],
-            serde_json::json!("start engine")
-        );
-        assert_eq!(
-            json_value["context"][0]["locator"],
-            serde_json::json!("engine.toml")
-        );
-        assert!(json_value["context"][0].get("fields").is_none());
-        assert!(json_value["context"][0].get("result").is_none());
-        assert_eq!(
-            json_value["source_frames"][0]["index"],
-            serde_json::json!(0)
-        );
-        assert!(json_value["source_frames"][0].get("debug").is_none());
-        assert!(json_value["source_frames"][0].get("display").is_none());
-        assert!(json_value["source_frames"][0].get("type_name").is_none());
-    }
-
     // ── Tests from report.rs ──
-
     #[test]
     fn test_report_serialization_supports_structured_export() {
         let source = StructError::from(TestReason::TestError).with_context(

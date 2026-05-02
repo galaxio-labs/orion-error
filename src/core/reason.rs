@@ -43,7 +43,7 @@ impl ErrorCategory {
 /// Runtime identity provider for stable error codes and categories.
 ///
 /// Implemented automatically by `#[derive(OrionError)]`. Used by
-/// [`StructError::exposure_snapshot`](crate::StructError::exposure_snapshot)
+/// [`StructError::exposure`](crate::StructError::exposure)
 /// and the protocol projection layer to determine visibility and
 /// exposure decisions.
 pub trait ErrorIdentityProvider {

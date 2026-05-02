@@ -7,7 +7,8 @@ mod tests {
     use crate::conversion::ErrorWith;
     use crate::reason::{DomainReason, ErrorCode};
     use crate::{
-        core::convert_error, testing::TestAssertWithMsg, OperationContext, StructError, UnifiedReason,
+        core::convert_error, testing::TestAssertWithMsg, OperationContext, StructError,
+        UnifiedReason,
     };
 
     // 测试用领域原因类型

@@ -199,7 +199,7 @@ Requires `ServiceReason: From<RepoReason>`.
 | `ErrorSnapshot` | Rich snapshot (all data) | `err.snapshot()` |
 | `StableErrorSnapshot` | Stable machine export | `snapshot.stable_export()` |
 | `DiagnosticReport` | Human diagnostics | `err.report()` |
-| `ErrorProtocolSnapshot` | Protocol projection | `err.exposure_snapshot(&policy)` |
+| `ErrorProtocolSnapshot` | Protocol projection | `err.exposure(&policy)` |
 
 Standard Error interop: `as_std()`, `into_std()`, `into_boxed_std()`, `into_dyn_std()`.
 
@@ -223,7 +223,7 @@ The identity prefix (`biz`, `sys`, `conf`, `logic`) also determines the default 
 The same error produces different JSON shapes for different protocol boundaries:
 
 ```rust
-let proto = err.exposure_snapshot(&DefaultExposurePolicy);
+let proto = err.exposure(&DefaultExposurePolicy);
 
 // HTTP response — minimal, safe for external clients
 proto.to_http_error_json();
@@ -259,5 +259,5 @@ Test helpers: `assert_err_code()`, `assert_err_category()`, `assert_err_identity
 - Use `source_err(reason, detail)` as the unified error entry point
 - Use `conv_err()` for cross-layer reason conversion
 - Use `snapshot().stable_export()` for stable machine export
-- Use `exposure_snapshot(...)` for protocol boundary output
+- Use `exposure(...)` for protocol boundary output
 - Use explicit interop APIs when entering `std::error::Error` ecosystem

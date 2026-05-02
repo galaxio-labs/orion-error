@@ -42,7 +42,7 @@
 | Capability | anyhow | thiserror | color-eyre | orion-error |
 |-----------|--------|-----------|------------|-------------|
 | Human diagnostics | `.display_chain()` | No | Colored output | `report().render()` + `RedactPolicy` |
-| Protocol JSON (HTTP/RPC) | No | No | No | `exposure_snapshot()` → `to_*_error_json()` |
+| Protocol JSON (HTTP/RPC) | No | No | No | `exposure()` → `to_*_error_json()` |
 | Stable snapshot | No | No | No | `StableErrorSnapshot` + versioned schema |
 | Exposure policy | No | No | No | `ExposurePolicy` (status/visibility/hints/retryable) |
 | Redaction | No | No | Limited | `RedactPolicy` trait |
@@ -65,7 +65,7 @@
 | Entering structured system | orion-error `source_err()` |
 | Business layer propagation | orion-error `StructError<R>` |
 | Cross-layer (repo → service → handler) | orion-error `conv_err()` |
-| Boundary output | orion-error `exposure_snapshot()` |
+| Boundary output | orion-error `exposure()` |
 | Quick prototyping / glue code | anyhow (supported via `anyhow` feature) |
 | Terminal diagnostics | orion-error `report().render()` or color-eyre |
 

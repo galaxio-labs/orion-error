@@ -15,7 +15,7 @@ fn test_snapshot_exposure_flow_for_system_error() {
     assert_err_identity(&err, "sys.io_error", ErrorCategory::Sys);
 
     let identity = err.identity_snapshot();
-    let snapshot = err.exposure_snapshot(&DefaultExposurePolicy);
+    let snapshot = err.exposure(&DefaultExposurePolicy);
     let rendered = snapshot.render_user_debug();
 
     assert_eq!(identity.code, "sys.io_error");
@@ -44,7 +44,7 @@ fn test_snapshot_exposure_flow_for_business_error() {
     );
 
     let identity = err.identity_snapshot();
-    let snapshot = err.exposure_snapshot(&DefaultExposurePolicy);
+    let snapshot = err.exposure(&DefaultExposurePolicy);
     let rendered = err.report().render();
 
     assert_eq!(identity.code, "biz.business_error");
@@ -71,11 +71,11 @@ fn test_exposure_json_projection_for_business_error() {
         .with_context(OperationContext::doing("validate order"));
 
     let http = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_http_error_json()
         .unwrap();
     let cli = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_cli_error_json()
         .unwrap();
 

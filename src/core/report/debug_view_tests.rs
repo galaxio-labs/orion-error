@@ -1,5 +1,5 @@
     #[test]
-    fn test_exposure_snapshot_render_debug_summary_prefers_detail_path_context_and_component() {
+    fn test_exposure_render_debug_summary_prefers_detail_path_context_and_component() {
         let snapshot = test_proto(
             DiagnosticReport::from_parts(
                 "invalid order".to_string(),
@@ -50,7 +50,7 @@
     }
 
     #[test]
-    fn test_exposure_snapshot_render_debug_summary_falls_back_to_reason_and_source() {
+    fn test_exposure_render_debug_summary_falls_back_to_reason_and_source() {
         let snapshot = test_proto(
             DiagnosticReport::from_parts(
                 "storage full".to_string(),
@@ -98,7 +98,7 @@
     }
 
     #[test]
-    fn test_exposure_snapshot_render_debug_summary_prefers_root_cause_source_frame() {
+    fn test_exposure_render_debug_summary_prefers_root_cause_source_frame() {
         let snapshot = test_proto(
             DiagnosticReport::from_parts(
                 "system error".to_string(),

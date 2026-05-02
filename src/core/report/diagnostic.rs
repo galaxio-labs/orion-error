@@ -171,18 +171,6 @@ impl<T: DomainReason> StructError<T> {
     }
 }
 
-impl From<&ErrorSnapshot> for DiagnosticReport {
-    fn from(value: &ErrorSnapshot) -> Self {
-        value.report()
-    }
-}
-
-impl From<ErrorSnapshot> for DiagnosticReport {
-    fn from(value: ErrorSnapshot) -> Self {
-        value.into_report()
-    }
-}
-
 impl<T: DomainReason> From<&StructError<T>> for DiagnosticReport {
     fn from(value: &StructError<T>) -> Self {
         value.report()
@@ -191,18 +179,6 @@ impl<T: DomainReason> From<&StructError<T>> for DiagnosticReport {
 
 impl<T: DomainReason> From<StructError<T>> for DiagnosticReport {
     fn from(value: StructError<T>) -> Self {
-        value.into_report()
-    }
-}
-
-impl From<&StableErrorSnapshot> for DiagnosticReport {
-    fn from(value: &StableErrorSnapshot) -> Self {
-        value.report()
-    }
-}
-
-impl From<StableErrorSnapshot> for DiagnosticReport {
-    fn from(value: StableErrorSnapshot) -> Self {
         value.into_report()
     }
 }

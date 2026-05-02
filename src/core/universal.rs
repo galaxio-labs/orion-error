@@ -277,6 +277,7 @@ impl UnifiedReason {
 
 /// Deprecated: use [`UnifiedReason`] instead.
 #[deprecated(since = "0.9.0", note = "renamed to UnifiedReason")]
+#[allow(dead_code)]
 pub type UvsReason = UnifiedReason;
 
 #[cfg(test)]

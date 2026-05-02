@@ -1,5 +1,5 @@
 use orion_error::prelude::ErrorWith;
-use orion_error::{cli, conversion, interop, protocol, reason, report, runtime, snapshot};
+use orion_error::{cli, conversion, interop, protocol, reason, report, runtime};
 
 #[test]
 fn test_layered_surfaces_compile_and_interoperate() {
@@ -9,9 +9,7 @@ fn test_layered_surfaces_compile_and_interoperate() {
         runtime::OperationContext::doing("start engine"),
     );
 
-    let snapshot_value: snapshot::ErrorSnapshot = err.snapshot();
-    let stable: snapshot::StableErrorSnapshot = snapshot_value.stable_export();
-    let report_value: report::DiagnosticReport = stable.report();
+    let report_value: report::DiagnosticReport = err.report();
     let bridge_view: interop::StdStructRef<'_, reason::UnifiedReason> = err.as_std();
     let owned_bridge: interop::OwnedStdStructError<reason::UnifiedReason> = err.clone().into_std();
 
@@ -19,12 +17,8 @@ fn test_layered_surfaces_compile_and_interoperate() {
         reason::ErrorCode::error_code(err.reason()),
         reason::ErrorCode::error_code(&reason::UnifiedReason::system_error())
     );
-    assert_eq!(snapshot_value.reason, "system error");
-    assert_eq!(
-        stable.schema_version(),
-        snapshot::STABLE_SNAPSHOT_SCHEMA_VERSION
-    );
     assert_eq!(report_value.reason(), "system error");
+
     #[cfg(feature = "serde")]
     assert_eq!(
         serde_json::to_value(&err).unwrap()["reason"],
@@ -73,11 +67,9 @@ fn test_root_surface_stays_on_primary_runtime_path() {
         .with_context(&ctx)
         .unwrap_err();
 
-    let snapshot = err.snapshot();
     let report = err.report();
-    let proto = err.exposure_snapshot(&DefaultExposurePolicy);
+    let proto = err.exposure(&DefaultExposurePolicy);
 
-    assert_eq!(snapshot.reason, "system error");
     assert_eq!(report.reason(), "system error");
     assert_eq!(proto.identity.code, "sys.io_error");
     assert_eq!(err.action_main().as_deref(), Some("load config"));
@@ -106,7 +98,8 @@ fn test_root_conversion_traits_now_live_under_prelude_or_conversion() {
         Result<(), std::io::Error>,
         reason::UnifiedReason,
         &'static str,
-    ) -> Result<(), runtime::StructError<reason::UnifiedReason>> = conversion::SourceErr::source_err;
+    ) -> Result<(), runtime::StructError<reason::UnifiedReason>> =
+        conversion::SourceErr::source_err;
 }
 
 #[test]
@@ -115,15 +108,13 @@ fn test_layered_modules_remain_the_official_home_for_non_root_types() {
         .detail("engine bootstrap failed")
         .finish();
 
-    let snapshot_value: snapshot::ErrorSnapshot = err.snapshot();
-    let report_value: report::DiagnosticReport = snapshot_value.report();
+    let report_value: report::DiagnosticReport = err.report();
     let std_bridge: interop::OwnedStdStructError<reason::UnifiedReason> = err.clone().into_std();
 
     let _: runtime::StructErrorBuilder<reason::UnifiedReason> =
         runtime::StructError::builder(reason::UnifiedReason::system_error());
     let _: reason::ErrorCategory = reason::ErrorCategory::Sys;
     let _: protocol::Visibility = protocol::Visibility::Internal;
-    let _: snapshot::StableErrorSnapshot = snapshot_value.stable_export();
     let _: interop::OwnedStdStructError<reason::UnifiedReason> = err.clone().into_std();
 
     assert_eq!(report_value.reason(), "system error");
@@ -152,11 +143,8 @@ fn test_reason_module_is_the_trait_home_for_identity_and_code() {
 
 #[test]
 fn test_removed_root_type_aliases_do_not_return() {
-    let identity: snapshot::ErrorIdentity =
+    let identity =
         runtime::StructError::from(reason::UnifiedReason::system_error()).identity_snapshot();
-    let _: runtime::ErrorMetadata = Default::default();
-    let _: runtime::MetadataValue = "demo".into();
-
     assert_eq!(identity.code, "sys.io_error");
 }
 
@@ -181,11 +169,11 @@ fn test_runtime_source_observation_surface_lives_under_runtime_source_module() {
 fn test_dev_prelude_types_and_report_exports_include_cli_projection() {
     use orion_error::dev::prelude::{ErrorProtocolSnapshot, ExposureDecision, Visibility};
     use orion_error::protocol::DefaultExposurePolicy;
-    use orion_error::StructError;
+    use orion_error::{StructError, UnifiedReason};
 
     let snapshot = StructError::from(UnifiedReason::business_error())
         .with_detail("order state invalid")
-        .exposure_snapshot(&DefaultExposurePolicy);
+        .exposure(&DefaultExposurePolicy);
 
     let http = snapshot.to_http_error_json().unwrap();
     let cli = snapshot.to_cli_error_json().unwrap();
@@ -226,8 +214,8 @@ fn test_report_and_protocol_modules_have_distinct_roles() {
 #[test]
 fn test_cli_module_is_the_public_home_for_print_error() {
     let fn_ptr: fn(&runtime::StructError<reason::UnifiedReason>) = cli::print_error;
-    let err = runtime::StructError::from(reason::UnifiedReason::system_error()
-        ).with_detail("disk offline");
+    let err = runtime::StructError::from(reason::UnifiedReason::system_error())
+        .with_detail("disk offline");
 
     let _ = fn_ptr;
     assert!(err.display_chain().contains("disk offline"));
@@ -239,11 +227,9 @@ fn test_public_surface_grading_stays_split_between_primary_observation_and_secon
         .with_detail("disk offline")
         .with_source(std::io::Error::other("root cause"));
 
-    // Primary path stays centered on report/snapshot/protocol entry points.
+    // Primary path stays centered on report/protocol entry points.
     let _: report::DiagnosticReport = err.report();
-    let _: snapshot::ErrorSnapshot = err.snapshot();
-    let _: protocol::ErrorProtocolSnapshot =
-        err.exposure_snapshot(&protocol::DefaultExposurePolicy);
+    let _: protocol::ErrorProtocolSnapshot = err.exposure(&protocol::DefaultExposurePolicy);
 
     // Observation surface remains explicitly readable but separate.
     let _: &[runtime::source::SourceFrame] = err.source_frames();
@@ -251,5 +237,4 @@ fn test_public_surface_grading_stays_split_between_primary_observation_and_secon
     let _: Option<runtime::source::SourcePayloadKind> = err.source_payload_kind();
 
     // Secondary protocol assembly path remains available without becoming root/runtime API.
-    // (Primary path exposure_snapshot above already verifies ErrorProtocolSnapshot type access.)
 }

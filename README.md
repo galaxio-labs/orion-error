@@ -126,7 +126,7 @@ raw std error ──→.source_err(...) ──→ first entry into structured sy
                                     upcast()
                                 (reason remap)
                                           │
-                  report / snapshot / exposure_snapshot
+                  report / snapshot / exposure
 ```
 
 This is the important shift:
@@ -142,7 +142,7 @@ When you reach HTTP/RPC/log/CLI boundaries, these are the main entry points:
 
 - `report()` for human-oriented diagnostics
 - `snapshot().stable_export()` for stable machine export
-- `exposure_snapshot(...)` with `to_http_error_json()`, `to_cli_error_json()`, `to_log_error_json()`, `to_rpc_error_json()`
+- `exposure(...)` with `to_http_error_json()`, `to_cli_error_json()`, `to_log_error_json()`, `to_rpc_error_json()`
 
 Current protocol naming is `Exposure*`, not `ErrorPolicy*`.
 
@@ -306,7 +306,7 @@ raw std error / StructError ──→.source_err(reason, detail) ──→ first
                                                               upcast()
                                                           (reason remap)
                                                                     │
-                                          report / snapshot / exposure_snapshot
+                                          report / snapshot / exposure
 ```
 
 **1. .source_err(reason, detail)`** — unified entry point. Works for both raw

@@ -20,7 +20,7 @@ let text = report.render();
 
 **协议/投影：**
 ```rust
-let proto = err.exposure_snapshot(&policy);
+let proto = err.exposure(&policy);
 proto.to_http_error_json()?;
 proto.to_rpc_error_json()?;
 ```
@@ -29,4 +29,4 @@ proto.to_rpc_error_json()?;
 
 - `DiagnosticReport` 保持诊断对象定位
 - `ErrorProtocolSnapshot` 是唯一的 exposure/projection 闭包对象
-- 要文本诊断走 `report()`，要 JSON projection 走 `exposure_snapshot(...)`
+- 要文本诊断走 `report()`，要 JSON projection 走 `exposure(...)`

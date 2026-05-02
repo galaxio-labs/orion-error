@@ -463,7 +463,7 @@ use orion_error::protocol::DefaultExposurePolicy;
 let err = StructError::from(ApiReason::system_error())
     .with_detail("disk offline at /dev/sda");
 
-let proto = err.exposure_snapshot(&DefaultExposurePolicy);
+let proto = err.exposure(&DefaultExposurePolicy);
 
 // HTTP 响应——最小字段，对外安全
 let http = proto.to_http_error_json().unwrap();
@@ -500,7 +500,7 @@ assert_eq!(cli["summary"], "system error: disk offline at /dev/sda");
 ### 6.3 入口选择
 
 - `identity_snapshot()`：只看稳定身份
-- `exposure_snapshot(...)`：完整协议输入（identity + decision + report）
+- `exposure(...)`：完整协议输入（identity + decision + report）
 - `to_*_error_json()`：协议边界出口 JSON
 
 ## 7. 测试建议
@@ -547,5 +547,5 @@ assert_eq!(err.reason().error_code(), 201);
 - 所有错误统一使用 `source_err(...)` 进入结构化体系
 - 只做 reason 收敛优先 `conv_err()`
 - 需要稳定导出时使用 `snapshot().stable_export()`
-- 需要对外协议时使用 `exposure_snapshot(...)` 或 projection API
+- 需要对外协议时使用 `exposure(...)` 或 projection API
 - 需要进入标准错误生态时使用显式 interop API

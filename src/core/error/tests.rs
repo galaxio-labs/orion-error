@@ -343,8 +343,8 @@ fn test_with_source_auto_routes_struct_source_kind() {
         OperationContext::doing("load sink defaults").with_meta("config.kind", "sink_defaults"),
     );
 
-    let error =
-        StructError::from(TestDomainReason::General(UnifiedReason::system_error())).with_source(source);
+    let error = StructError::from(TestDomainReason::General(UnifiedReason::system_error()))
+        .with_source(source);
 
     assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Struct));
     assert_eq!(
@@ -485,8 +485,8 @@ fn test_with_source_routes_struct_source_payload() {
     let source = StructError::from(TestDomainReason::TestError)
         .with_detail("repo layer failed")
         .with_std_source(std::io::Error::other("db unavailable"));
-    let error =
-        StructError::from(TestDomainReason::General(UnifiedReason::system_error())).with_source(source);
+    let error = StructError::from(TestDomainReason::General(UnifiedReason::system_error()))
+        .with_source(source);
 
     assert_eq!(error.source_payload_kind(), Some(SourcePayloadKind::Struct));
     assert_eq!(

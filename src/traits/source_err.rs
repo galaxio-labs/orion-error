@@ -317,8 +317,8 @@ mod tests {
     use std::{fmt, io};
 
     use super::{raw_source, RawStdError, SourceErr};
-    use crate::UnifiedReason;
     use crate::StructError;
+    use crate::UnifiedReason;
 
     #[derive(Debug)]
     struct ThirdPartyError(&'static str);

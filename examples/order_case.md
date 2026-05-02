@@ -74,7 +74,7 @@ Result<T, StructError<OrderReason>>
 每个失败场景最后都会直接展示一组“摘要优先”的结果：
 
 - `identity_snapshot()`
-- `exposure_snapshot(...).decision`
+- `exposure(...).decision`
 - `http_response(...)`
 - `render_user_debug(...)`
 

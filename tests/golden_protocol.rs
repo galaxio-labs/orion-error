@@ -11,7 +11,6 @@ use orion_error::{
     protocol::DefaultExposurePolicy,
     reason::UnifiedReason,
     runtime::{OperationContext, StructError},
-    snapshot::StableErrorSnapshot,
 };
 
 // ---------------------------------------------------------------------------
@@ -26,82 +25,9 @@ fn make_err() -> StructError<UnifiedReason> {
         .at("request.json")
 }
 
-fn make_deep_err() -> StructError<UnifiedReason> {
-    let leaf = StructError::from(UnifiedReason::system_error())
-        .with_detail("disk offline")
-        .with_position("src/storage.rs:88");
-    let mid = StructError::from(UnifiedReason::data_error())
-        .with_detail("query failed")
-        .with_source(leaf)
-        .doing("load user");
-    StructError::from(UnifiedReason::validation_error())
-        .with_detail("invalid request")
-        .with_source(mid)
-        .doing("handle request")
-        .at("POST /users")
-        .with_context(
-            OperationContext::doing("auth check")
-                .with_meta("tenant", "acme")
-                .with_meta("component.name", "auth"),
-        )
-}
-
 // ---------------------------------------------------------------------------
 // Golden tests
 // ---------------------------------------------------------------------------
-
-#[test]
-fn golden_stable_snapshot_shallow() {
-    let err = make_err();
-    let stable: StableErrorSnapshot = err.snapshot().stable_export();
-
-    let value = serde_json::to_value(&stable).unwrap();
-    let obj = value.as_object().unwrap();
-
-    // Schema version is stable
-    assert_eq!(obj["schema_version"], "orion-error.snapshot.v3");
-    assert_eq!(obj["reason"], "validation error");
-    assert_eq!(obj["detail"], "field `email` is required");
-    assert_eq!(obj["position"], "src/handler.rs:42");
-    assert_eq!(obj["path"], "parse input / request.json");
-    assert_eq!(obj["context"][0]["action"], "parse input");
-    assert_eq!(obj["context"][1]["locator"], "request.json");
-
-    // Stable export omits compat projection fields (fields, result, display, type_name)
-    for ctx in obj["context"].as_array().unwrap() {
-        assert!(
-            ctx.get("fields").is_none(),
-            "stable context must not contain fields"
-        );
-        assert!(
-            ctx.get("result").is_none(),
-            "stable context must not contain result"
-        );
-    }
-}
-
-#[test]
-fn golden_stable_snapshot_deep_source() {
-    let err = make_deep_err();
-    let stable = err.snapshot().stable_export();
-    let value = serde_json::to_value(&stable).unwrap();
-
-    // Root fields
-    assert_eq!(value["reason"], "validation error");
-    assert_eq!(value["path"], "auth check / handle request / POST /users");
-    assert_eq!(value["context"].as_array().unwrap().len(), 3);
-
-    // Source frames = underlying source chain (top error reason is in snapshot.reason)
-    let frames = value["source_frames"].as_array().unwrap();
-    assert_eq!(frames.len(), 2, "data_error -> system_error");
-    assert_eq!(frames[0]["message"], "data error");
-    assert_eq!(frames[0]["is_root_cause"], false);
-
-    // Root cause = deepest source
-    let last = frames.last().unwrap();
-    assert_eq!(last["message"], "system error");
-    assert!(last["is_root_cause"] == true);
-}
 
 #[test]
 fn golden_http_error_json_for_public_error() {
@@ -109,7 +35,7 @@ fn golden_http_error_json_for_public_error() {
         .with_detail("order state invalid")
         .doing("validate order");
     let json = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_http_error_json()
         .unwrap();
 
@@ -127,7 +53,7 @@ fn golden_http_error_json_for_internal_error() {
         .with_detail("disk offline")
         .doing("write file");
     let json = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_http_error_json()
         .unwrap();
 
@@ -146,7 +72,7 @@ fn golden_http_error_json_for_internal_error() {
 fn golden_http_error_json_keys() {
     let err = make_err();
     let json = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_http_error_json()
         .unwrap();
     let keys: Vec<&str> = json
@@ -170,7 +96,7 @@ fn golden_rpc_error_json_for_timeout() {
     let err =
         StructError::from(UnifiedReason::timeout_error()).with_detail("downstream rpc timeout");
     let json = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_rpc_error_json()
         .unwrap();
 
@@ -188,7 +114,7 @@ fn golden_rpc_error_json_for_timeout() {
 fn golden_rpc_error_json_for_business() {
     let err = StructError::from(UnifiedReason::business_error()).with_detail("order state invalid");
     let json = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_rpc_error_json()
         .unwrap();
 
@@ -203,7 +129,7 @@ fn golden_redacted_protocol_masks_detail() {
     let err = StructError::from(UnifiedReason::validation_error()).with_detail("token=abc");
     let policy = TestRedactPolicy;
     let redacted = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .redacted(&policy)
         .render_user_debug_redacted(&policy);
 
@@ -221,7 +147,7 @@ fn golden_source_frame_metadata() {
     let err = StructError::from(UnifiedReason::system_error()).with_struct_source(inner);
 
     let json = err
-        .exposure_snapshot(&DefaultExposurePolicy)
+        .exposure(&DefaultExposurePolicy)
         .to_log_error_json()
         .unwrap();
 

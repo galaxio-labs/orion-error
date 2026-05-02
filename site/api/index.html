@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-page="api">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,55 +10,60 @@
     <header class="wrap topbar">
       <a class="brand" href="../index.html">
         <strong>orion-error</strong>
-        <span>Structured error governance for Rust</span>
+        <span data-i18n="brand.tagline">Structured error governance for Rust</span>
       </a>
       <nav class="nav" aria-label="Primary">
-        <a href="../index.html">Home</a>
-        <a href="../tutorial/">Tutorial</a>
-        <a href="../compare/">Compare</a>
+        <a href="../index.html" data-i18n="nav.home">Home</a>
+        <a href="../tutorial/" data-i18n="nav.tutorial">Tutorial</a>
+        <a href="../compare/" data-i18n="nav.compare">Compare</a>
       </nav>
+      <div class="language-toggle" aria-label="Language">
+        <button type="button" data-lang-switch="en">EN</button>
+        <button type="button" data-lang-switch="zh">中文</button>
+      </div>
     </header>
 
     <main class="wrap page">
-      <p class="eyebrow">API guide</p>
-      <h1>Main paths to learn first.</h1>
-      <p class="lede">
-        New code should prefer the compact public path. Lower-level explicit
-        source APIs remain available for compatibility, tests, and diagnostics.
+      <p class="eyebrow" data-i18n="api.eyebrow">API guide</p>
+      <h1 data-i18n="api.title">Main paths to learn first.</h1>
+      <p class="lede" data-i18n="api.lede">
+        New code should prefer the compact public path. Lower-level explicit source APIs remain available for
+        compatibility, tests, and diagnostics.
       </p>
 
       <section class="grid">
         <article class="card">
           <h3><code>source_err(reason, detail)</code></h3>
-          <p>First entry into structured errors, or a new semantic boundary that keeps the upstream error as source.</p>
+          <p data-i18n="api.card.source">First entry into structured errors, or a new semantic boundary that keeps the upstream error as source.</p>
         </article>
         <article class="card">
           <h3><code>conv_err()</code></h3>
-          <p>Reason-only conversion between layers. Use it when you do not want a new source boundary.</p>
+          <p data-i18n="api.card.conv">Reason-only conversion between layers. Use it when you do not want a new source boundary.</p>
         </article>
         <article class="card">
           <h3><code>to_err()</code></h3>
-          <p>Turn one reason value into <code>StructError&lt;R&gt;</code> directly.</p>
+          <p data-i18n="api.card.toerr">Turn one reason value into <code>StructError&lt;R&gt;</code> directly.</p>
         </article>
         <article class="card">
           <h3><code>with_source(...)</code></h3>
-          <p>Attach a source through automatic routing, whether it is a raw standard error or another structured error.</p>
+          <p data-i18n="api.card.withsource">Attach a source through automatic routing, whether it is a raw standard error or another structured error.</p>
         </article>
       </section>
 
       <section class="table-wrap">
         <table>
           <thead>
-            <tr><th>Need</th><th>Use</th><th>Avoid as primary path</th></tr>
+            <tr><th data-i18n="api.table.need">Need</th><th data-i18n="api.table.use">Use</th><th data-i18n="api.table.avoid">Avoid as primary path</th></tr>
           </thead>
           <tbody>
-            <tr><td>Raw IO/parser/client error enters the app domain</td><td><code>source_err(reason, detail)</code></td><td>Manual builder plumbing</td></tr>
-            <tr><td>Repository error becomes service reason only</td><td><code>conv_err()</code></td><td><code>source_err</code> unless creating a new boundary</td></tr>
-            <tr><td>Reason value becomes an error now</td><td><code>to_err()</code></td><td>Older direct construction style in new examples</td></tr>
-            <tr><td>Attach source while building</td><td><code>with_source(...)</code></td><td><code>with_std_source</code> / <code>with_struct_source</code> in tutorials</td></tr>
+            <tr><td data-i18n="api.table.raw.need">Raw IO/parser/client error enters the app domain</td><td><code>source_err(reason, detail)</code></td><td data-i18n="api.table.raw.avoid">Manual builder plumbing</td></tr>
+            <tr><td data-i18n="api.table.conv.need">Repository error becomes service reason only</td><td><code>conv_err()</code></td><td data-i18n="api.table.conv.avoid"><code>source_err</code> unless creating a new boundary</td></tr>
+            <tr><td data-i18n="api.table.toerr.need">Reason value becomes an error now</td><td><code>to_err()</code></td><td data-i18n="api.table.toerr.avoid">Older direct construction style in new examples</td></tr>
+            <tr><td data-i18n="api.table.source.need">Attach source while building</td><td><code>with_source(...)</code></td><td data-i18n="api.table.source.avoid"><code>with_std_source</code> / <code>with_struct_source</code> in tutorials</td></tr>
           </tbody>
         </table>
       </section>
     </main>
+    <script src="../i18n.js"></script>
   </body>
 </html>

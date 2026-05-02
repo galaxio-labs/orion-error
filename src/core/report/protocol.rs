@@ -46,7 +46,7 @@ pub struct ErrorProtocolSnapshot {
 ///
 /// ```rust
 /// use orion_error::protocol::{ExposurePolicy, Visibility};
-/// use orion_error::snapshot::ErrorIdentity;
+/// use orion_error::ErrorIdentity;
 ///
 /// struct MyPolicy;
 ///
@@ -61,6 +61,20 @@ pub struct ErrorProtocolSnapshot {
 /// ```
 ///
 /// All methods have defaults — override only what you need.
+///
+/// # Common override patterns
+///
+/// | Method | Override frequency | Typical use |
+/// |--------|-------------------|-------------|
+/// | [`http_status`](ExposurePolicy::http_status) | Most common | Map error identity to HTTP status code |
+/// | [`visibility`](ExposurePolicy::visibility) | Common | Control which errors expose detail publicly |
+/// | [`retryable`](ExposurePolicy::retryable) | Occasional | Mark transient errors as retryable |
+/// | [`default_hints`](ExposurePolicy::default_hints) | Rare | Provide user-facing recovery hints |
+/// | [`decide`](ExposurePolicy::decide) | Rare | Override the entire composition logic |
+///
+/// Most implementations only override [`http_status`](ExposurePolicy::http_status)
+/// and optionally [`visibility`](ExposurePolicy::visibility). The rest can be left
+/// at their defaults.
 pub trait ExposurePolicy {
     fn http_status(&self, _identity: &ErrorIdentity) -> u16 {
         500
@@ -138,11 +152,11 @@ impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
     ///
     /// let err = StructError::from(UnifiedReason::system_error())
     ///     .with_detail("disk full");
-    /// let proto = err.exposure_snapshot(&DefaultExposurePolicy);
+    /// let proto = err.exposure(&DefaultExposurePolicy);
     /// assert_eq!(proto.identity.code, "sys.io_error");
     /// assert_eq!(proto.decision.http_status, 500);
     /// ```
-    pub fn exposure_snapshot(
+    pub fn exposure(
         &self,
         exposure_policy: &impl ExposurePolicy,
     ) -> ErrorProtocolSnapshot {
@@ -166,12 +180,12 @@ impl<T: DomainReason + ErrorIdentityProvider> StructError<T> {
     ///
     /// let proto = StructError::from(UnifiedReason::system_error())
     ///     .with_detail("disk full")
-    ///     .into_exposure_snapshot(&DefaultExposurePolicy);
+    ///     .into_exposure(&DefaultExposurePolicy);
     ///
     /// assert_eq!(proto.identity.code, "sys.io_error");
     /// assert_eq!(proto.decision.http_status, 500);
     /// ```
-    pub fn into_exposure_snapshot(
+    pub fn into_exposure(
         self,
         exposure_policy: &impl ExposurePolicy,
     ) -> ErrorProtocolSnapshot {
@@ -230,9 +244,9 @@ impl ErrorProtocolSnapshot {
     ///
     /// This is a secondary adapter/test entry point. It does not carry the
     /// full runtime-derived projection payload that
-    /// `StructError::exposure_snapshot(...)` can assemble.
+    /// `StructError::exposure(...)` can assemble.
     ///
-    /// Prefer `StructError::exposure_snapshot(...)` for normal business code
+    /// Prefer `StructError::exposure(...)` for normal business code
     /// and boundary output.
     #[allow(dead_code)]
     pub(crate) fn from_report_skeleton(

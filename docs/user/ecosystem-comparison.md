@@ -42,7 +42,7 @@
 | 能力 | anyhow | thiserror | color-eyre | orion-error |
 |------|--------|-----------|------------|-------------|
 | Human 诊断 | `.display_chain()` | 无 | `{}` 彩色输出 | `report().render()` + `RedactPolicy` |
-| 协议 JSON (HTTP/RPC) | 无 | 无 | 无 | `exposure_snapshot()` → `to_http_error_json()` / `to_rpc_error_json()` / `to_cli_error_json()` / `to_log_error_json()` |
+| 协议 JSON (HTTP/RPC) | 无 | 无 | 无 | `exposure()` → `to_http_error_json()` / `to_rpc_error_json()` / `to_cli_error_json()` / `to_log_error_json()` |
 | 稳定快照 | 无 | 无 | 无 | `StableErrorSnapshot` + `schema_version` |
 | 暴露策略 | 无 | 无 | 无 | `ExposurePolicy`（status/visibility/hints/retryable + 按 `stable_code` 控制） |
 | 脱敏/Redaction | 无 | 无 | 支持（有限） | `RedactPolicy` trait（贯穿 report/projection/identity） |
@@ -149,7 +149,7 @@ orion-error 设计上不与生态对立。推荐的分工：
 | 进入结构化体系 | orion-error `source_err(...)` |
 | 业务层传播 | orion-error `StructError<R>` |
 | 跨层（repo → service → handler） | orion-error `conv_err()` |
-| 边界输出 | orion-error `exposure_snapshot()` |
+| 边界输出 | orion-error `exposure()` |
 | 快速原型 / 胶水代码 | anyhow（orion-error 提供了 feature `anyhow` 支持） |
 | 终端诊断展示 | orion-error `report().render()` 或 color-eyre（非冲突） |
 

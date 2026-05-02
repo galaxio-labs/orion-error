@@ -55,14 +55,14 @@ fn perf_measure_allocations() {
 
     // 5. With std source (io::Error, cheap Debug)
     bench_n("with-std-source  ", M, || {
-        StructError::from(UnifiedReason::system_error()
-            ).with_source(io::Error::other("disk offline"))
+        StructError::from(UnifiedReason::system_error())
+            .with_source(io::Error::other("disk offline"))
     });
 
     // 6. With std source + long message (Debug cost visible)
     bench_n("with-std-verbose ", M, || {
-        StructError::from(UnifiedReason::system_error()
-            ).with_source(io::Error::other("x".repeat(256)))
+        StructError::from(UnifiedReason::system_error())
+            .with_source(io::Error::other("x".repeat(256)))
     });
 
     // 7. With struct source (expensive Debug — full context stack)

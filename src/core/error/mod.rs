@@ -9,6 +9,7 @@
 
 pub mod builder;
 pub mod carrier;
+pub mod identity;
 pub mod source_chain;
 pub mod std_bridge;
 
@@ -21,6 +22,10 @@ macro_rules! location {
 
 // Re-exports from carrier
 pub use carrier::{convert_error, StructError};
+
+// Re-exports from identity
+pub use identity::ErrorIdentity;
+
 // Re-exports from builder
 pub use builder::StructErrorBuilder;
 

@@ -1,10 +1,6 @@
 use crate::reason::{ErrorCategory, ErrorCode, ErrorIdentityProvider};
 use crate::{
-    core::DomainReason,
-    core::{
-        ErrorIdentity, ErrorMetadata, ErrorSnapshot, SnapshotContextFrame, SnapshotSourceFrame,
-        SourceFrame,
-    },
+    core::{DomainReason, ErrorIdentity, ErrorMetadata, SourceFrame},
     protocol::DefaultExposurePolicy,
     OperationContext, StructError, UnifiedReason,
 };

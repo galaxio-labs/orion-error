@@ -56,8 +56,8 @@ Default policy (`DefaultExposurePolicy`):
 Entry points:
 
 - `ExposurePolicy::decide(…)`
-- `StructError::exposure_snapshot(…)`
-- `StructError::into_exposure_snapshot(…)`
+- `StructError::exposure(…)`
+- `StructError::into_exposure(…)`
 
 ## 4. ErrorProtocolSnapshot
 
@@ -69,8 +69,8 @@ Fields:
 
 Entry points:
 
-- `StructError::exposure_snapshot(…)`
-- `StructError::into_exposure_snapshot(…)`
+- `StructError::exposure(…)`
+- `StructError::into_exposure(…)`
 
 Use cases: test snapshot, gateway reprojection, unified protocol output, debug summary.
 
@@ -143,7 +143,7 @@ Entry: `StructError::report()`, `StructError::into_report()`, `ErrorSnapshot::re
 
 1. Runtime propagation → `StructError<R>`
 2. Stable identification → `identity_snapshot()`
-3. Unified output → `exposure_snapshot(…)`
+3. Unified output → `exposure(…)`
 4. Protocol output → projection API
 5. Human summary → `render_user_debug(…)`
 
