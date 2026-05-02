@@ -520,15 +520,18 @@ impl<T: DomainReason> Display for StructError<T> {
         let ctx_slice = self.context_slice();
         if !ctx_slice.is_empty() {
             write!(f, "\n  -> Context:")?;
+            let total = ctx_slice.len();
             for (i, c) in ctx_slice.iter().rev().enumerate() {
-                // Outer contexts first (pushed last)
+                let is_last = i == total - 1;
+                let prefix = if is_last { "  └─ " } else { "  ├─ " };
                 let label = c.action().as_deref().or_else(|| c.locator().as_deref())
                     .unwrap_or("(operation)");
-                write!(f, "\n    {i}: {label}")?;
+                write!(f, "\n{prefix}{label}")?;
 
                 if !c.context().items.is_empty() {
                     for (k, v) in &c.context().items {
-                        write!(f, "\n        {k}: {v}")?;
+                        let field_prefix = if is_last { "     " } else { "  │  " };
+                        write!(f, "\n{field_prefix}{k}: {v}")?;
                     }
                 }
             }
