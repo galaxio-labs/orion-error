@@ -198,7 +198,7 @@ impl OrderService {
 }
 
 fn persist_order(item: &str) -> Result<(), MemStoreError> {
-    let ctx = OperationContext::doing("persis order").with_field("mem", 256);
+    let ctx = OperationContext::doing("persis order").with_meta("mem", 256);
     write_impl(item).map_err(|err| match err.kind() {
         std::io::ErrorKind::OutOfMemory => MemStoreReason::StorageFull
             .to_err()

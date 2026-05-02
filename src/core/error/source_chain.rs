@@ -167,6 +167,9 @@ pub struct SourceFrame {
     pub path: Option<SmolStr>,
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub detail: Option<SmolStr>,
+    /// Context key-value fields (from `with_field` / `record_field`).
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub context_fields: Vec<(SmolStr, SmolStr)>,
     #[cfg_attr(feature = "serde", serde(default))]
     #[cfg_attr(
         feature = "serde",
@@ -207,6 +210,7 @@ fn collect_source_frames(
             detail: None,
             metadata: ErrorMetadata::default(),
             is_root_cause: false,
+            context_fields: Vec::new(),
         });
         cur = source.source();
         index += 1;
@@ -231,6 +235,13 @@ where
     R: DomainReason,
 {
     let mut frames = Vec::with_capacity(source.source_frames().len() + 1);
+    let ctx_fields: Vec<(SmolStr, SmolStr)> = source
+        .contexts()
+        .iter()
+        .flat_map(|c| c.context().items.iter())
+        .map(|(k, v)| (SmolStr::from(k.as_str()), SmolStr::from(v.as_str())))
+        .collect();
+
     frames.push(SourceFrame {
         index: 0,
         message: source.reason().to_string().into(),
@@ -242,6 +253,7 @@ where
         path: source.target_path().map(Into::into),
         detail: source.detail().clone().map(Into::into),
         metadata: source.context_metadata(),
+        context_fields: ctx_fields,
         is_root_cause: source.source_frames().is_empty(),
     });
 

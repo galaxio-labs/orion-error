@@ -93,6 +93,7 @@ fn perf_measure_allocations() {
         detail: Some("field `email` is required".into()),
         metadata: ErrorMetadata::new(),
         is_root_cause: true,
+        context_fields: Vec::new(),
     };
     bench_n_src("frame-clone-short", S, frame_short);
 
@@ -109,6 +110,7 @@ fn perf_measure_allocations() {
         detail: Some("x".repeat(128).into()),
         metadata: ErrorMetadata::new(),
         is_root_cause: true,
+        context_fields: Vec::new(),
     };
     bench_n_src("frame-clone-long ", S, frame_long);
 

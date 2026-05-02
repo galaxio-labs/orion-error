@@ -129,6 +129,7 @@ mod tests {
             detail: None,
             metadata: ErrorMetadata::default(),
             is_root_cause: true,
+            context_fields: Vec::new(),
         };
 
         let json_value = serde_json::to_value(&frame).unwrap();
@@ -357,6 +358,7 @@ mod tests {
                     metadata
                 },
                 is_root_cause: true,
+            context_fields: Vec::new(),
             }],
             category: ErrorCategory::Sys,
             code: "sys.test_error".to_string(),

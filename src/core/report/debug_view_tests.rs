@@ -73,6 +73,7 @@
                     detail: None,
                     metadata: ErrorMetadata::new(),
                     is_root_cause: true,
+            context_fields: Vec::new(),
                 }],
             },
             test_identity(
@@ -121,6 +122,7 @@
                         detail: None,
                         metadata: ErrorMetadata::new(),
                         is_root_cause: false,
+            context_fields: Vec::new(),
                     },
                     SourceFrame {
                         index: 1,
@@ -134,6 +136,7 @@
                         detail: None,
                         metadata: ErrorMetadata::new(),
                         is_root_cause: true,
+            context_fields: Vec::new(),
                     },
                 ],
             },

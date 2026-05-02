@@ -382,6 +382,7 @@ impl From<SnapshotSourceFrame> for SourceFrame {
             detail: value.detail.map(Into::into),
             metadata: value.metadata,
             is_root_cause: value.is_root_cause,
+            context_fields: Vec::new(),
         }
     }
 }
