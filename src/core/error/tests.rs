@@ -140,7 +140,8 @@ fn test_struct_error_uses_outer_action_and_full_path() {
     );
 
     let display_output = format!("{error}");
-    assert!(display_output.contains("-> Call: place_order / read_order_payload / parse_order"));
+    assert!(display_output.contains("-> Trace:"));
+    assert!(display_output.contains("1. place_order"));
 }
 
 #[test]

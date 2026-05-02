@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>orion-error - Compare</title>
+    <link rel="stylesheet" href="../styles.css">
+  </head>
+  <body>
+    <header class="wrap topbar">
+      <a class="brand" href="../index.html">
+        <strong>orion-error</strong>
+        <span>Structured error governance for Rust</span>
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <a href="../index.html">Home</a>
+        <a href="../tutorial/">Tutorial</a>
+        <a href="../api/">API</a>
+      </nav>
+    </header>
+
+    <main class="wrap page">
+      <p class="eyebrow">Compare</p>
+      <h1>Different layer, different job.</h1>
+      <p class="lede">
+        anyhow, thiserror, and diagnostic crates are still useful. orion-error
+        is aimed at the contract layer: stable identities, structured context,
+        source chains, snapshots, and policy-aware protocol output.
+      </p>
+
+      <section class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Tool</th><th>Best for</th><th>Where orion-error differs</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>anyhow</td><td>Fast application error handling and type erasure</td><td>orion-error keeps typed reasons and stable machine identities.</td></tr>
+            <tr><td>thiserror</td><td>Local Rust error enums and standard Error implementations</td><td>orion-error adds context, conversion paths, snapshots, and exposure policy.</td></tr>
+            <tr><td>color-eyre</td><td>Rich terminal reports for humans</td><td>orion-error treats display as one projection, not the contract itself.</td></tr>
+            <tr><td>orion-error</td><td>Large services with layered boundaries and public protocols</td><td>It is more explicit because errors are part of governance.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h3>Keep identities stable</h3>
+          <p>Use <code>ErrorIdentity.code</code> as the external identity, while numeric <code>ErrorCode</code> remains compatibility-oriented.</p>
+        </article>
+        <article class="card">
+          <h3>Separate semantics from routing</h3>
+          <p><code>source_err</code> creates entry or boundary meaning. <code>conv_err</code> remaps reason only.</p>
+        </article>
+        <article class="card">
+          <h3>Export deliberately</h3>
+          <p>Use reports, stable snapshots, and exposure snapshots instead of leaking internal error shape directly.</p>
+        </article>
+        <article class="card">
+          <h3>Stay compatible</h3>
+          <p>Interop APIs keep standard-error ecosystem boundaries explicit when a caller needs <code>std::error::Error</code>.</p>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

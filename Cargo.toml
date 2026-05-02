@@ -20,7 +20,7 @@ log = ["dep:log"]
 tracing = ["dep:tracing"]
 serde = ["dep:serde"]
 anyhow = ["dep:anyhow"]
-serde_json = ["dep:serde_json"]
+serde_json = ["dep:serde_json", "serde"]
 toml = ["dep:toml"]
 
 [dependencies]

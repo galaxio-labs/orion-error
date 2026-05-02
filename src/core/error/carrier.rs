@@ -489,10 +489,6 @@ impl<T: DomainReason> Display for StructError<T> {
             write!(f, "\n  -> At: {pos}")?;
         }
 
-        if let Some(path) = self.target_path() {
-            write!(f, "\n  -> Call: {path}")?;
-        }
-
         if let Some(detail) = &self.imp.detail {
             write!(f, "\n  -> Info: {detail}")?;
         }
