@@ -40,7 +40,15 @@ enum UserReason {
 
 #[derive(Debug, Clone, PartialEq, From, OrionError)]
 enum StoreReason {
-    #[orion_error(identity = "sys.storage_full")]
+    #[orion_error(identity = "biz.storage_full")]
+    StorageFull,
+    #[orion_error(transparent)]
+    Uvs(UvsReason),
+}
+
+#[derive(Debug, Clone, PartialEq, From, OrionError)]
+enum MemStoreReason {
+    #[orion_error(identity = "sys.out_mem")]
     StorageFull,
     #[orion_error(transparent)]
     Uvs(UvsReason),
@@ -95,6 +103,7 @@ impl From<StoreReason> for OrderReason {
 type ParseError = StructError<ParseReason>;
 type UserError = StructError<UserReason>;
 type StoreError = StructError<StoreReason>;
+type MemStoreError = StructError<MemStoreReason>;
 type OrderError = StructError<OrderReason>;
 
 // ── 业务数据 / Business data ──
@@ -184,17 +193,17 @@ impl OrderService {
     }
 
     fn save_order(draft: &OrderDraft) -> Result<(), StoreError> {
-        persist_order(draft.item.as_str())
+        persist_order(draft.item.as_str()).source_err(StoreReason::StorageFull, "store impl fail")
     }
 }
 
-fn persist_order(item: &str) -> Result<(), StoreError> {
+fn persist_order(item: &str) -> Result<(), MemStoreError> {
     write_impl(item).map_err(|err| match err.kind() {
-        std::io::ErrorKind::OutOfMemory => StoreReason::StorageFull
+        std::io::ErrorKind::OutOfMemory => MemStoreReason::StorageFull
             .to_err()
             .with_detail("storage quota exceeded")
             .with_source(err),
-        _ => StoreReason::system_error()
+        _ => MemStoreReason::system_error()
             .to_err()
             .with_detail("write order record failed")
             .with_source(err),
@@ -202,10 +211,10 @@ fn persist_order(item: &str) -> Result<(), StoreError> {
 }
 
 fn write_impl(item: &str) -> Result<(), std::io::Error> {
-    if item == "overflow" {
+    if item == "book" {
         return Err(std::io::Error::new(
             std::io::ErrorKind::OutOfMemory,
-            "storage full",
+            "OutOfMemory",
         ));
     }
     Ok(())
@@ -233,5 +242,5 @@ fn main() {
     run_case("invalid input", 42, 100, "");
     run_case("user missing", 7, 100, "coffee");
     run_case("insufficient funds", 42, 500, "coffee");
-    run_case("storage full", 42, 100, "overflow");
+    run_case("storage full", 42, 100, "book");
 }

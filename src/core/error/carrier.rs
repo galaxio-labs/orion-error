@@ -314,16 +314,17 @@ impl<T: DomainReason> StructError<T> {
         T: std::fmt::Debug + Display + 'static,
     {
         let mut out = format!("{self}");
-        let chain = self.source_chain();
-        if !chain.is_empty() {
-            out.push_str("\nCaused by:");
-            for (idx, msg) in chain.iter().enumerate() {
-                let mut lines = msg.lines();
-                if let Some(first) = lines.next() {
-                    out.push_str(&format!("\n  {idx}: {first}"));
-                    for line in lines {
-                        out.push_str(&format!("\n     {line}"));
-                    }
+        let frames = self.source_frames();
+        if !frames.is_empty() {
+            for (idx, frame) in frames.iter().enumerate() {
+                let indent = "   ".repeat(frame.index);
+                let prefix = if idx == frames.len() - 1 { "└─ " } else { "├─ " };
+                let msg = &frame.message;
+                let rest = frame.detail.as_deref().unwrap_or("");
+                if rest.is_empty() {
+                    out.push_str(&format!("\n  {indent}{prefix}{msg}"));
+                } else {
+                    out.push_str(&format!("\n  {indent}{prefix}{msg}: {rest}"));
                 }
             }
         }
@@ -483,7 +484,7 @@ impl<T: DomainReason> Display for StructError<T> {
         }
 
         if let Some(source) = self.source_ref() {
-            write!(f, "\n  -> Source: {source}")?;
+            write!(f, "\n  -> Source: {}", source.to_string().lines().next().unwrap_or(""))?;
         }
 
         let ctx_slice = self.context_slice();
