@@ -320,11 +320,21 @@ impl<T: DomainReason> StructError<T> {
                 let indent = "   ".repeat(frame.index);
                 let prefix = if idx == frames.len() - 1 { "└─ " } else { "├─ " };
                 out.push_str(&format!("\n  {indent}{prefix}{}", frame.message));
-                if let Some(detail) = &frame.detail {
-                    if !detail.is_empty() {
-                        out.push_str(&format!("\n  {indent}   {detail}"));
+
+                // Call path when present (from source's context)
+                if let Some(path) = &frame.path {
+                    if !path.is_empty() {
+                        out.push_str(&format!("\n  {indent}   call: {path}"));
                     }
                 }
+
+                // Detail when separate from message
+                if let Some(detail) = &frame.detail {
+                    if !detail.is_empty() {
+                        out.push_str(&format!("\n  {indent}   info: {detail}"));
+                    }
+                }
+
             }
         }
         out
