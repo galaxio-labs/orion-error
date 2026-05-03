@@ -206,7 +206,7 @@ impl<T: DomainReason> StructError<T> {
         self.with_internal_source(source.into_source_payload())
     }
 
-    pub fn with_std_source<E>(self, source: E) -> Self
+    pub(crate) fn with_std_source<E>(self, source: E) -> Self
     where
         E: StdError + Send + Sync + 'static,
     {
@@ -229,7 +229,7 @@ impl<T: DomainReason> StructError<T> {
         self
     }
 
-    pub fn with_struct_source<R>(self, source: StructError<R>) -> Self
+    pub(crate) fn with_struct_source<R>(self, source: StructError<R>) -> Self
     where
         R: DomainReason,
     {

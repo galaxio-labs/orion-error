@@ -189,7 +189,7 @@ pub use core::{convert_error, ErrorIdentity, OperationContext, StructError, Unif
 /// ```
 pub mod prelude {
     pub use crate::core::StructError;
-    pub use crate::traits::{ConvErr, ErrorWith, SourceErr};
+    pub use crate::traits::{ConvErr, ErrorWith, SourceErr, SourceRawErr};
     #[cfg(feature = "derive")]
     pub use crate::OrionError;
     pub use crate::UnifiedReason;
@@ -233,7 +233,7 @@ pub mod cli {
 /// orion-error through an interface that expects `dyn Error`.
 pub mod interop {
     pub use crate::core::{OwnedDynStdStructError, OwnedStdStructError, StdStructRef};
-    pub use crate::traits::{raw_source, RawSource, RawStdError};
+    pub use crate::traits::{any_err, raw_source, AnyErr, RawSource, RawStdError};
 }
 
 /// Protocol/exposure-layer types for boundary projections.
@@ -252,7 +252,9 @@ pub mod reason {
 
 /// Conversion traits for the current primary paths.
 pub mod conversion {
-    pub use crate::traits::{ConvErr, ConvStructError, ErrorWith, SourceErr, ToStructError};
+    pub use crate::traits::{
+        ConvErr, ConvStructError, ErrorWith, SourceErr, SourceRawErr, ToStructError,
+    };
 }
 
 /// Development and validation-only helpers.

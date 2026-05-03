@@ -144,7 +144,7 @@ fn golden_source_frame_metadata() {
             .with_meta("parse.line", 42u32)
             .with_meta("parse.file", "config.toml"),
     );
-    let err = StructError::from(UnifiedReason::system_error()).with_struct_source(inner);
+    let err = StructError::from(UnifiedReason::system_error()).with_source(inner);
 
     let json = err
         .exposure(&DefaultExposurePolicy)

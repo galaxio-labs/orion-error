@@ -294,6 +294,68 @@ impl UnstructuredSource for toml::ser::Error {
     }
 }
 
+/// Wrapper that implements `RawStdError` for any `StdError`.
+///
+/// This is the bridge for third-party error types that don't have a
+/// dedicated `UnstructuredSource` impl.  Downstream code rarely needs to
+/// name this type directly; use [`any_err`] instead.
+pub struct AnyErr<E: StdError + Send + Sync + 'static>(pub E);
+
+impl<E: StdError + Send + Sync + 'static> fmt::Display for AnyErr<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl<E: StdError + Send + Sync + 'static> fmt::Debug for AnyErr<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl<E: StdError + Send + Sync + 'static> StdError for AnyErr<E> {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        self.0.source()
+    }
+}
+
+impl<E: StdError + Send + Sync + 'static> RawStdError for AnyErr<E> {}
+
+impl<E: StdError + Send + Sync + 'static> private::Sealed for AnyErr<E> {}
+
+impl<E: StdError + Send + Sync + 'static> UnstructuredSource for AnyErr<E> {
+    fn into_struct_error<R>(self, reason: R, detail: String) -> StructError<R>
+    where
+        R: DomainReason,
+    {
+        attach_std_source(self.0, reason, detail)
+    }
+}
+
+/// Wrap any `StdError` so it can enter `.source_err()`.
+pub fn any_err<E: StdError + Send + Sync + 'static>(e: E) -> AnyErr<E> {
+    AnyErr(e)
+}
+
+/// Like [`SourceErr::source_err`] but accepts **any** `StdError`.
+///
+/// Internally wraps the error with [`any_err`] so the sealed
+/// `UnstructuredSource` bound is satisfied without weakening the
+/// sealing contract.
+pub trait SourceRawErr<T, R: DomainReason>: Sized {
+    fn source_raw_err(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>>;
+}
+
+impl<T, E, R> SourceRawErr<T, R> for Result<T, E>
+where
+    E: StdError + Send + Sync + 'static,
+    R: DomainReason,
+{
+    fn source_raw_err(self, reason: R, detail: impl Into<String>) -> Result<T, StructError<R>> {
+        self.map_err(any_err).source_err(reason, detail)
+    }
+}
+
 // Allow `source_err` to work with already-structured `Result<T, StructError<R1>>`
 // sources. Callers no longer need to distinguish between raw std errors and
 // structured errors — `source_err` handles both.

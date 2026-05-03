@@ -4,8 +4,14 @@
 
 本版是 API 收口版本：删除所有 `0.7.x` 已废弃（deprecated）的兼容路径，缩减根导出，清理公开模块。
 
+### Changed
+
+- **`with_std_source` / `with_struct_source`** → `pub(crate)`. Use `with_source()` instead.
+
 ### Added
 
+- **`SourceRawErr` trait** + `source_raw_err()` — accepts any `StdError`, no `UnstructuredSource` needed.
+- **`AnyErr<E>`** + **`any_err()`** — underlying bridge for `source_raw_err`.
 - **`Upcast` trait** (renamed from `ErrorConv`) with deprecated `err_conv` compat alias
 - **`ErrorProtocolSnapshot::report()`** public getter for the embedded diagnostic report
 - **`convert_error()`** re-exported from crate root
