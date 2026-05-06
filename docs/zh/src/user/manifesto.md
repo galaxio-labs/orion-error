@@ -121,7 +121,7 @@
 
 核心方法论：**把"分类信息"和"诊断信息"分离到两个不同的维度，通过两个不同的通道传递。**
 
-```
+```text
 错误 = 稳定身份 + 稳定分类 + 诊断链 + 上下文 + 细节
 ```
 
@@ -673,7 +673,7 @@ try {
 ```
 
 此时 cause chain 为：
-```
+```text
 OrderError.DependencyUnavailable
   └─ cause: RepositoryError.ConnectionFailed
        └─ cause: SQLException ("Connection reset")
