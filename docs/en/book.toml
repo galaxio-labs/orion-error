@@ -12,3 +12,5 @@ default-theme = "light"
 preferred-dark-theme = "navy"
 git-repository-url = "https://github.com/galaxio-labs/orion-error"
 edit-url-template = "https://github.com/galaxio-labs/orion-error/edit/main/docs/en/src/{path}"
+additional-js = ["page-toc.js"]
+additional-css = ["theme/reading.css"]

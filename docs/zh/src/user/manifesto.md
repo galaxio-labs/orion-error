@@ -103,6 +103,20 @@
 
 这些方案如果只依赖单一形态同时满足两类需求，结果往往是牺牲其中一边：要么调用方拿到的信息太散，无法自动化治理；要么排障方拿到的信息太少，只能重新翻日志和复现现场。
 
+### 砖块不等于建筑
+
+一个常见的质疑是：Java 的异常类型 + 错误码、Go 的 sentinel error + wrapping、Rust 的 enum + cause chain，这些机制不是已经覆盖了双通道模型要解决的大部分问题吗？
+
+这些机制确实都是砖块，但砖块不等于建筑。问题出在三个方向。
+
+**异常类型或错误码作为分发主键，身份不稳定。** Java 生态中，异常类型通常承担分发角色：`catch (OrderNotFoundException e)`。但异常类型受继承层次控制，重构时会变。错误码通常是异常的附赠字段，调用方先做 `instanceof`，再取 `getErrorCode()`——错误码不是路由主键。双通道模型的主张是：把错误身份提升为治理通道的第一公民，边界策略基于身份路由，与类型的继承层次解耦。不管你用 `enum`、错误码字符串还是 tagged union 来表达它，身份本身必须是稳定的、可文档化的、被测试约束的契约。
+
+**分类空间天然膨胀。** 异常机制鼓励"一种失败一个类"：`SubmitDependencyUnavailableException`、`InvalidStateException`……类的数量跟随业务失败模式无限制增长。没有机制强制"收敛到有限分类"。如果异常类型同时承担分类职责，分类就不可能稳定——每新增一个 exception class，所有依赖异常层次做路由的边界都可能受影响。双通道模型把分类空间（`R`）限制为有限枚举，新增变体是有意为之的兼容演进，不是随意加类。
+
+**治理和诊断共用同一通道，两类需求互相牵制。** cause chain、structured wrapping、`errors.Is`/`errors.As` 解决的是诊断保留问题——根因如何保留和查询。它们不解决：这个错误应该触发重试还是降级？应该映射到哪个 HTTP 状态码？应该暴露给用户还是只记日志？这些治理动作如果由异常类型、字段或局部判断来做，就会散落在每个 handler、每个 catch 块、每个 `errors.Is` 调用中。双通道模型做的是把治理信息和诊断信息分离成不同通道，治理动作由集中策略而非局部代码决定。
+
+综上，关键区别不在于你用的是什么语言机制，而在于你的错误架构有没有以下几根承重墙：稳定身份（不受类型重构影响）、有限分类空间（受兼容演进规则约束）、诊断保留（跨层不丢失）、集中边界策略（不在 handler 中重复决策）。失去了这些结构，任何语言的错误处理都会长成不可治理的灌木丛——哪怕你用的砖块是顶好的。
+
 ### 我们的方案：双通道错误治理模型
 
 核心方法论：**把"分类信息"和"诊断信息"分离到两个不同的维度，通过两个不同的通道传递。**
@@ -550,9 +564,174 @@ Union type + discriminated union 天然适合错误分类。`neverthrow`、`fp-t
 
 ### Java — 需要映射到框架约定
 
-泛型擦除，异常机制主导。但 Java 的 cause chain 机制成熟，Spring 的 `@ControllerAdvice`、filter、interceptor 已经是集中策略的常见模式。Java 17+ 的 sealed class、record 和 pattern matching 也让有限分类表达比过去更自然，虽然它们仍然不是整个异常生态的默认路径。
+泛型擦除，异常机制主导。但 Java 的 cause chain 机制成熟，Spring 的 `@ControllerAdvice`、filter、interceptor 已经是集中策略的常见模式。Java 17+ 的 sealed class、record 和 pattern matching 也让有限分类表达比过去更自然。
 
-更合适的做法通常是借鉴分类稳定、诊断链、边界集中投影这些思想，而不是照搬返回值式载体。
+更合适的做法通常是借鉴分类稳定、诊断链、边界集中投影这些思想，而不是照搬返回值式载体。下面是一个可行的映射方案。
+
+**核心映射：每个语义域定义一个 sealed class，域之间无继承关系。**
+
+和 Rust 方案对应——Rust 中每个语义域有自己的 `Reason` 枚举，`RepositoryReason` 和 `OrderReason` 是两个独立的类型，不共享 trait 之外的继承。Java 同理：`RepositoryError` 和 `OrderError` 是两个独立的 sealed class，各自在自己的语义域内约束分类空间。跨域时不是向上转型到共同的父类，而是**构造新域的异常，把旧域异常作为 cause 保留**。
+
+```java
+// ===== data access 语义域 =====
+public sealed abstract class RepositoryError extends RuntimeException
+    permits RepositoryError.ConnectionFailed,
+           RepositoryError.WriteFailed,
+           RepositoryError.General {
+
+    public abstract String identity();
+    public abstract String category();
+    public abstract boolean retryable();
+
+    private DiagnoseContext ctx;
+    public DiagnoseContext context() { return ctx; }
+
+    protected RepositoryError(String detail, Throwable cause, DiagnoseContext ctx) {
+        super(detail, cause);
+        this.ctx = ctx;
+    }
+
+    public static final class ConnectionFailed extends RepositoryError {
+        public ConnectionFailed(String detail, Throwable cause, DiagnoseContext ctx) {
+            super(detail, cause, ctx);
+        }
+        public String identity() { return "repository.connection_failed"; }
+        public String category() { return "system"; }
+        public boolean retryable() { return true; }
+    }
+    // WriteFailed, General ...
+}
+
+// ===== order 业务语义域 =====
+public sealed abstract class OrderError extends RuntimeException
+    permits OrderError.DependencyUnavailable,
+           OrderError.InvalidState,
+           OrderError.General {
+
+    public abstract String identity();
+    public abstract String category();
+    public abstract boolean retryable();
+
+    private DiagnoseContext ctx;
+    public DiagnoseContext context() { return ctx; }
+
+    protected OrderError(String detail, Throwable cause, DiagnoseContext ctx) {
+        super(detail, cause);
+        this.ctx = ctx;
+    }
+
+    public static final class DependencyUnavailable extends OrderError {
+        public DependencyUnavailable(String detail, Throwable cause, DiagnoseContext ctx) {
+            super(detail, cause, ctx);
+        }
+        public String identity() { return "order.submit_dependency_unavailable"; }
+        public String category() { return "system"; }
+        public boolean retryable() { return true; }
+    }
+    // InvalidState, General ...
+}
+```
+
+`DiagnoseContext` 是跨域通用的 record，不绑定特定语义域：
+
+```java
+public record DiagnoseContext(
+    String operation,
+    String entityId,
+    String tenant,
+    String component
+) {}
+```
+
+**完整的传播路径：三层，两个语义域。**
+
+第一步，数据库错误在 Repository 层首次进入结构化体系：
+
+```java
+// Repository 层：首次进入
+var ctx = new DiagnoseContext("insert_order", order.id, null, "order_repository");
+try {
+    db.insert(order);
+} catch (SQLException e) {
+    throw new RepositoryError.ConnectionFailed("insert order failed", e, ctx);
+}
+```
+
+第二步，Service 层跨越语义域。这里的关键动作不是向上转型，而是**构造新域的异常**：`RepositoryError` 不继承 `OrderError`，两者是平级的独立类型，通过 cause chain 连接。
+
+```java
+// Service 层：跨语义域——构造 OrderError，把 RepositoryError 作为 cause
+var ctx = new DiagnoseContext("submit_order", order.id, order.tenant, "order_service");
+try {
+    repository.insert(order);
+} catch (RepositoryError e) {
+    throw new OrderError.DependencyUnavailable("submit order failed", e, ctx);
+    //                                              detail ─────────┘  ↑   ↑
+    //                                              cause ────────────┘   │
+    //                                              context ──────────────┘
+}
+```
+
+此时 cause chain 为：
+```
+OrderError.DependencyUnavailable
+  └─ cause: RepositoryError.ConnectionFailed
+       └─ cause: SQLException ("Connection reset")
+```
+
+第三步，边界层交给 `@ControllerAdvice` 统一投影。`@ExceptionHandler` 按域注册：`OrderError` 的 handler 处理所有业务语义域的错误，`RepositoryError` 如果没有被上层转换则在边界作为 500 兜底。
+
+```java
+@ControllerAdvice
+public class ErrorPolicy {
+    @ExceptionHandler(OrderError.class)
+    public ResponseEntity<ErrorBody> handleOrder(OrderError e) {
+        logger.error(e.toLogRecord());              // 诊断通道：完整 cause chain + context
+        return ResponseEntity
+            .status(statusOf(e.identity()))          // 治理通道：基于身份路由
+            .body(new ErrorBody(e.identity(), publicMessageOf(e.identity())));
+    }
+
+    @ExceptionHandler(RepositoryError.class)
+    public ResponseEntity<ErrorBody> handleRepo(RepositoryError e) {
+        // 未被上层转换的 repository 错误 = 内部错误兜底
+        logger.error(e.toLogRecord());
+        return ResponseEntity.status(500)
+            .body(new ErrorBody("internal_error", "internal error"));
+    }
+}
+```
+
+**和 Rust 方案的对比。** 两者的结构一一对应：
+
+| 概念 | Rust | Java |
+|------|------|------|
+| 语义域分类 | `enum RepositoryReason` | `sealed class RepositoryError` |
+| 治理通道 | reason 枚举变体 + identity 字符串 | 子类覆写的 `identity()` / `category()` / `retryable()` |
+| 诊断通道 | `StructError` 的 detail / context / source 字段 | `getMessage()` / `context()` record / `getCause()` |
+| 统一载体 | `StructError<R>` 泛型参数化 | **不可行** —— JLS 禁止泛型类继承 Throwable |
+| 跨域转换 | `source_err(OrderReason::..., detail)` —— 一行 | `catch (RepositoryError e) { throw new OrderError(..., e, ctx) }` —— 四行 |
+
+Java 无法像 Rust 那样用一个 `StructuredError<R>` 泛型类统一所有域的载体——Java 语言规范明确禁止泛型类继承 `Throwable`（`class StructError<R> extends RuntimeException` 是编译错误）。即使绕过 Throwable 改用返回值式载体，又会丢失 `@ControllerAdvice`、cause chain、堆栈追踪等异常生态基础设施。因此 Java 方案只能用独立 sealed class 作为每个域的载体——这是类型系统的硬约束，不是设计偏好。
+
+Java 方案的额外代价：跨域转换必须显式 try-catch，无法像 Rust 的 `?` + `source_err` 那样一行完成。这不是设计问题，是异常机制的固有代价——异常通过抛出/捕获传递，不存在 `map_err` 式的链式转换。
+
+**测试。** 和 Rust 版本同理，断言身份而非消息：
+
+```java
+@Test
+void shouldFailWithDependencyUnavailableWhenRepoFails() {
+    OrderError err = assertThrows(OrderError.class,
+        () -> service.submit(order));
+    assertEquals("order.submit_dependency_unavailable", err.identity());
+    assertTrue(err.retryable());
+    // 诊断链完整
+    assertNotNull(err.getCause());                   // RepositoryError
+    assertNotNull(err.getCause().getCause());         // SQLException
+}
+```
+
+这个方案的关键不是异常 vs. Result 的选择。关键是：每个语义域的 sealed class 是独立类型（不共享业务继承层次），跨域通过构造新异常 + cause 保留完成，稳定身份是字段主键而非类的副产品，边界策略集中路由，测试断言身份和诊断存在性。这几根承重墙和 Rust 方案完全一致。Java 的附加代价是跨域 try-catch 的代码量和编译器不强制 context 存在——这两项都需要团队纪律补足。
 
 ### C++ — 技术可行，生态无约定
 
