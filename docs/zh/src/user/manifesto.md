@@ -564,17 +564,7 @@ Union type + discriminated union 天然适合错误分类。`neverthrow`、`fp-t
 
 ## 阶段性小结
 
-大型工程中的错误治理，本质上是一个**信息架构问题**——而不是一个异常处理语法问题。
-
-争论"checked exception vs unchecked exception"或"Result vs try-catch"是在语法层面解决问题。真正的挑战是：
-
-- 错误信息如何组织（分类 vs 诊断分离）
-- 错误信息如何在层间传递（跨层保留原则）
-- 错误信息如何输出（边界集中决策）
-
-这三个问题在 Rust、Java、Go、C++ 中都存在，与具体语言无关。当错误需要跨层传播、协议暴露、监控治理和长期演进时，项目应该建立自己的错误治理架构——不管用什么语法来表达它。
-
-这不是文章的结束。前面讨论的是通用方法论：错误治理为什么重要、主要矛盾是什么、应该遵循哪些原则。接下来需要进一步回答一个更具体的问题：在 Rust 工程中，如何把这些原则落成一套可执行的设计方案。
+到这里，本文已经完成通用方法论部分：错误治理为什么重要、主要矛盾是什么、双通道错误治理模型如何组织失败信息。接下来进入具体设计：在 Rust 工程中，如何把这套模型落成可执行、可测试、可演进的错误治理方案。
 
 ---
 
@@ -771,7 +761,34 @@ assert_eq!(exposed.decision.http_status, 503);
 
 WarpParse 是 Orion 体系中面向高吞吐日志解析与 ETL 场景的核心引擎，也是这套方法论的工业级验证案例。根据 `wp-examples/benchmark/report/report_linux.md` 的 Linux 单机 benchmark，WarpParse 0.12.0 在 Nginx、AWS ELB、Firewall、APT Threat、Mixed Log 五类日志，以及 File -> BlackHole、TCP -> BlackHole、TCP -> File 三种拓扑下，对比 Vector-VRL 0.49.0 取得了纯解析 1.56x-20.30x、解析+转换 1.34x-17.90x 的 EPS 倍数区间。
 
-这个案例说明：在高吞吐 ETL 系统中，错误治理不是低优先级的附属问题。吞吐越高，失败路径越需要结构化：解析失败要能定位到规则、字段和样本；脏数据不能让整条管线失去可观测性；边界输出必须区分用户可见错误、规则维护诊断和运行时指标。否则系统处理能力越强，错误扩散和排障成本也会被同步放大。
+Benchmark 证明的是 WarpParse 所处场景的工业强度：高吞吐、多格式、多拓扑、解析与转换并存。它本身不证明错误治理质量。错误治理的价值，需要从失败路径能否被定位、分类、投影和自动化处理来判断。
+
+在这类系统中，如果规则语法错误只返回一段字符串，例如：
+
+```text
+unexpected token at line 12
+```
+
+规则开发者仍然需要打开规则文件、定位行列、猜测出错字段、判断是语法问题还是样本不匹配。系统也很难基于这段文本稳定地区分"配置错误"、"数据质量问题"和"运行时系统错误"。
+
+引入双通道错误治理后，同一次失败应该被表达成结构化信息：
+
+```text
+identity : rule.syntax
+category : config
+detail   : unexpected token in extractor expression
+context  : {
+  rule_file      : "rules/nginx.wpl",
+  line           : 12,
+  column         : 18,
+  field          : "request_time",
+  expected_token : "identifier",
+  actual_token   : ")"
+}
+policy   : block rule activation, show repair hint, do not page SRE
+```
+
+这才是方法论在 WarpParse 中被验证的关键：规则开发者拿到的是错误位置和修复线索；运行系统拿到的是稳定错误身份和治理策略；运维侧可以把配置错误、数据错误、系统错误分开统计和告警。吞吐越高，失败路径越需要这种结构化能力，否则系统处理能力越强，错误扩散和排障成本也会被同步放大。
 
 ### WarpParse 的错误治理结构
 
@@ -839,6 +856,26 @@ flowchart TB
 ```
 
 这张图表达的是同一个原则：WarpParse 的高性能解析能力和错误治理能力必须同时存在。规则开发者需要知道是哪条规则、哪个字段、哪条样本失败；运行系统需要知道失败属于配置问题、数据质量问题还是系统问题；运维侧需要把错误身份转成指标、告警和容量判断。`orion-error` 提供的是错误治理基础设施，WarpParse 则验证了这套方法论在工业级高吞吐 ETL 系统中的可用性。
+
+---
+
+## 面向 AI 的工程化复用
+
+双通道错误治理模型不应该只停留在文档里。更有效的做法，是把方法论、设计原则、crate/lib 使用规范、示例代码、反模式和迁移规则整理成可复用的 engineering skills。Orion 体系中的 skills 会沉淀在 `orion-skills` 仓库中：https://github.com/galaxio-labs/orion-skills
+
+类似地，AI 也可以基于这些 skills 产出项目级错误设计文档。例如 Warp Insight 的错误处理系统设计文档：https://github.com/wp-labs/warp-insight/blob/main/doc/design/foundation/error-handling-system.md 。这类文档的价值不只是记录错误类型，而是让 AI 和工程师围绕同一套治理模型讨论分类、传播、边界输出、观测和迁移。
+
+这样做的价值在于：AI 不再只是根据上下文临时生成几段错误处理代码，而是可以围绕一套明确的治理模型工作。面对一个新项目时，AI 可以先识别错误边界、语义域、稳定身份、诊断链和边界输出，再给出错误治理规划；进入实现阶段时，AI 也可以按照约定使用 `orion-error` 这样的 crate，把 reason 定义、source 保留、context 挂载、exposure 策略和测试断言落到代码里。
+
+换句话说，skills 把错误治理从"靠经验提示 AI"变成了"给 AI 一套工程约束"：
+
+- 规划阶段：识别 L0/L1/L2 现状，设计分类契约和迁移路径。
+- 设计阶段：划分语义域，定义 reason、identity、category 和治理属性。
+- 实现阶段：选择首次进入、跨层收敛、语义边界包装和边界投影的正确 API。
+- Review 阶段：检查是否丢失 source、是否依赖错误文案、是否在 handler 中重复拼响应、是否缺少身份测试。
+- 迁移阶段：把字符串错误、临时 enum、泛化包装逐步收敛为稳定的双通道结构。
+
+这对工业级项目尤其重要。错误处理横跨架构、协议、观测、测试和团队规范，单靠一次 prompt 很难稳定完成。把方法论和库约束沉淀为 skills 后，AI 才能在不同项目中持续复用同一套高质量工程判断，既能完成错误治理设计，也能生成更一致、更可维护的实现代码。
 
 ---
 
