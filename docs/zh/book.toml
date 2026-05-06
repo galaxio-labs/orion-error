@@ -7,8 +7,12 @@ src = "src"
 [build]
 build-dir = "../../site/zh"
 
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
 [output.html]
 default-theme = "light"
 preferred-dark-theme = "navy"
 git-repository-url = "https://github.com/galaxio-labs/orion-error"
 edit-url-template = "https://github.com/galaxio-labs/orion-error/edit/main/docs/zh/src/{path}"
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
