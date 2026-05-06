@@ -27,6 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: taiki-e/install-action@mdbook
+      - uses: taiki-e/install-action@mdbook-mermaid
       - name: Build English site
         run: mdbook build docs/en
       - name: Build Chinese site
