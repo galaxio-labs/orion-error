@@ -13,6 +13,7 @@
 - [生态方案对比](user/ecosystem-comparison.md)
 - [与 thiserror 的关系](user/thiserror-comparison.md)
 - [大型工程错误治理宣言](user/manifesto.md)
+- [大型工程错误治理宣言-blog](user/manifesto-blog.md)
 - [错误治理与 AI 编程](user/errors-and-ai.md)
 - [设计约束](user/design-constraints.md)
 
