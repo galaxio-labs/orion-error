@@ -1,5 +1,21 @@
 # orion-error 中文文档
 
+`orion-error` 就是 WuKong 错误治理模型在 Rust 中的一种工程实现。
+
+在文档首页，最重要的定位先说明清楚：
+
+- **契约通道**：稳定 identity、category、retryable、visibility
+- **诊断通道**：detail、source chain、操作上下文、关键字段
+- **适配输出**：按策略生成 HTTP / RPC / CLI / 日志投影视图
+
+在这个 crate 里，这些理念落到：
+
+- 用 `#[derive(OrionError)]` 定义稳定语义身份
+- 用 `StructError<R>` 作为统一运行时载体
+- 用 `source_err(...)` 处理首次进入和新语义边界包装
+- 用 `conv_err()` 做 reason 收敛，不重写错误叙事
+- 用 `report()` / `identity_snapshot()` / `exposure(...)` 做边界输出
+
 `orion-error` 面向 Rust 服务中的结构化错误治理：让错误在跨层传播时保留稳定身份、上下文、来源链、日志材料和协议暴露视图，而不是退化成不可治理的字符串。
 
 推荐先阅读“为什么需要 orion-error”，再进入教程和协议文档。
@@ -16,6 +32,7 @@
 | [日志说明](./user/LOGGING.md) | 说明如何在错误边界输出有效日志，避免到处散落日志代码 |
 | [生态方案对比](./user/ecosystem-comparison.md) | 对比 `anyhow`、`thiserror`、`color-eyre` 和 `orion-error` 的适用边界 |
 | [与 thiserror 的关系](./user/thiserror-comparison.md) | 说明两者不是简单替代关系，分别适合不同层级 |
+| [大型工程错误治理宣言](./user/manifesto.md) | WuKong 模型、治理原则与工业级验证 |
 | [设计约束](./user/design-constraints.md) | 说明 orphan rule 等 Rust 语言约束下的 API 取舍 |
 
 ## 开发文档

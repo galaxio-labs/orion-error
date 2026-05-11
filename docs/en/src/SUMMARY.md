@@ -11,6 +11,7 @@
 - [Logging](user/LOGGING.md)
 - [Ecosystem Comparison](user/ecosystem-comparison.md)
 - [Thiserror Comparison](user/thiserror-comparison.md)
+- [Large-Scale Error Governance Manifesto](user/manifesto.md)
 - [Error Governance and AI](user/errors-and-ai.md)
 - [Design Constraints](user/design-constraints.md)
 
