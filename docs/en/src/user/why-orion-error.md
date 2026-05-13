@@ -63,8 +63,8 @@ let ctx = OperationContext::doing("load config")
     .with_meta("component.name", "config_loader");
 
 let content = std::fs::read_to_string(path)
-    .source_err(AppReason::system_error(), "read config failed")?
-    .with_context(&ctx);
+    .source_err(AppReason::system_error(), "read config failed")
+    .with_context(&ctx)?;
 ```
 
 Here:
@@ -116,9 +116,9 @@ use orion_error::prelude::*;
 async fn write_order(order: Order) -> Result<(), StructError<StoreReason>> {
     repository::insert_order(&order)
         .await
-        .source_err(StoreReason::Unavailable, "insert order failed")?
+        .source_err(StoreReason::Unavailable, "insert order failed")
         .with_field("order_id", order.id.to_string())
-        .with_meta("component.name", "order_store");
+        .with_meta("component.name", "order_store")?;
 
     Ok(())
 }
@@ -193,8 +193,8 @@ async fn adapter_call(req: Request) -> Result<Response, StructError<AdapterReaso
 async fn load_quote(id: QuoteId) -> Result<Quote, StructError<ServiceReason>> {
     adapter_call(Request::quote(id))
         .await
-        .source_err(ServiceReason::QuoteLoadFailed, "load quote failed")?
-        .with_field("quote_id", id.to_string());
+        .source_err(ServiceReason::QuoteLoadFailed, "load quote failed")
+        .with_field("quote_id", id.to_string())?;
 
     todo!("map response")
 }

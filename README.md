@@ -2,14 +2,14 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-Structured error governance for large Rust codebases.
+Structured error governance for layered Rust systems.
 
-`orion-error` is not just an error type library.
+`orion-error` is not primarily about prettier error text or local error ergonomics.
 
-It is the Rust implementation of the WuKong error governance model.
+It is a Rust crate for systems that need failures to stay structured across
+layers and boundaries.
 
-That means this crate is not centered on prettier error text. It is centered on
-the three parts of the WuKong model:
+The design is centered on three parts:
 
 - **contract channel** — stable identity, category, retryability, visibility
 - **diagnostic channel** — detail, source chain, operation context, key fields
@@ -23,8 +23,8 @@ In Rust, those ideas land as:
 - `conv_err()` for reason remapping without rebuilding the error story
 - `report()` / `identity_snapshot()` / `exposure(...)` for boundary output
 
-It helps teams move from ad-hoc strings and mixed local conventions to one
-shared error model for:
+In practice, it helps teams move from ad-hoc strings and mixed local
+conventions to one shared error model for:
 
 - semantic modeling
 - runtime propagation
@@ -55,14 +55,16 @@ Use this crate when you want:
 - controlled bridging to `std::error::Error` only where needed
 - a system that scales better than local `Result<T, String>` habits
 
-If you only need a tiny local enum inside one module, `thiserror` alone may be
-enough. If your service has layers, external boundaries, and structured error
-output, `orion-error` is the better fit.
+If you only need a small local enum inside one module, `thiserror` alone may be
+enough. If you mainly want application-level convenience with rich ad hoc
+context, `anyhow` may also be enough. `orion-error` is aimed at systems with
+layers, semantic boundaries, and stable boundary-facing error behavior.
 
 In short:
 
-- `thiserror` is a good local modeling tool
-- `orion-error` is for project-wide error governance
+- `thiserror` is a strong local modeling tool
+- `anyhow` is a strong application-level convenience tool
+- `orion-error` is for project-wide structured error governance
 
 ## Install
 

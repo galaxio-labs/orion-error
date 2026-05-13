@@ -2,11 +2,11 @@
 name = "orion-error"
 version = "0.8.1" #@gxl:set(version)
 edition = "2021"
-authors = ["wukong <sec-wukong@outlook.com>"]
-description = "Struct Error for Large Project"
+authors = ["Orion Contributors <sec-wukong@outlook.com>"]
+description = "Structured error governance for layered Rust systems"
 license = "MIT"
 repository = "https://github.com/galaxio-labs/orion-error"
-keywords = ["error", "utilities"]
+keywords = ["error", "rust-patterns", "observability", "service"]
 categories = ["rust-patterns"]
 
 [features]
