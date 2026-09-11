@@ -131,7 +131,7 @@ fn orion_error_derive_implements_display() {
     assert_eq!(SingleStructReason.to_string(), "single struct reason");
     assert_eq!(
         TransparentStructReason(UnifiedReason::logic_error()).to_string(),
-        "BUG :logic error"
+        "internal logic error"
     );
 }
 

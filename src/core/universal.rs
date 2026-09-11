@@ -76,8 +76,8 @@ pub enum UnifiedReason {
     #[error("external service error")]
     ExternalError,
 
-    /// Third-party service errors (第三方服务错误)
-    #[error("BUG :logic error")]
+    /// Internal logic error / invariant violation (内部逻辑错误、不变量违反)
+    #[error("internal logic error")]
     LogicError,
 }
 

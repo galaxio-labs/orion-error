@@ -40,19 +40,14 @@ pub(crate) struct InternalSourceState {
 }
 
 // ---------------------------------------------------------------------------
-// InternalSourcePayload – persisted variant, keeps frames in an Arc
+// InternalSourcePayload – persisted payload, keeps frames in an Arc
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-pub(crate) enum InternalSourcePayload {
-    Std {
-        source: BoxedSource,
-        frames: Arc<Vec<SourceFrame>>,
-    },
-    Struct {
-        source: BoxedSource,
-        frames: Arc<Vec<SourceFrame>>,
-    },
+pub(crate) struct InternalSourcePayload {
+    source: BoxedSource,
+    kind: SourcePayloadKind,
+    frames: Arc<Vec<SourceFrame>>,
 }
 
 impl InternalSourcePayload {
@@ -61,10 +56,10 @@ impl InternalSourcePayload {
         kind: SourcePayloadKind,
         frames: Vec<SourceFrame>,
     ) -> Self {
-        let frames = Arc::new(frames);
-        match kind {
-            SourcePayloadKind::Std => Self::Std { source, frames },
-            SourcePayloadKind::Struct => Self::Struct { source, frames },
+        Self {
+            source,
+            kind,
+            frames: Arc::new(frames),
         }
     }
 
@@ -73,28 +68,19 @@ impl InternalSourcePayload {
     }
 
     pub(crate) fn source_ref(&self) -> &(dyn StdError + 'static) {
-        match self {
-            Self::Std { source, .. } | Self::Struct { source, .. } => source.as_ref(),
-        }
+        self.source.as_ref()
     }
 
     pub(crate) fn source_arc(&self) -> BoxedSource {
-        match self {
-            Self::Std { source, .. } | Self::Struct { source, .. } => Arc::clone(source),
-        }
+        Arc::clone(&self.source)
     }
 
     pub(crate) fn kind(&self) -> SourcePayloadKind {
-        match self {
-            Self::Std { .. } => SourcePayloadKind::Std,
-            Self::Struct { .. } => SourcePayloadKind::Struct,
-        }
+        self.kind
     }
 
     pub(crate) fn frames(&self) -> &[SourceFrame] {
-        match self {
-            Self::Std { frames, .. } | Self::Struct { frames, .. } => frames.as_ref(),
-        }
+        self.frames.as_ref()
     }
 
     pub(crate) fn root_cause(&self) -> &(dyn StdError + 'static) {
@@ -277,10 +263,6 @@ impl InternalSourceState {
     where
         E: StdError + Send + Sync + 'static,
     {
-        assert_non_struct_source(
-            std::any::type_name::<E>(),
-            "use with_struct_source(...) when attaching StructError sources",
-        );
         let frames = collect_source_frames_from(&source);
         Self {
             source: Arc::new(source),
@@ -312,12 +294,4 @@ impl InternalSourceState {
             frames,
         }
     }
-}
-
-fn is_struct_error_type_name(type_name: &str) -> bool {
-    type_name.contains("StructError<")
-}
-
-fn assert_non_struct_source(type_name: &str, message: &str) {
-    assert!(!is_struct_error_type_name(type_name), "{message}");
 }

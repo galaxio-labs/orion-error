@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.2
+
+本版为一致性收口：收敛错误身份双轨，并收敛 source payload 内部结构。
+
+### Changed
+
+- **身份双轨收敛**：明确 `ErrorIdentityProvider::stable_code()`（配合 `error_category()`）是权威机器身份，`ErrorCode::error_code()` 仅作为 legacy 数值码保留。同步更新 `reason::ErrorCode` 文档与 derive `ATTRIBUTES.md`。
+- **清理 `UnifiedReason::LogicError` 文案**：Display 由 `"BUG :logic error"` 改为 `"internal logic error"`，并修正其 doc 注释（原先误复制为“Third-party service errors”）。
+
+### Refactor
+
+- **移除 `assert_non_struct_source` 字符串启发式**：`StructError<R>` 不实现 `std::error::Error`，`with_std_source` / `attach_std_source` 的 `E: StdError` 约束已在类型层排除结构化错误，故删除基于 `type_name().contains("StructError<")` 的运行时 panic 断言。
+- **合并 `InternalSourcePayload` 冗余变体**：将 `enum { Std {..}, Struct {..} }` 收敛为单 `struct { source, kind, frames }`，消除两个字段完全一致的变体，`kind` 降级为普通字段。
+
 ## 0.8.0
 
 本版是 API 收口版本：删除所有 `0.7.x` 已废弃（deprecated）的兼容路径，缩减根导出，清理公开模块。

@@ -1,6 +1,5 @@
 use std::{error::Error as StdError, fmt};
 
-use crate::core::error::source_chain::InternalSourcePayload;
 use crate::core::error::std_bridge::internal_into_std_bridge;
 use crate::{
     core::context::CallContext,
@@ -406,13 +405,13 @@ fn test_builder_source_auto_routes_struct_source_kind() {
 }
 
 #[test]
-fn test_internal_source_payload_uses_distinct_std_and_struct_variants() {
+fn test_internal_source_payload_kind_distinguishes_std_and_struct() {
     let std_error = StructError::from(TestDomainReason::TestError)
         .with_std_source(std::io::Error::other("disk offline"));
-    assert!(matches!(
-        std_error.imp.source_payload.as_ref().unwrap(),
-        InternalSourcePayload::Std { .. }
-    ));
+    assert_eq!(
+        std_error.imp.source_payload.as_ref().unwrap().kind(),
+        SourcePayloadKind::Std
+    );
 
     let source = StructError::from(TestDomainReason::TestError)
         .with_detail("inner detail")
@@ -421,10 +420,10 @@ fn test_internal_source_payload_uses_distinct_std_and_struct_variants() {
         );
     let struct_error = StructError::from(TestDomainReason::General(UnifiedReason::system_error()))
         .with_struct_source(source);
-    assert!(matches!(
-        struct_error.imp.source_payload.as_ref().unwrap(),
-        InternalSourcePayload::Struct { .. }
-    ));
+    assert_eq!(
+        struct_error.imp.source_payload.as_ref().unwrap().kind(),
+        SourcePayloadKind::Struct
+    );
 }
 
 #[test]

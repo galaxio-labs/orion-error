@@ -10,7 +10,7 @@
 | `category = ...` | 变体或结构体 | 覆盖 `error_category()` 分类 | 否（从 `identity` 前缀推断） |
 | `transparent` | 变体或结构体 | 委托给内部包装类型 | 二选一：`identity` 或 `transparent` |
 | `message = "..."` | 变体或结构体 | 覆盖 Display 文案 | 否（从 `identity` 自动生成） |
-| `code = ...` | 变体或结构体 | 设置 `error_code()` 返回值 | 否（默认 500） |
+| `code = ...` | 变体或结构体 | 设置 `error_code()` 返回值（legacy 数值码） | 否（默认 500） |
 
 ## `identity` — 稳定错误码
 
@@ -68,10 +68,14 @@ enum AppReason {
 如果不指定 `message`，会自动从 `identity` 的最后一个 segment 生成：
 `biz.invalid_input` → `"invalid input"`（下划线替换为空格）。
 
-## `code` — 传统数值码
+## `code` — 传统数值码（legacy）
 
 ```rust
 #[orion_error(identity = "biz.invalid", code = 400)]
 ```
 
-当系统还需要向后兼容数值错误码时使用。`ErrorCode::error_code()` 返回该值。
+`ErrorCode::error_code()` 返回该值。
+
+> **注意：`identity` / `stable_code()` 才是权威的机器身份。** 数值 `code` 仅用于向后
+> 兼容旧的数值码集成（如 HTTP 状态映射、历史监控）。新代码应只依赖 `identity`，
+> 不要基于 `code` 引入新的分类语义。

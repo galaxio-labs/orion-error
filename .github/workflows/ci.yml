@@ -113,3 +113,18 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: ${{ github.event_name == 'push' }}
           verbose: true
+
+  semver:
+    name: Semver Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history + tags so cargo-semver-checks can resolve the
+          # baseline (most recent tag, currently v0.8.1).
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # `release-type` defaults to `auto`: it derives the bump kind from
+      # the baseline tag (v0.8.1) vs the manifest version (currently 0.8.2).
+      - uses: obi1kenobi/cargo-semver-checks-action@v2
