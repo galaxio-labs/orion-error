@@ -10,7 +10,7 @@
 
 Rust 的类型系统天然适合错误治理。代数类型表达分类，`match` 提供穷尽检查，泛型参数化载体，`Result<T, E>` 让错误走返回值而非异常。这些都跟 Wukong 模型的结构化思路高度匹配。
 
-但 Rust 只解决了"怎么表达失败"。`enum` 能列举错误变体，不等于变体之间有稳定的语义边界；`?` 能向上传播，不等于原因链会被保留；`thiserror`、`anyhow`、`eyre` 能快速生成错误类型，不等于团队对"哪些失败共享同一标识"有共识。
+但 Rust 只解决了"怎么表达失败"。`enum` 能列举错误变体，不等于变体之间有稳定的语义边界；`?` 能向上传播，不等于原因链会被保留；`thiserror`、`anyhow`、`eyre` 能减少错误定义、聚合和诊断报告的样板代码，不等于团队对"哪些失败共享同一错误标识"有共识。
 
 工具给的是砖块，不是建筑。下面五条是在 Rust 里把 Wukong 模型落成工程约束的具体做法。
 
@@ -95,7 +95,7 @@ fn insert_order(order: &Order) -> Result<(), StructError<RepositoryReason>> {
 
 判断依据：**当前层是否跨越了语义域？**
 
-- 同语义域内：只做 reason 收敛，不建立新语义边界。用 `conv_err()` 把下层 reason 映射到当前 reason。
+- 同语义域内：只做 reason 收敛，不建立新语义边界。用 `conv_err()` 把下层 reason 映射到当前 reason，前提是治理语义没有改变。
 - 跨语义域：建立新语义边界，把下层结构化错误作为 source 保留。用 `source_err(...)`。
 
 ```rust
@@ -186,9 +186,9 @@ detect -> classify -> enrich -> propagate -> output -> observe -> review/evolve
 
 ## 工业验证：WarpParse
 
-方法论需要真实系统检验，不能只靠示例代码。WarpParse 是 Orion 体系中面向高吞吐日志解析与 ETL 的核心引擎，在 benchmark 中对比主流方案取得了显著领先。
+方法论需要真实系统检验，不能只靠示例代码。WarpParse 是 Orion 体系中面向高吞吐日志解析与 ETL 的核心引擎，长期运行在高吞吐、多格式、多拓扑、解析与转换并存的场景里。
 
-但 benchmark 证明的是工业强度：高吞吐、多格式、多拓扑、解析与转换并存。错误治理质量，需要从失败路径判断。
+benchmark 能说明性能路径是否站得住，但错误治理质量，需要从失败路径判断。
 
 WarpParse 中真正被验证的是：
 
