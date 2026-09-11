@@ -1,15 +1,43 @@
-# orion-error
+# `orion-error`
 
-[English](./README.md) | [简体中文](./README.zh-CN.md)
+> **面向大型 Rust 工程的结构化错误治理体系。**
 
-面向大型 Rust 工程的结构化错误治理体系。
+[English](./README.md) · [简体中文](./README.zh-CN.md)
 
-`orion-error` 不只是一个“定义错误类型”的库。
+<p align="center">
+  <a href="https://crates.io/crates/orion-error"><img alt="Crates.io" src="https://img.shields.io/crates/v/orion-error.svg?label=crates.io&color=orange"></a>
+  <a href="https://crates.io/crates/orion-error"><img alt="Downloads" src="https://img.shields.io/crates/d/orion-error.svg?label=downloads"></a>
+  <a href="https://docs.rs/orion-error"><img alt="docs.rs" src="https://img.shields.io/docsrs/orion-error/latest.svg?label=docs.rs&color=blue"></a>
+  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <a href="https://github.com/galaxio-labs/orion-error/actions"><img alt="CI" src="https://github.com/galaxio-labs/orion-error/workflows/CI/badge.svg"></a>
+  <a href="https://codecov.io/gh/galaxio-labs/orion-error"><img alt="Codecov" src="https://codecov.io/gh/galaxio-labs/orion-error/branch/main/graph/badge.svg"></a>
+  <a href="https://deps.rs/repo/github/galaxio-labs/orion-error"><img alt="Dependency status" src="https://deps.rs/repo/github/galaxio-labs/orion-error/status.svg"></a>
+  <a href="https://github.com/galaxio-labs/orion-error/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/galaxio-labs/orion-error?label=release"></a>
+</p>
 
-它就是 WuKong 错误治理模型在 Rust 中的一种工程实现。
+`orion-error` 不只是一个“定义错误类型”的库，它更像一套面向大型服务和分层系统的
+错误治理框架。
 
-也就是说，这个 crate 的中心不是“把错误打印得更漂亮”，而是把 WuKong
-模型里的三部分真正落到代码里：
+## 目录
+
+- [为什么值得用](#为什么值得用)
+- [安装](#安装)
+- [5 分钟上手](#5-分钟上手)
+- [新用户先学这 4 个 API](#新用户先学这-4-个-api)
+- [一张图理解主路径](#一张图理解主路径)
+- [到服务边界时用什么](#到服务边界时用什么)
+- [第三方错误类型适配](#第三方错误类型适配)
+- [和 std::error::Error 的关系](#和-stderrorerror-的关系)
+- [推荐导入方式](#推荐导入方式)
+- [导入策略](#导入策略)
+- [错误流转路径](#错误流转路径)
+- [可选 Feature](#可选-feature)
+- [直接试一下](#直接试一下)
+- [继续阅读](#继续阅读)
+
+## 为什么值得用
+
+这个 crate 的中心不是“把错误打印得更漂亮”，而是把错误治理模型里的三部分真正落到代码里：
 
 - **契约通道**：稳定 identity、category、retryable、visibility
 - **诊断通道**：detail、source chain、操作上下文、关键字段
@@ -23,35 +51,6 @@
 - 用 `conv_err()` 做 reason 收敛，不重写错误叙事
 - 用 `report()` / `identity_snapshot()` / `exposure(...)` 做边界输出
 
-它更像是一套面向大型服务和分层系统的错误治理框架，用一套统一模型去治理：
-
-- 错误语义
-- 运行时传播
-- 上下文附着
-- 跨层转换
-- HTTP / RPC / CLI / 日志边界输出
-
-它解决的是这类问题：
-
-- 业务错误到处是字符串，无法稳定识别
-- 每一层都在用不同的错误写法
-- 到 HTTP / RPC / CLI / 日志边界时，很难统一输出
-- 既想保留底层 source，又不想把错误链搞乱
-
-它的核心思路很简单：
-
-- 用 `#[derive(OrionError)]` 定义稳定的业务 reason
-- 用 `StructError<R>` 作为统一运行时载体
-- 错误进入系统用 `source_err(...)`（统一入口，支持 std 和 StructError 源）
-- 统一用 `source_err(...)` 进入系统，跨层转换用 `conv_err()`
-- 到边界时，再做 `report()` / `exposure()`
-
-[![CI](https://github.com/galaxio-labs/orion-error/workflows/CI/badge.svg)](https://github.com/galaxio-labs/orion-error/actions)
-[![Coverage Status](https://codecov.io/gh/galaxio-labs/orion-error/branch/main/graph/badge.svg)](https://codecov.io/gh/galaxio-labs/orion-error)
-[![crates.io](https://img.shields.io/crates/v/orion-error.svg)](https://crates.io/crates/orion-error)
-
-## 为什么值得用
-
 如果你的项目已经有下面这些需求，这个 crate 会比“手写字符串 + thiserror 零散拼装”更顺手：
 
 - 想让 service / repo / adapter / protocol 层共享同一套错误语言
@@ -61,14 +60,16 @@
 - 想在外部协议层输出统一结构，而不是每层自己拼 JSON
 - 想让错误处理方式能够随着工程规模增长，而不是越写越散
 
-如果你只是写一个很小的本地 enum，`thiserror` 往往就够了。  
-如果你是一个分层服务，或者已经有对外协议和诊断输出需求，`orion-error`
-会更合适。
+如果你只是写一个很小的本地 enum，`thiserror` 往往就够了。如果你是一个分层服务，
+或者已经有对外协议和诊断输出需求，`orion-error` 会更合适。
 
 可以简单理解成：
 
-- `thiserror` 更像本地建模工具
-- `orion-error` 更像全工程的错误治理方案
+| 库            | 最适合的场景                                        |
+| ------------- | --------------------------------------------------- |
+| `thiserror`   | 单个模块或 crate 内的本地错误建模                   |
+| `anyhow`      | 应用层级的便利性、丰富的临时上下文                  |
+| `orion-error` | 跨层的全工程结构化错误治理                          |
 
 ## 安装
 
@@ -118,24 +119,20 @@ fn load_config(path: &str) -> Result<String, StructError<AppReason>> {
 
 ## 新用户先学这 4 个 API
 
-1. `#[derive(OrionError)]`
-   定义稳定的业务 reason。
-2. `source_err(reason, detail)`
-   普通错误第一次进入结构化体系时使用。
-3. `conv_err()`
-   上游已经是 `StructError<R1>`，这里只是换 reason 类型时使用。
-4. `exposure(&policy)`
-   到服务边界时，投影为 HTTP/RPC/CLI/log 输出。
+| # | API | 使用时机 |
+| - | --- | -------- |
+| 1 | `#[derive(OrionError)]` | 定义稳定的业务 reason |
+| 2 | `source_err(reason, detail)` | 普通错误第一次进入结构化体系时使用，同时支持原始 `std::error::Error` 和已结构化的 `StructError<_>` 源 |
+| 3 | `conv_err()` | 上游已经是 `StructError<R1>`，这里只是换 reason 类型时使用 |
+| 4 | `exposure(&policy)` | 到服务边界时，投影为 HTTP/RPC/CLI/log 输出 |
 
 ## 一张图理解主路径
 
-```text
-std::io::Error
-  ->.source_err(...)
-StructError<RepoReason>
-  ->.source_err() + conv_err() (错误进入 + 跨层转换)
-StructError<ServiceReason>
-  -> report() / exposure(...)
+```mermaid
+flowchart LR
+    A[std::io::Error] -->|source_err| B[StructError RepoReason]
+    B -->|source_err + conv_err| C[StructError ServiceReason]
+    C --> D[report / exposure]
 ```
 
 这张图背后的价值是：
@@ -151,7 +148,7 @@ StructError<ServiceReason>
 
 - `report()`：人看的诊断信息
 - `identity_snapshot()`：稳定身份识别
-- `exposure(...)`
+- `exposure(...)`：按策略投影到 HTTP/RPC/CLI/log 输出
 
 当前协议命名已经统一为 `Exposure*`，不是旧的 `ErrorPolicy*`。
 
@@ -302,7 +299,6 @@ use orion_error::{prelude::*, conversion::*};
 // 协议 / 边界层 — 只用到投影输出
 use orion_error::protocol::*;
 use orion_error::report::{DiagnosticReport, RedactPolicy};
-use orion_error::protocol::*;
 
 // Interop — 必须进入 std::error::Error 生态时
 use orion_error::interop::*;
@@ -316,13 +312,11 @@ use orion_error::dev::testing::*;
 
 ## 错误流转路径
 
-```text
-raw std error / StructError ──→.source_err(reason, detail) ──→ 首次进入
-                                                                  │
-                                                            conv_err()
-                                                        (reason 转换)
-                                                                  │
-                                    report / exposure
+```mermaid
+flowchart LR
+    A[raw std error / StructError] -->|source_err: 首次进入| B[结构化体系]
+    B -->|conv_err: reason 转换| C[StructError R2]
+    C --> D[report / exposure]
 ```
 
 **1. `source_err(reason, detail)`** — 统一入口。同时支持原始 `std::error::Error`
@@ -339,6 +333,14 @@ metadata 全部保留。
 ## 可选 Feature
 
 只有项目确实需要时才加：
+
+| Feature | 用途 |
+| ------- | ---- |
+| `serde` | Serialize / Deserialize |
+| `serde_json` | 协议 JSON 投影 |
+| `tracing` | Tracing 集成 |
+| `anyhow` | `anyhow::Error` 互操作 |
+| `toml` | `toml::Error` 互操作 |
 
 ```toml
 [dependencies]
@@ -370,6 +372,10 @@ cargo run --example logging_example --features log
 - [协议契约](./docs/zh/src/user/protocol-contract.md)
 - [与 thiserror 的关系](./docs/zh/src/user/thiserror-comparison.md)
 - [orion-error-derive README](./orion-error-derive/README.md)
+
+## 许可证
+
+基于 [MIT License](./LICENSE) 发布。
 
 ## 维护者说明
 

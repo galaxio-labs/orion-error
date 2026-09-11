@@ -1,13 +1,43 @@
-# orion-error
+# `orion-error`
 
-[English](./README.md) | [简体中文](./README.zh-CN.md)
+> **Structured error governance for layered Rust systems.**
 
-Structured error governance for layered Rust systems.
+[English](./README.md) · [简体中文](./README.zh-CN.md)
+
+<p align="center">
+  <a href="https://crates.io/crates/orion-error"><img alt="Crates.io" src="https://img.shields.io/crates/v/orion-error.svg?label=crates.io&color=orange"></a>
+  <a href="https://crates.io/crates/orion-error"><img alt="Downloads" src="https://img.shields.io/crates/d/orion-error.svg?label=downloads"></a>
+  <a href="https://docs.rs/orion-error"><img alt="docs.rs" src="https://img.shields.io/docsrs/orion-error/latest.svg?label=docs.rs&color=blue"></a>
+  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <a href="https://github.com/galaxio-labs/orion-error/actions"><img alt="CI" src="https://github.com/galaxio-labs/orion-error/workflows/CI/badge.svg"></a>
+  <a href="https://codecov.io/gh/galaxio-labs/orion-error"><img alt="Codecov" src="https://codecov.io/gh/galaxio-labs/orion-error/branch/main/graph/badge.svg"></a>
+  <a href="https://deps.rs/repo/github/galaxio-labs/orion-error"><img alt="Dependency status" src="https://deps.rs/repo/github/galaxio-labs/orion-error/status.svg"></a>
+  <a href="https://github.com/galaxio-labs/orion-error/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/galaxio-labs/orion-error?label=release"></a>
+</p>
 
 `orion-error` is not primarily about prettier error text or local error ergonomics.
 
 It is a Rust crate for systems that need failures to stay structured across
 layers and boundaries.
+
+## Table of Contents
+
+- [Why It Is Useful](#why-it-is-useful)
+- [Install](#install)
+- [Quick Start](#quick-start)
+- [The 4 APIs To Learn First](#the-4-apis-to-learn-first)
+- [Typical Flow](#typical-flow)
+- [Service Boundary Helpers](#service-boundary-helpers)
+- [Third-Party Error Types](#third-party-error-types)
+- [Standard Error Interop](#standard-error-interop)
+- [Recommended Imports](#recommended-imports)
+- [Import Strategy](#import-strategy)
+- [Error Flow Paths](#error-flow-paths)
+- [Optional Features](#optional-features)
+- [Try It](#try-it)
+- [Learn More](#learn-more)
+
+## Why It Is Useful
 
 The design is centered on three parts:
 
@@ -22,29 +52,6 @@ In Rust, those ideas land as:
 - `source_err(...)` for first entry and semantic-boundary wrapping
 - `conv_err()` for reason remapping without rebuilding the error story
 - `report()` / `identity_snapshot()` / `exposure(...)` for boundary output
-
-In practice, it helps teams move from ad-hoc strings and mixed local
-conventions to one shared error model for:
-
-- semantic modeling
-- runtime propagation
-- context attachment
-- cross-layer conversion
-- boundary-facing output for HTTP / RPC / CLI / logs
-
-Core building blocks:
-
-- stable business identities via `#[derive(OrionError)]`
-- one runtime carrier: `StructError<R>`
-- explicit first-entry conversion with `source_err(...)`
-- unified error entry point: `source_err(...)` for all source types
-- report and exposure helpers for service boundaries
-
-[![CI](https://github.com/galaxio-labs/orion-error/workflows/CI/badge.svg)](https://github.com/galaxio-labs/orion-error/actions)
-[![Coverage Status](https://codecov.io/gh/galaxio-labs/orion-error/branch/main/graph/badge.svg)](https://codecov.io/gh/galaxio-labs/orion-error)
-[![crates.io](https://img.shields.io/crates/v/orion-error.svg)](https://crates.io/crates/orion-error)
-
-## Why It Is Useful
 
 Use this crate when you want:
 
@@ -62,9 +69,11 @@ layers, semantic boundaries, and stable boundary-facing error behavior.
 
 In short:
 
-- `thiserror` is a strong local modeling tool
-- `anyhow` is a strong application-level convenience tool
-- `orion-error` is for project-wide structured error governance
+| Crate          | Best fit                                                        |
+| -------------- | --------------------------------------------------------------- |
+| `thiserror`    | Local error modeling inside a single module or crate            |
+| `anyhow`       | Application-level convenience with ad hoc context               |
+| `orion-error`  | Project-wide structured error governance across layers          |
 
 ## Install
 
@@ -114,26 +123,20 @@ For new code, treat `doing(...)` as the standard operation verb.
 
 ## The 4 APIs To Learn First
 
-1. `#[derive(OrionError)]`
-   Define stable business-facing reason enums.
-2. `source_err(reason, detail)`
-   Use when an error enters the structured system — works for both raw
-   `std::error::Error` and already-structured `StructError<_>` sources.
-3. `conv_err()`
-   Use when the upstream value is already `StructError<R1>` and you only remap
-   reason type to `StructError<R2>`.
-4. `exposure(&policy)`
-   Use at service boundaries to project the error into HTTP/RPC/CLI/log output.
+| # | API | When to use |
+| - | --- | ----------- |
+| 1 | `#[derive(OrionError)]` | Define stable business-facing reason enums |
+| 2 | `source_err(reason, detail)` | An error enters the structured system — for both raw `std::error::Error` and already-structured `StructError<_>` sources |
+| 3 | `conv_err()` | Upstream value is already `StructError<R1>`; you only remap reason type to `StructError<R2>` |
+| 4 | `exposure(&policy)` | At service boundaries, project the error into HTTP/RPC/CLI/log output |
 
 ## Typical Flow
 
-```text
-raw std error ──→.source_err(...) ──→ first entry into structured system
-                                          │
-                                    conv_err()
-                                (reason remap)
-                                          │
-                  report / exposure
+```mermaid
+flowchart LR
+    A[raw std error] -->|source_err| B[StructError R1]
+    B -->|conv_err| C[StructError R2]
+    C --> D[report / exposure]
 ```
 
 This is the important shift:
@@ -304,7 +307,6 @@ use orion_error::{prelude::*, conversion::*};
 // Protocol / boundary layer — output projection only
 use orion_error::protocol::*;
 use orion_error::report::{DiagnosticReport, RedactPolicy};
-use orion_error::protocol::*;
 
 // Interop — when you must enter std::error::Error ecosystem
 use orion_error::interop::*;
@@ -320,13 +322,11 @@ use orion_error::dev::testing::*;
 
 There are exactly four ways a `StructError` enters or moves through your system:
 
-```text
-raw std error / StructError ──→.source_err(reason, detail) ──→ first entry
-                                                                    │
-                                                              conv_err()
-                                                          (reason remap)
-                                                                    │
-                                          report / exposure
+```mermaid
+flowchart LR
+    A[raw std error / StructError] -->|source_err: first entry| B[Structured system]
+    B -->|conv_err: reason remap| C[StructError R2]
+    C --> D[report / exposure]
 ```
 
 **1. `source_err(reason, detail)`** — unified entry point. Works for both raw
@@ -344,6 +344,14 @@ raw std error / StructError ──→.source_err(reason, detail) ──→ first
 ## Optional Features
 
 Add features only when your project needs them:
+
+| Feature | Purpose |
+| ------- | ------- |
+| `serde` | Serialize / Deserialize |
+| `serde_json` | Protocol JSON projections |
+| `tracing` | Tracing integration |
+| `anyhow` | `anyhow::Error` interop |
+| `toml` | `toml::Error` interop |
 
 ```toml
 [dependencies]
@@ -374,6 +382,10 @@ cargo run --example logging_example --features log
 - [Protocol Contract](./docs/en/src/user/protocol-contract.md)
 - [thiserror Comparison](./docs/en/src/user/thiserror-comparison.md)
 - [orion-error-derive README](./orion-error-derive/README.md)
+
+## License
+
+Licensed under the [MIT License](./LICENSE).
 
 ## Maintainers
 
