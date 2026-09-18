@@ -10,7 +10,7 @@
   <a href="https://docs.rs/orion-error"><img alt="docs.rs" src="https://img.shields.io/docsrs/orion-error/latest.svg?label=docs.rs&color=blue"></a>
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <a href="https://github.com/galaxio-labs/orion-error/actions"><img alt="CI" src="https://github.com/galaxio-labs/orion-error/workflows/CI/badge.svg"></a>
-  <a href="https://codecov.io/gh/galaxio-labs/orion-error"><img alt="Codecov" src="https://codecov.io/gh/galaxio-labs/orion-error/branch/main/graph/badge.svg"></a>
+  <a href="https://coveralls.io/github/galaxio-labs/orion-error?branch=main"><img alt="Coveralls" src="https://coveralls.io/repos/github/galaxio-labs/orion-error/badge.svg?branch=main"></a>
   <a href="https://deps.rs/repo/github/galaxio-labs/orion-error"><img alt="Dependency status" src="https://deps.rs/repo/github/galaxio-labs/orion-error/status.svg"></a>
   <a href="https://github.com/galaxio-labs/orion-error/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/galaxio-labs/orion-error?label=release"></a>
 </p>

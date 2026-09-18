@@ -103,16 +103,11 @@ jobs:
           ls -la lcov.info
           echo "File size: $(wc -c < lcov.info) bytes"
 
-      - name: Upload to Codecov
-        uses: codecov/codecov-action@v7
+      - name: Upload to Coveralls
+        uses: coverallsapp/github-action@v2
         with:
-          files: ./lcov.info
-          disable_search: true
-          flags: unittests
-          name: coverage-${{ github.ref_name }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: ${{ github.event_name == 'push' }}
-          verbose: true
+          file: lcov.info
+          format: lcov
 
   semver:
     name: Semver Checks
