@@ -5,10 +5,10 @@
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::{
-    parse_macro_input, spanned::Spanned, Attribute, Data, DeriveInput, Error, Expr, ExprLit,
-    ExprPath, Fields, Ident, Lit, LitStr, Result, Variant,
+    Attribute, Data, DeriveInput, Error, Expr, ExprLit, ExprPath, Fields, Ident, Lit, LitStr,
+    Result, Variant, parse_macro_input, spanned::Spanned,
 };
 
 #[proc_macro_derive(ErrorCode, attributes(orion_error))]
