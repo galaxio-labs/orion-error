@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.3
+
+本版为依赖维护，无 API 与行为变更。
+
+### Dependencies
+
+- `orion-error-derive`: `syn` `2.0` → `3.0`。
+- `orion-error`: `toml`（可选依赖）`1.0` → `1.1`。
+- dev-dependencies: `parse-display-derive` `0.10` → `0.11`。
+
+### Changed
+
+- `orion-error-derive` 的 `edition` 由 `2021` 提升至 `2024`，构建该 crate 需 Rust 1.85+。
+
 ## 0.8.2
 
 本版为一致性收口：收敛错误身份双轨，并收敛 source payload 内部结构。

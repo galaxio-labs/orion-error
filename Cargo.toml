@@ -1,6 +1,6 @@
 [package]
 name = "orion-error"
-version = "0.8.2" #@gxl:set(version)
+version = "0.8.3" #@gxl:set(version)
 edition = "2021"
 authors = ["Orion Contributors <sec-wukong@outlook.com>"]
 description = "Structured error governance for layered Rust systems"
@@ -32,12 +32,12 @@ log = { version = "0.4", optional = true }
 tracing = { version = "0.1", optional = true }
 anyhow = { version = "1.0", optional = true }
 serde_json = { version = "1.0", optional = true }
-toml = { version = "1.0", optional = true }
+toml = { version = "1.1", optional = true }
 
 
 [dev-dependencies]
 derive_more = { version = "2.1", features = ["from"] }
-parse-display-derive = "0.10"
+parse-display-derive = "0.11"
 serde_json = "1.0"
 env_logger = "0.11"
 
