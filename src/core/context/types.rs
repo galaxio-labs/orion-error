@@ -28,7 +28,6 @@ macro_rules! op_context {
 pub struct OperationContext {
     context: CallContext,
     result: OperationResult,
-    exit_log: bool,
     mod_path: String,
     #[cfg_attr(feature = "serde", serde(default))]
     action: Option<String>,
@@ -53,7 +52,6 @@ impl Default for OperationContext {
             target: None,
             path: Vec::new(),
             result: OperationResult::Fail,
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
@@ -69,19 +67,18 @@ impl From<CallContext> for OperationContext {
             locator: None,
             target: None,
             path: Vec::new(),
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
     }
 }
 
-impl Drop for OperationContext {
-    fn drop(&mut self) {
-        if !self.exit_log {
-            return;
-        }
-
+impl OperationContext {
+    /// Emit this context's lifecycle log entry (`suc!` / `fail!` / `cancel!`).
+    ///
+    /// `OperationContext` is pure data and never logs on its own drop; this is
+    /// invoked exactly once by [`AutoLogGuard::drop`].
+    fn emit_exit_log(&self) {
         #[cfg(feature = "tracing")]
         {
             let ctx = self.format_context();
@@ -166,7 +163,6 @@ impl OperationContext {
         let mut ctx = Self {
             context: CallContext { items: fields },
             result,
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             action,
             locator,
@@ -221,7 +217,6 @@ impl OperationContext {
             path: Vec::new(),
             context: CallContext::default(),
             result: OperationResult::Fail,
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
@@ -258,10 +253,6 @@ impl OperationContext {
         &self.result
     }
 
-    pub fn exit_log(&self) -> &bool {
-        &self.exit_log
-    }
-
     pub fn mod_path(&self) -> &String {
         &self.mod_path
     }
@@ -290,7 +281,6 @@ impl OperationContext {
             path: Vec::new(),
             context: CallContext::default(),
             result: OperationResult::Fail,
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
@@ -304,7 +294,6 @@ impl OperationContext {
             path: vec![action],
             context: CallContext::default(),
             result: OperationResult::Fail,
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
@@ -318,14 +307,25 @@ impl OperationContext {
             path: vec![locator],
             context: CallContext::default(),
             result: OperationResult::Fail,
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
     }
-    pub fn with_auto_log(mut self) -> Self {
-        self.exit_log = true;
-        self
+    /// Arm automatic lifecycle logging by wrapping this context in an
+    /// [`AutoLogGuard`].
+    ///
+    /// The guard owns the context and, because it is deliberately **not**
+    /// `Clone`, writes the `suc!` / `fail!` / `cancel!` entry exactly once when
+    /// it is dropped. The context's `result` at drop time selects the entry
+    /// (default: [`OperationResult::Fail`]).
+    ///
+    /// To attach the same context to an error purely as data, clone through a
+    /// shared reference (`err.with_context(&guard)`); that copy never logs.
+    pub fn with_auto_log(self) -> AutoLogGuard {
+        AutoLogGuard {
+            ctx: self,
+            armed: true,
+        }
     }
     pub fn with_mod_path<S: Into<String>>(mut self, path: S) -> Self {
         self.mod_path = path.into();
@@ -484,6 +484,9 @@ impl OperationContext {
     }
     pub fn mark_cancel(&mut self) {
         self.result = OperationResult::Cancel;
+    }
+    pub fn mark_fail(&mut self) {
+        self.result = OperationResult::Fail;
     }
 
     /// Format context information for log output.
@@ -648,12 +651,11 @@ impl OperationContext {
     pub fn log_trace<S: AsRef<str>>(&self, message: S) {
         self.trace(message)
     }
-
 }
 
 /// Guard value for scoped [`OperationContext`] lifecycle management.
 ///
-/// Created via [`OperationContext::scope`] or [`OperationContext::auto_scope`].
+/// Created via [`OperationContext::scope`] or [`OperationContext::scoped_success`].
 /// Automatically records the exit result when dropped.
 pub struct OperationScope<'a> {
     ctx: &'a mut OperationContext,
@@ -716,6 +718,115 @@ impl Drop for OperationScope<'_> {
     fn drop(&mut self) {
         if self.mark_success {
             self.ctx.mark_suc();
+        }
+    }
+}
+
+/// Owned, non-`Clone` guard that emits a lifecycle log entry when dropped.
+///
+/// Created via [`OperationContext::with_auto_log`]. Unlike [`OperationContext`]
+/// — which is a plain, `Clone` data value — this guard owns the context and
+/// performs the `suc!` / `fail!` / `cancel!` log write exactly once, on drop.
+///
+/// # Why a separate, non-`Clone` type?
+///
+/// A drop-time side effect must not be duplicated by cloning; otherwise
+/// attaching an armed context to an error would log the same failure twice (or
+/// defer the log to the error's drop). Keeping the guard non-`Clone` while the
+/// data type stays `Clone` makes "attach as data" (`err.with_context(&guard)`)
+/// free of side effects.
+///
+/// # Example
+///
+/// ```rust
+/// use orion_error::OperationContext;
+///
+/// let ctx = OperationContext::doing("renew").with_field("gateway_id", "gw-1");
+/// let data = ctx.clone(); // pure data copy, safe to attach to an error
+/// let _guard = ctx.with_auto_log(); // logs once, on drop
+/// let _ = data;
+/// ```
+#[derive(Debug)]
+#[must_use = "the guard writes the lifecycle log entry when dropped; bind it to keep the operation scope alive"]
+pub struct AutoLogGuard {
+    ctx: OperationContext,
+    armed: bool,
+}
+
+impl AutoLogGuard {
+    /// Builder-style field addition while keeping the guard alive.
+    pub fn with_field<K, V>(mut self, key: K, val: V) -> Self
+    where
+        K: Into<String>,
+        V: Display,
+    {
+        self.ctx.record_field(key, val);
+        self
+    }
+
+    /// Builder-style metadata addition while keeping the guard alive.
+    pub fn with_meta<K, V>(mut self, key: K, value: V) -> Self
+    where
+        K: Into<String>,
+        V: Into<MetadataValue>,
+    {
+        self.ctx.record_meta(key, value);
+        self
+    }
+
+    /// Builder-style module-path override while keeping the guard alive.
+    pub fn with_mod_path<S: Into<String>>(mut self, path: S) -> Self {
+        self.ctx.mod_path = path.into();
+        self
+    }
+
+    /// Explicitly mark the guarded operation as successful (`suc!`).
+    pub fn mark_success(&mut self) {
+        self.ctx.mark_suc();
+    }
+
+    /// Keep the failure result (the default), logging `fail!` on drop.
+    pub fn mark_failure(&mut self) {
+        self.ctx.mark_fail();
+    }
+
+    /// Mark the guarded operation as cancelled (`cancel!`).
+    pub fn cancel(&mut self) {
+        self.ctx.mark_cancel();
+    }
+
+    /// Disarm the guard and return the owned, pure-data [`OperationContext`]
+    /// without emitting a log entry.
+    pub fn into_context(mut self) -> OperationContext {
+        self.armed = false;
+        std::mem::take(&mut self.ctx)
+    }
+}
+
+impl Deref for AutoLogGuard {
+    type Target = OperationContext;
+
+    fn deref(&self) -> &Self::Target {
+        &self.ctx
+    }
+}
+
+impl DerefMut for AutoLogGuard {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.ctx
+    }
+}
+
+impl Display for AutoLogGuard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.ctx, f)
+    }
+}
+
+impl Drop for AutoLogGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            self.ctx.emit_exit_log();
         }
     }
 }

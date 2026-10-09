@@ -1,5 +1,6 @@
 //! 展示 OperationContext 日志记录功能的示例。
-//! 此示例使用当前更推荐的 `op_context!` + `with_field(...)` + `scoped_success()` 组合。
+//! 使用 `op_context!` + `with_auto_log()`（返回不 `Clone` 的 `AutoLogGuard`，
+//! 在 Drop 时恰好写一次结果日志）+ `with_field(...)` 的组合。
 
 use orion_error::op_context;
 

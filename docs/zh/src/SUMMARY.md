@@ -10,6 +10,7 @@
 - [协议契约](user/protocol-contract.md)
 - [Report / Exposure 边界](user/report-exposure-boundary.md)
 - [日志说明](user/LOGGING.md)
+- [Auto-Log Guard 使用指南](user/autolog-guard.md)
 - [生态方案对比](user/ecosystem-comparison.md)
 - [与 thiserror 的关系](user/thiserror-comparison.md)
 - [大型工程错误治理宣言](user/manifesto.md)

@@ -296,18 +296,18 @@ ctx.warn("slow upstream");
 ctx.error("final failure");
 ```
 
-对于需要生命周期日志的作用域，使用 `with_auto_log()`：
+对于需要生命周期日志的作用域，使用 `with_auto_log()`，它返回一个不 `Clone` 的 `AutoLogGuard`：
 
 ```rust
-let mut ctx = OperationContext::doing("sync_user")
+let guard = OperationContext::doing("sync_user")
     .with_auto_log()
     .with_field("user_id", "42");
 
 do_sync()?;
-ctx.mark_suc();
+guard.mark_success();
 ```
 
-如果作用域在 Drop 前没有标记成功或取消，自动输出失败日志。更详细的用法参考 [日志说明](./LOGGING.md)。
+如果 guard 在 Drop 前没有标记成功或取消，会自动且**恰好一次**输出失败日志。通过 `err.with_context(&guard)` 把该操作附到错误上只会复制数据，不会重复或延迟日志；`OperationContext` 本身是普通的 `Clone` 数据载体，没有 `Drop` 行为。更详细的用法参考 [日志说明](./LOGGING.md)。
 
 推荐原则：**少量生命周期日志 + 边界错误投影**，而不是每层重复 `error!`。
 

@@ -145,6 +145,15 @@
 //! let _ = StructError::from(UnifiedReason::system_error()).target_main();
 //! ```
 //!
+//! ```compile_fail
+//! // `AutoLogGuard` is a non-`Clone` drop guard: cloning the drop-time log
+//! // side effect is the bug this type exists to prevent (issue #64).
+//! use orion_error::runtime::AutoLogGuard;
+//!
+//! fn requires_clone<T: Clone>() {}
+//! requires_clone::<AutoLogGuard>();
+//! ```
+//!
 //! ```rust
 //! use orion_error::protocol::DefaultExposurePolicy;
 //! use orion_error::{StructError, UnifiedReason};
@@ -201,7 +210,7 @@ pub mod prelude {
 /// application code.
 pub mod runtime {
     pub use crate::core::{
-        ErrorMetadata, MetadataValue, OperationContext, OperationScope, StructError,
+        AutoLogGuard, ErrorMetadata, MetadataValue, OperationContext, OperationScope, StructError,
         StructErrorBuilder, WithContext,
     };
 

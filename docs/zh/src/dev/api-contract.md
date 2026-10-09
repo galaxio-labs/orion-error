@@ -46,7 +46,7 @@ interop type 或测试 helper。它们的正式归属在分层模块中。
 
 - `runtime`
   运行时传播载体和上下文：`StructError`、`StructErrorBuilder`、
-  `OperationContext`、`OperationScope`、`WithContext`、`ErrorMetadata`。
+  `OperationContext`、`AutoLogGuard`、`OperationScope`、`WithContext`、`ErrorMetadata`。
 - `runtime::source`
   source 观察模型：`SourceFrame`、`SourcePayloadKind`、`SourcePayloadRef`。
 - `conversion`

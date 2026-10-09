@@ -7,7 +7,6 @@ impl From<String> for OperationContext {
             path: Vec::new(),
             context: CallContext::from(("key", value.to_string())),
             result: OperationResult::Fail,
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
@@ -23,7 +22,6 @@ impl From<&PathBuf> for OperationContext {
             path: Vec::new(),
             context: CallContext::from(("path", format!("{}", value.display()))),
             result: OperationResult::Fail,
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
@@ -39,7 +37,6 @@ impl From<&Path> for OperationContext {
             path: Vec::new(),
             context: CallContext::from(("path", format!("{}", value.display()))),
             result: OperationResult::Fail,
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
@@ -55,7 +52,6 @@ impl From<&str> for OperationContext {
             path: Vec::new(),
             context: CallContext::from(("key", value.to_string())),
             result: OperationResult::Fail,
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
@@ -71,7 +67,6 @@ impl From<(&str, &str)> for OperationContext {
             path: Vec::new(),
             context: CallContext::from((value.0, value.1)),
             result: OperationResult::Fail,
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
@@ -87,7 +82,6 @@ impl From<(&str, String)> for OperationContext {
             path: Vec::new(),
             context: CallContext::from((value.0, value.1)),
             result: OperationResult::Fail,
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
@@ -118,7 +112,6 @@ where
                 )],
             },
             result: OperationResult::Fail,
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
@@ -134,7 +127,6 @@ impl From<(String, String)> for OperationContext {
             path: Vec::new(),
             context: CallContext::from((value.0, value.1)),
             result: OperationResult::Fail,
-            exit_log: false,
             mod_path: DEFAULT_MOD_PATH.into(),
             metadata: ErrorMetadata::default(),
         }
@@ -144,6 +136,18 @@ impl From<(String, String)> for OperationContext {
 impl From<&OperationContext> for OperationContext {
     fn from(value: &OperationContext) -> Self {
         value.clone()
+    }
+}
+
+/// Attach an armed [`AutoLogGuard`]'s context to an error as pure data.
+///
+/// Taking the guard by shared reference deliberately copies only the data; the
+/// guard keeps ownership and remains the single owner responsible for the
+/// drop-time log entry. There is intentionally no `From<AutoLogGuard>` (by
+/// value): moving the guard into an error would defer/repeat its log.
+impl From<&AutoLogGuard> for OperationContext {
+    fn from(value: &AutoLogGuard) -> Self {
+        value.ctx.clone()
     }
 }
 

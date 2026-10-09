@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.9.0 - 2026-10-09
+
+**破坏性**：把「操作上下文数据」与「Drop 日志 guard」拆成两个类型，彻底消除失败日志的**重复**与**延迟**。
+
+### Changed（破坏性）
+
+- **失败日志不再重复或延迟**：`OperationContext` 变为纯数据（可 `Clone`、**不再有 `Drop`**）；自动日志改由新的 `AutoLogGuard`（**不 `Clone`**）在 Drop 时**恰好写一次** `suc!` / `fail!` / `cancel!`。
+- `with_auto_log()` 的返回类型由 `OperationContext` 改为 `AutoLogGuard`；把上下文附到错误请用 `with_context(&guard)`（仅复制数据、无副作用）。
+- 移除了 `OperationContext::exit_log()`；`clone()` 不再携带任何副作用。
+
+### Added
+
+- `AutoLogGuard`（`runtime::AutoLogGuard`）：提供 `with_field` / `with_meta` / `mark_success` / `mark_failure` / `cancel` / `into_context`。
+- `OperationContext::mark_fail()`。
+
+### Migration
+
+- 大多数用法无需改动：`let mut ctx = ...with_auto_log(); ctx.mark_suc(); ctx.info(...)` 仍可经 `Deref` / `DerefMut` 工作。
+- 需要纯数据副本时：`err.with_context(&guard)`，或 `guard.into_context()`。
+- 详见 [Auto-Log Guard 使用指南](docs/zh/src/user/autolog-guard.md)。
+
 ## 0.8.3
 
 本版为依赖维护，无 API 与行为变更。

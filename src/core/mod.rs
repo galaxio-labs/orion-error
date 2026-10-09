@@ -11,7 +11,7 @@ mod serde;
 mod universal;
 
 pub use context::ContextAdd;
-pub use context::{OperationContext, OperationScope, WithContext};
+pub use context::{AutoLogGuard, OperationContext, OperationScope, WithContext};
 pub use domain::DomainReason;
 pub use error::{
     convert_error, ErrorIdentity, OwnedDynStdStructError, OwnedStdStructError, SourceFrame,

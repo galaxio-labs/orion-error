@@ -9,6 +9,7 @@
 - [Protocol Contract](user/protocol-contract.md)
 - [Report / Exposure Boundary](user/report-exposure-boundary.md)
 - [Logging](user/LOGGING.md)
+- [Auto-Log Guard Usage](user/autolog-guard.md)
 - [Ecosystem Comparison](user/ecosystem-comparison.md)
 - [Thiserror Comparison](user/thiserror-comparison.md)
 - [Large-Scale Error Governance Manifesto](user/manifesto.md)

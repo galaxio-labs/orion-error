@@ -1,14 +1,25 @@
 # Logging
 
-`orion-error` logging capabilities are built around `OperationContext` and `OperationScope`.
+`orion-error` logging is built around three roles:
+
+- `OperationContext` — **pure data**: a `Clone` carrier of operation fields,
+  metadata, path, and result. It has **no `Drop` side effect**.
+- `AutoLogGuard` — an owned, **non-`Clone` guard** created by
+  `OperationContext::with_auto_log()`. It writes the `suc!` / `fail!` /
+  `cancel!` entry **exactly once**, on drop.
+- `OperationScope` — a borrowed guard for marking the result (`mark_success()`),
+  usable through `OperationContext` or an `AutoLogGuard`.
+
+For example-driven guidance and migration notes, see
+[Auto-Log Guard Usage](./autolog-guard.md).
 
 ## 1. Feature
 
 ```toml
 [dependencies]
-orion-error = { version = "0.8.0", features = ["log"] }
+orion-error = { version = "0.9.0", features = ["log"] }
 # or
-orion-error = { version = "0.8.0", features = ["tracing"] }
+orion-error = { version = "0.9.0", features = ["tracing"] }
 ```
 
 Default features include `log`.
@@ -39,30 +50,52 @@ Aliases: `log_info`, `log_debug`, `log_warn`, `log_error`, `log_trace`.
 
 ## 3. Automatic Result Logging
 
+`with_auto_log()` consumes the data context and returns an `AutoLogGuard`:
+
 ```rust
 use orion_error::OperationContext;
 
-let mut ctx = OperationContext::doing("sync_user")
-    .with_auto_log()
-    .with_field("user_id", "42");
+let ctx = OperationContext::doing("sync_user").with_field("user_id", "42");
+let guard = ctx.with_auto_log();
 
 do_sync()?;
-ctx.mark_suc();
+guard.mark_success();
 ```
 
-Default result is `Fail`. If `with_auto_log()` is enabled but neither `mark_suc()` nor `mark_cancel()` is called before drop, a failure log is emitted.
+The guard writes its entry when it is dropped. The default result is `Fail`: if
+neither `mark_success()` nor `cancel()` is called before drop, a `fail!` entry is
+written.
+
+### Data vs. guard
+
+Because the guard is deliberately **not** `Clone`, the drop-time side effect can
+never be duplicated. To attach the same operation to an error purely as data
+(e.g. for `display_chain()`), borrow the guard — that copies only the data and
+emits nothing:
+
+```rust
+let guard = OperationContext::doing("sync_user").with_auto_log();
+
+let err = build_error().with_context(&guard); // data copy; no log
+// ... the guard is still the single owner that logs on drop.
+```
+
+There is intentionally no by-value `with_context(guard)`: moving the guard into
+an error would defer or repeat its log. Use `guard.into_context()` if you want
+to disarm the guard and keep the plain data.
 
 ## 4. OperationScope
 
-`OperationScope` is a guard for scoped lifecycle management.
+`OperationScope` marks the result of a borrowed context. It works on a bare
+`OperationContext` or through an `AutoLogGuard` (via `Deref`).
 
 ```rust
 use orion_error::OperationContext;
 
-let mut ctx = OperationContext::doing("sync_user").with_auto_log();
+let mut guard = OperationContext::doing("sync_user").with_auto_log();
 
 {
-    let mut scope = ctx.scope();
+    let mut scope = guard.scope();
     scope.with_field("user_id", "42");
     validate()?;
     scope.mark_success();
@@ -76,21 +109,31 @@ Methods:
 - `mark_failure()` — revert to failure
 - `cancel()` — mark as cancelled
 
-## 5. When to Use `scoped_success()`
+An `AutoLogGuard` also exposes `mark_success()` / `mark_failure()` / `cancel()`
+directly (without creating a nested scope).
 
-`scoped_success()` is suitable when:
+## 5. Prefer `scope()` for Fallible Flows
 
-- The scope already handles failure branches internally
-- Failure is explicitly handled via `mark_failure()`
-- The code does not use `?` to return early
-
-Example:
+`scope()` defaults to failure, so it is **safe with `?`**: if the function
+returns early, no `mark_success()` runs and the failure is logged correctly.
 
 ```rust
-let mut ctx = OperationContext::doing("process_order").with_auto_log();
+let mut guard = OperationContext::doing("process_order").with_auto_log();
 
 {
-    let mut scope = ctx.scoped_success();
+    let mut scope = guard.scope();   // default: failure
+    let value = do_work().await?;    // early return -> fail! on drop
+    scope.mark_success();            // success -> suc!
+}
+```
+
+`scoped_success()` defaults to success on creation, so a `?` early return would
+still be recorded as `suc!`. Only use it when every failure branch calls
+`mark_failure()` explicitly:
+
+```rust
+{
+    let mut scope = guard.scoped_success();
     let ok = validate_order();
     if !ok {
         scope.mark_failure();
@@ -98,32 +141,16 @@ let mut ctx = OperationContext::doing("process_order").with_auto_log();
 }
 ```
 
-Not recommended:
-
-```rust,ignore
-let mut scope = ctx.scoped_success();
-validate()?;
-```
-
-Because `scoped_success()` defaults to success on creation. If `?` returns early, the scope is still marked as success on drop.
-
-For fallible flows with early returns, prefer:
-
-```rust
-let mut scope = ctx.scope();
-validate()?;
-scope.mark_success();
-```
-
 ## 6. `op_context!` Macro
 
 ```rust
 use orion_error::op_context;
 
-let ctx = op_context!("load_config").with_auto_log().with_field("path", "config.toml");
+let guard = op_context!("load_config").with_auto_log().with_field("path", "config.toml");
 ```
 
-This macro expands `module_path!()` at the call site, adding more accurate module paths to automatic result logs.
+This macro expands `module_path!()` at the call site, adding more accurate module
+paths to automatic result logs.
 
 ## 7. Best Practices
 
@@ -132,4 +159,5 @@ This macro expands `module_path!()` at the call site, adding more accurate modul
 - Use `record_field(...)` / `record_meta(...)` only when a mutable reference already exists
 - Use `with_auto_log()` only on scopes that need result logging
 - For fallible logic with `?`, prefer `scope() + mark_success()`
+- Attach context to errors via `&guard` (data copy) so logging stays owned by the guard
 - Use `scoped_success()` only when failure paths are explicitly handled

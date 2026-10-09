@@ -145,7 +145,7 @@ struct StructErrorImpl<T> {
 
 ### `OperationContext`
 
-运行时上下文载体。概念上它描述“当前层正在做什么、访问什么、附带哪些诊断字段、是否触发日志输出”等信息：
+运行时上下文载体，**纯数据**。概念上它描述“当前层正在做什么、访问什么、附带哪些诊断字段”等信息。它没有 `Drop` 副作用；自动生命周期日志由 `with_auto_log()` 创建的不 `Clone` 的独立 `AutoLogGuard` 拥有。
 
 ```rust
 pub struct OperationContext {
@@ -155,7 +155,6 @@ pub struct OperationContext {
     path: Vec<String>,
     metadata: ErrorMetadata,
     result: OperationResult,
-    exit_log: bool,
 }
 ```
 

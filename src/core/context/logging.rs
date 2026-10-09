@@ -8,13 +8,42 @@
     }
 
     #[test]
-    fn test_with_auto_log() {
-        let ctx = OperationContext::new().with_auto_log();
-        assert!(ctx.exit_log);
+    fn test_mark_fail_resets_result() {
+        let mut ctx = OperationContext::doing("reset");
+        ctx.mark_suc();
+        ctx.mark_cancel();
+        ctx.mark_fail();
+        assert!(ctx.result == OperationResult::Fail);
+    }
 
-        let ctx2 = OperationContext::doing("test").with_auto_log();
-        assert!(ctx2.exit_log);
-        assert_eq!(ctx2.compat_target(), Some("test".to_string()));
+    #[test]
+    fn test_guard_methods_track_result() {
+        let mut guard = OperationContext::doing("guard").with_auto_log();
+        guard.mark_success();
+        assert!(matches!(guard.result(), OperationResult::Suc));
+        guard.mark_failure();
+        assert!(matches!(guard.result(), OperationResult::Fail));
+        guard.cancel();
+        assert!(matches!(guard.result(), OperationResult::Cancel));
+    }
+
+    #[test]
+    fn test_guard_into_context_preserves_data() {
+        let guard = OperationContext::doing("guard")
+            .with_auto_log()
+            .with_field("k", "v");
+        let ctx = guard.into_context();
+        assert_eq!(ctx.action().as_deref(), Some("guard"));
+        assert_eq!(ctx.context().items.len(), 1);
+    }
+
+    #[test]
+    fn test_with_auto_log() {
+        let guard = OperationContext::new().with_auto_log();
+        assert_eq!(guard.compat_target(), None);
+
+        let guard = OperationContext::doing("test").with_auto_log();
+        assert_eq!(guard.compat_target(), Some("test".to_string()));
     }
 
     #[test]
@@ -71,39 +100,36 @@
     }
 
     #[test]
-    fn test_drop_trait_with_success() {
+    fn test_autolog_guard_success() {
         {
-            let mut ctx = OperationContext::doing("test_drop").with_auto_log();
-            ctx.record("operation", "test");
-            ctx.mark_suc(); // 标记为成功
-                            // ctx 在这里离开作用域，会触发Drop trait
+            let mut guard = OperationContext::doing("test_drop").with_auto_log();
+            guard.record("operation", "test");
+            guard.mark_success();
+            // guard 在此离开作用域，会在 Drop 时输出 suc! 日志
         }
-        // 注意：Drop trait的日志输出需要日志框架配置才能看到
-        // 这里主要测试Drop trait不会panic
+        // 日志输出需要日志框架配置才能看到；这里主要验证不会 panic。
     }
 
     #[test]
-    fn test_drop_trait_with_failure() {
+    fn test_autolog_guard_failure() {
         {
-            let mut ctx = OperationContext::doing("test_drop_fail").with_auto_log();
-            ctx.record("operation", "test_fail");
-            // 不调用mark_suc，保持is_suc = false
-            // ctx 在这里离开作用域，会触发Drop trait
+            let mut guard = OperationContext::doing("test_drop_fail").with_auto_log();
+            guard.record("operation", "test_fail");
+            // 不调用 mark_success，保持失败（默认）
+            // guard 在此离开作用域，会在 Drop 时输出 fail! 日志
         }
-        // 注意：Drop trait的日志输出需要日志框架配置才能看到
-        // 这里主要测试Drop trait不会panic
+        // 日志输出需要日志框架配置才能看到；这里主要验证不会 panic。
     }
 
     #[test]
-    fn test_drop_trait_without_exit_log() {
+    fn test_plain_context_does_not_log() {
         {
             let mut ctx = OperationContext::doing("test_no_log");
             ctx.record("operation", "no_log");
             ctx.mark_suc();
-            // exit_log = false，不会触发日志输出
-            // ctx 在这里离开作用域，Drop trait应该什么都不做
+            // 纯数据 `OperationContext` 没有 Drop 副作用，不会输出日志。
         }
-        // 测试通过即可
+        // 只有 `with_auto_log()` 返回的 `AutoLogGuard` 才会在 Drop 时写日志。
     }
 
     #[test]
@@ -126,8 +152,7 @@
         ctx.info("用户注册成功");
 
         // 验证上下文状态
-        assert!(ctx.result == OperationResult::Suc);
-        assert!(ctx.exit_log);
+        assert!(matches!(ctx.result(), OperationResult::Suc));
         assert_eq!(ctx.compat_target(), Some("user_registration".to_string()));
         assert_eq!(ctx.context().items.len(), 3);
 

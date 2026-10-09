@@ -93,7 +93,10 @@
 
         assert_eq!(ctx.compat_target(), Some("builder_test".to_string()));
         assert_eq!(ctx.path(), &["builder_test".to_string()]);
-        assert!(ctx.exit_log);
+
+        // 守卫持有上下文，可解除武装后取回纯数据。
+        let ctx = ctx.into_context();
+        assert_eq!(ctx.compat_target(), Some("builder_test".to_string()));
     }
 
     #[test]

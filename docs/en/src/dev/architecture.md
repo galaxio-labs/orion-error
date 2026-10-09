@@ -145,7 +145,7 @@ Key decisions:
 
 ### `OperationContext`
 
-Carries runtime context. Conceptually it describes what the current layer was doing, what it was accessing, which diagnostic fields were attached, and whether operation logging should be emitted:
+Carries runtime context as **pure data**. Conceptually it describes what the current layer was doing, what it was accessing, and which diagnostic fields were attached. It has no `Drop` side effect; automatic lifecycle logging is owned by the separate, non-`Clone` `AutoLogGuard` created via `with_auto_log()`.
 
 ```rust
 pub struct OperationContext {
@@ -155,7 +155,6 @@ pub struct OperationContext {
     path: Vec<String>,
     metadata: ErrorMetadata,
     result: OperationResult,
-    exit_log: bool,
 }
 ```
 

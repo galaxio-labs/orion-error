@@ -255,18 +255,18 @@ ctx.warn("slow upstream");
 ctx.error("final failure");
 ```
 
-For lifecycle-scoped logging, use `with_auto_log()`:
+For lifecycle-scoped logging, use `with_auto_log()`, which returns a non-`Clone` `AutoLogGuard`:
 
 ```rust
-let mut ctx = OperationContext::doing("sync_user")
+let guard = OperationContext::doing("sync_user")
     .with_auto_log()
     .with_field("user_id", "42");
 
 do_sync()?;
-ctx.mark_suc();
+guard.mark_success();
 ```
 
-If the scope drops without `mark_suc()` or `mark_cancel()`, a failure log is emitted automatically. See [LOGGING.md](./LOGGING.md) for details.
+If the guard drops without `mark_success()` or `cancel()`, a failure log is emitted automatically — exactly once. Attaching the operation to an error via `err.with_context(&guard)` copies only data and never duplicates or defers the log. `OperationContext` itself is a plain, `Clone` data value with no `Drop` behavior. See [LOGGING.md](./LOGGING.md) for details.
 
 The principle: **sparse lifecycle logs + boundary error projection**, not repetitive `error!` at every layer.
 
